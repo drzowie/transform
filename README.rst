@@ -76,5 +76,7 @@ Contributors
 ============
 
 Craig DeForest  - concept, architecture, development
+
 Matt West       - development & testing
+
 Jake Wilson     - initial prototype development
