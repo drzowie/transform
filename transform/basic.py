@@ -28,7 +28,7 @@ class Linear(Transform):
         to the return data after hitting with the matrix
         
     matrix : numpy.ndarray
-        Optional; if present must be a 2-D array.  
+        Optional; if present must be a 2-D array. 
 
     '''
     
