@@ -197,13 +197,10 @@ class Transform:
             if(self.no_reverse):
                 raise AssertionError("This Transform ({self.__str__()}) is invalid in the reverse direction")
             return self._reverse(data)
-            
+        else:  
             if(self.no_forward):
                 raise AssertionError("This Transform ({self.__str__()}) is invalid in the forward direction")
             return self._forward(data)
-        
-        else:
-            return self._reverse(data)
         
         
         
@@ -410,10 +407,10 @@ class Inverse(Transform):
         self.otype      = t.itype
         self.params     = {'transform':copy.deepcopy(t)}
     
-    def _forward(self,data):
+    def _forward(self, data):
         return(self.params['transform'].apply(data,invert=True))
     
-    def _reverse(self,data):
+    def _reverse(self, data):
         return(self.params['transform'].apply(data,invert=False))
     
     def __str__(self):
@@ -481,6 +478,6 @@ class Composition(Transform):
             xf._str_not_top_tmp = True
             strings.append(xf.__str__())
     
-        self._strtmp = '(' + ') o ('.join( strings ) + ')'
+        self._strtmp = '( (' + ') o ('.join( strings ) + ') )'
         return (super().__str__())
     

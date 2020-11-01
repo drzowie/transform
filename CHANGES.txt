@@ -1,1 +1,2 @@
 v0.0.1, 29-Oct-2020 -- initial setup
+ 31-Oct-2020 -- implement Linear; implement tests
