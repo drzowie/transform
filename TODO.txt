@@ -1,13 +1,11 @@
-31-Oct-2020:
+* Tests for Scale
+* Rot & tests
+* Polar & tests
+* FITS & tests
+* initial map() & tests
+  - Basic functionality
+  - FITS wrapping
+  - autoscaling
+  - multiple interpolation methods
+  - ultimately: SWIG an optimal-resample
 
-CED - I noticed that the threading behavior of t.Linear was wrong (latest
-test in test_basic.py).  I read through the Broadcasting section
-of the NumPy documentation and noticed that indeed the entire dimensionality
-suite is backwards in NumPy compared to PDL:  broadcasting works like
-Perl threading, but dimensions are added by the broadcasting engine
-to the *front* of the NumPy dim list, rather than to the *end* (as with
-the Perl dim list).  This ties in with concerns I had about the memory
-ordering in Python variables.  We are going to have to refactor both core
-and Linear (fortunately this is a minor thing at this point!) to
-keep active dims on the end of the dim list, not at the beginning.
-That is the Next Thing to do.
