@@ -23,8 +23,8 @@ VERSION = '0.0.1'
 # What packages are required for this module to be executed?
 REQUIRED = [
     'pytest',
-    'numpy','copy',
-    'astropy.fits',
+    'numpy',
+    'astropy',
 ]
 
 # What packages are optional?
