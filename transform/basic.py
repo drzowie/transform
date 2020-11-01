@@ -212,6 +212,11 @@ class Scale(Linear):
     selects its dimensionality implicitly) you can specify the dimension
     of the operator with the "d" parameter.
     
+    In the special case where you specify a single scale variable and 
+    you do not specify either of the offsets, the dimensionality defaults
+    to 2 -- this is for simple scaling of image data.  To obtain a 1-D
+    simple scale, specify d=1 in the construction parameters.
+    
     Examples
     --------
     
@@ -250,23 +255,27 @@ class Scale(Linear):
         d = _parse_prepost( d, post, 'Scale', 'Post-offset', 'd' )
      
         if( not( isinstance( scale, np.ndarray ) ) ) :
-            scale = np.array(scale)
+            scale = np.array([scale])
         if(len(scale.shape) > 1):
            raise ValueError('Scale: scale parameter must be scalar or vector')
            
-        if( d is not Null ):
+        if( d is not None ):
             if(scale.shape[0] != d  and  scale.shape[0] != 1):
                 raise ValueError('Scale d must agree with size of scale vector')
             if(scale.shape[0] == 1):
                 scale = scale + np.zeros(d) # force broadcast to correct size
         else:
-            d = scale.shape[0]
+            if( scale.shape[0]==1 ):
+                d = 2
+                scale = scale + np.zeros(2)
+            else:
+                d = scale.shape[0]
             
         m = np.zeros([d,d])
         for i in range(d):
             m[i,i]=scale[i]
             
-        m1 = zeros(d,d)
+        m1 = np.zeros([d,d])
         if(all(scale!=0)):
             for i in range(d):
                 m1[i,i]=1.0/scale[i]

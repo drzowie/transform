@@ -93,6 +93,21 @@ def test_001_Linear_matrix():
     d2 = a.apply(d1)
     d3 = b.invert(d1)
     assert np.all(d2==d3)
+    
+def test_002_Scale():
+    a = t.Scale( np.array([1,2]) )
+    assert a.idim == 2  and a.odim == 2 
+    d1 = a.apply( np.array([10,20]) )
+    assert all( d1 == np.array([10,40]) )
+    
+    a = t.Scale( 3 )
+    assert a.idim == 2 and a.odim == 2 
+    d1 = a.apply( np.array( [5,50] ) )
+    assert all( d1 == np.array([15,150]) )
+    
+    
+    
+    
 
 
     
