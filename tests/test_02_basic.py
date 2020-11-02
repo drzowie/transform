@@ -113,16 +113,16 @@ def test_003_Rotation():
     
     # Test direction of implicit 2D rotation: matrix
     a = t.Rotation( 90, u='deg' )
-    assert np.all( np.isclose( a.params['matrix'],          \
-                               np.array( [[0,-1], [1,0]] ), \
-                               atol=1e-15                   \
+    assert np.all( np.isclose( a.params['matrix'],          
+                               np.array( [[0,-1], [1,0]] ), 
+                               atol=1e-15,
                                ) )
     # Test direction of implicit 2D rotation: actual vector application
     d0 = np.array( [[1,0],[0,1]] )
     d1 = a.apply( d0 )
-    assert np.all( np.isclose( d1,                          \
-                               np.array( [[0,1],[-1,0]] ),  \
-                               atol=1e-15 \
+    assert np.all( np.isclose( d1,                          
+                               np.array( [[0,1],[-1,0]] ),  
+                               atol=1e-15,
                                ) )
     # Test inverse
     d2 = a.invert( d1 )
@@ -131,16 +131,16 @@ def test_003_Rotation():
                 
     # Make sure default rotation is radians not degrees
     a = t.Rotation( 90 )
-    assert not np.any( np.isclose( a.params['matrix'],           \
-                                   np.array( [[ 0,-1], [1,0]] ), \
+    assert not np.any( np.isclose( a.params['matrix'],           
+                                   np.array( [[ 0,-1], [1,0]] ), 
                                    atol=1e-15
                                   ) )
     
     # Test rotation *from* Y *to* X (reverse sense from standard)  
     a = t.Rotation([1,0,90],u='deg')
-    assert np.all( np.isclose( a.params['matrix'],           \
-                               np.array( [[0,1],[-1,0]] ),   \
-                               atol=1e-15 \
+    assert np.all( np.isclose( a.params['matrix'],           
+                               np.array( [[0,1],[-1,0]] ),   
+                               atol=1e-15,
                                    ) )
     
     # Test rotation order

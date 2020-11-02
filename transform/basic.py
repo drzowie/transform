@@ -65,11 +65,11 @@ class Linear(Transform):
 
     '''
     
-    def __init__(self, *,
-                 pre    = None, post   = None,\
-                 matrix = None,\
-                 iunit  = None, ounit  = None,\
-                 itype  = None, otype  = None\
+    def __init__(self, *,                      
+                 pre    = None, post   = None, 
+                 matrix = None,                
+                 iunit  = None, ounit  = None, 
+                 itype  = None, otype  = None  
                 ):
         
         idim = None
@@ -124,11 +124,11 @@ class Linear(Transform):
         self.ounit      = ounit
         self.itype      = itype
         self.otype      = otype
-        self.params = {\
-            'pre'    :  pre,\
-            'post'   :  post,\
-            'matrix' :  matrix,\
-            'matinv' :  matinv,\
+        self.params = {
+            'pre'    :  pre,
+            'post'   :  post,
+            'matrix' :  matrix,
+            'matinv' :  matinv,
             }
             
     def __str__(self):
@@ -286,8 +286,8 @@ class Scale(Linear):
         Optional; if present must be a vector.  Offset vector to be added to
         the return data after hitting with the scale matrix
     ''' 
-    def __init__(self,                                     \
-                 /, scale: np.ndarray,  d=None, \
+    def __init__(self,                                     
+                 /, scale: np.ndarray,  d=None, 
                  *, post=None, pre=None,
                  iunit=None, ounit=None,
                  itype=None, otype=None
@@ -330,11 +330,11 @@ class Scale(Linear):
         self.ounit      = ounit
         self.itype      = itype
         self.otype      = otype
-        self.params = {    \
-            'pre': pre,    \
-            'post': post,  \
-            'matrix' : m,  \
-            'matinv' : m1, \
+        self.params = {    
+            'pre': pre,    
+            'post': post,  
+            'matrix' : m,  
+            'matinv' : m1, 
             }
     
     def __str__(self):
@@ -405,12 +405,12 @@ class Rotation(Linear):
         Optional; if present must be a vector.  Offset vector to be added to
         the return data after hitting with the rotation matrix.
     '''
-    def __init__(self,                      \
-                 rot=None,                  \
-                 *, post=None, pre=None,    \
-                 euler=None, u='rad',       \
-                 iunit=None,ounit=None,     \
-                 itype=None,otype=None,     \
+    def __init__(self,                      
+                 rot=None,                  
+                 *, post=None, pre=None,    
+                 euler=None, u='rad',       
+                 iunit=None,ounit=None,     
+                 itype=None,otype=None,     
                  ):
         
         d_offs = self._parse_prepost( None,   pre, 'Rotation', 'Pre-offset',  'd')
@@ -478,41 +478,17 @@ class Rotation(Linear):
         self.idim = d
         self.odim = d
         self.no_forward = False
-        self.no_reverse = False
+        self.no_reverse = False # rotations are always invertible
         self.iunit = iunit
         self.ounit = ounit
         self.itype = itype
         self.otype = otype
-        self.params = {                 \
-            'pre'    : pre,             \
-            'post'   : post,            \
-            'matrix' : out,             \
-            'matinv' : out.transpose(), \
+        self.params = {                 
+            'pre'    : pre,             
+            'post'   : post,            
+            'matrix' : out,             
+            'matinv' : out.transpose(), 
             }
 
-        
-        
-        
-        
     
-    
-        
-        
-    
-    
-        
-        
-            
-#########################
-# Helper functions - module scope; not part of a particular object
-
-
-
-                
-            
-                
-            
-                
-        
-
         
