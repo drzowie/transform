@@ -4,6 +4,7 @@
 Transform subclasses for basic coordinate transforms
 """
 import numpy as np
+import math as math
 from .core import Transform
 
  
@@ -39,7 +40,7 @@ class Linear(Transform):
     -----
     
     Several subclasses enable simpler specification of common linear 
-    transformations such as scaling and rotation.
+    transformations such as scaling, rotation, and simple offsets.
     
     Linear transformation is overspecified by including both pre and post,
     but in practice it's convenient to be able to work in either the matrix-
@@ -87,8 +88,8 @@ class Linear(Transform):
                 raise ValueError("Linear: matrix must be a 2D numpy.ndarray or None")
         
         ### Now validate the pre and post, if present
-        idim = _parse_prepost( idim, pre,  'Linear', 'Pre-offset',  'idim' )
-        odim = _parse_prepost( odim, post, 'Linear', 'Post-offset', 'odim' )
+        idim = self._parse_prepost( idim, pre,  'Linear', 'Pre-offset',  'idim' )
+        odim = self._parse_prepost( odim, post, 'Linear', 'Post-offset', 'odim' )
                 
         if( matrix is not None ):
             if( odim is None ):
@@ -189,6 +190,48 @@ class Linear(Transform):
             return( np.append( data0, data[...,self.odim:], axis=-1 ) )
         else:
             return( data0 )
+        
+
+
+    def _parse_prepost( self, dimspec, vec, objname, prepostname, dimname ) :
+        '''
+        _parse_prepost - internal Linear method to parse a pre-offset or 
+        post-offset vector's dims during object construction.  This is 
+        used by most of the Linear subclasses as well as by Linear itself.
+        
+        Parameters
+        ----------
+        dimspec : int or None
+            DESCRIPTION.
+        vec : np.ndarray or None
+            DESCRIPTION.
+        objname : string
+            the name of the object doing the parsing (for exceptions)
+        prepostname : string
+            'pre' or post' - vector name
+        
+        Returns
+        -------
+        the dimensionality from the dimspec or vec size.
+        
+        '''
+        if( dimspec is not None   and  not isinstance( dimspec, np.ndarray) ):
+            dimspec = np.array(dimspec)
+            
+        if( dimspec is not None and dimspec.size>1 ):
+            raise ValueError(f"{objname}: {dimname} must be a scalar")
+        
+        if( vec is not None ):
+            if( not isinstance( vec, np.ndarray ) ):
+                raise ValueError(f"{objname}: {prepostname} must be a 1-D numpy.ndarray vector or None")
+            if( len( vec.shape ) != 1 ):
+                raise ValueError(f"{objname}: {prepostname} must be a 1-D vector")
+            if( (dimspec is not None)  and (dimspec != vec.size[0]) ):
+                raise ValueError(f"{objname}: {prepostname} size must match {dimname}")
+            dimspec = vec.shape[0]
+    
+        return dimspec
+    
  
         
  
@@ -235,15 +278,14 @@ class Scale(Linear):
         This is an optional dimension specifier in case you pass in a scalar
         and no other dimensionality hints.
     
-    pre : numpy.ndarray (optional; default = 0)
+    /pre : numpy.ndarray (optional; default = 0)
         Optional; if present must be a vector.  Offset vector to be added to 
         the input data before hitting with the scale matrix
         
-    post : numpy.ndarray (optional; default = 0)
+    /post : numpy.ndarray (optional; default = 0)
         Optional; if present must be a vector.  Offset vector to be added to
         the return data after hitting with the scale matrix
-    '''
-    
+    ''' 
     def __init__(self,                                     \
                  /, scale: np.ndarray,  d=None, \
                  *, post=None, pre=None,
@@ -251,8 +293,8 @@ class Scale(Linear):
                  itype=None, otype=None
                  ):
        
-        d = _parse_prepost( d, pre,  'Scale', 'Pre-offset',  'd' )
-        d = _parse_prepost( d, post, 'Scale', 'Post-offset', 'd' )
+        d = self._parse_prepost( d, pre,  'Scale', 'Pre-offset',  'd' )
+        d = self._parse_prepost( d, post, 'Scale', 'Post-offset', 'd' )
      
         if( not( isinstance( scale, np.ndarray ) ) ) :
             scale = np.array([scale])
@@ -288,7 +330,7 @@ class Scale(Linear):
         self.ounit      = ounit
         self.itype      = itype
         self.otype      = otype
-        self.params = {
+        self.params = {    \
             'pre': pre,    \
             'post': post,  \
             'matrix' : m,  \
@@ -300,6 +342,164 @@ class Scale(Linear):
         return (super().__str__())
     
     
+    
+class Rotation(Linear):
+    '''
+    Rotation - linear transform that just rotates vectors
+    
+    Rotation transforms implement transforms of the form:
+        
+        data_out = (post) + (rmatrix x (data + pre))
+        
+    where post, pre, data, and data_out are column ectors, and rmatrix
+    is a square rotation matrix.  You specify the rotation angles between
+    pairs of input coordinates.  
+    
+    You can specify one or more rotations by axis or with two shortcuts
+    for 2D rotations (scalar rotation angle) or 3D rotations (Euler angles).
+    
+    By default, angles are specified in radians.  They can also be specified
+    in degrees if you specify.
+    
+    Examples
+    --------
+    
+        a = t.Rotation(43,'deg')       # 2-D rotation by 43 degrees CCW
+        a = t.Rotation(math.pi/4)      # 2-D rotation by 45 degrees CCW
+        a = t.Rotation([0,1,27],'deg') # 2-D rotation by 27 degrees CCW
+        
+        ### Two ways to express Euler angles in 3D
+        a = t.Rotation( euler=np.array( [10, 20, 30] ), u='deg') # axial vector
+        a = t.Rotation( [[1,2,10],[2,0,20],[1,2,30]], u='deg' )  # explicit axes
+        
+    Parameters
+    ----------
+    
+    rot : numpy.ndarray or list or scalar or None
+        This is either a scalar or a collection of 1 or more 3-arrays. If it's
+        a scalar, it is implicitly a rotation from axis 0 toward axis 1.  
+        If it's a collection of 3-arrays, the 0 and 1 elements are the "from"
+        and "toward" axes of each rotation, and the 2 element is the amount
+        of rotation.  The unit defaults to radians but can be set to degrees
+        via the "u" parameter.  The dimension of the Transform is the largest
+        axis referenced, or the dimension of the pre- or post- offset vectors,
+        if they are larger.
+    
+    /u : string (optional; keyword only; default 'rad')
+        This is the angular unit.  Only the first character is checked: If 
+        it is 'd' then angle is considered to be in degrees.  If it is 'r', then
+        angle is considered to be in radians.
+        
+    /euler:  numpy.ndarray or None
+        If this is specified, rot must be None; and axial must contain a 
+        3-vector.  The 3 elements are Euler angles, in order -- they form
+        an axial vector.  They are applied in dimension order: X (which 
+        rotates axis 1->2), Y (which rotates axis 2->0), Z (which rotates axis)
+        0->1).
+    
+    /pre : numpy.ndarray (optional; default = 0 )
+        Optional; if present must be a vector.  Offset vector to be added to
+        the input data before hitting with the rotation matrix.
+    
+    /post : numpy.ndarray ( optional; default = 0) 
+        Optional; if present must be a vector.  Offset vector to be added to
+        the return data after hitting with the rotation matrix.
+    '''
+    def __init__(self,                      \
+                 rot=None,                  \
+                 *, post=None, pre=None,    \
+                 euler=None, u='rad',       \
+                 iunit=None,ounit=None,     \
+                 itype=None,otype=None,     \
+                 ):
+        
+        d_offs = self._parse_prepost( None,   pre, 'Rotation', 'Pre-offset',  'd')
+        d_offs = self._parse_prepost( d_offs, post,'Rotation', 'Post-offset', 'd')
+        
+        if( rot is None ):
+            if(euler is None):
+                raise ValueError("Rotation: either rot or euler angles must be specified")
+            if(len(euler) != 3):
+                raise ValueError("Rotation: euler angles must have 3 components (axial vector)")
+            rot = np.array( [ [1,2,euler[0]], [2,0,euler[1]], [0,1,euler[2]] ] );
+        else:
+            assert euler is None, "Rotation: must specify only one of rot and euler angles"
+            if( not isinstance(rot, np.ndarray) ):
+                rot = np.array(rot)
+
+        if( len(rot.shape)>2 ):
+            raise ValueError("Rotation: rot parameter must be a collection of 3-vectors")
+        if( rot.size == 1 ):
+            # simple scalar rotation - replace with a 3-list
+            rot = np.array( [ [0,1,rot] ] )
+                             
+        if( len(rot.shape) == 1 ):
+            rot = np.expand_dims(rot,0)
+        
+        fr_axes = rot[:,0].astype(int)
+        to_axes = rot[:,1].astype(int)
+        angs    = rot[:,2] 
+        
+        if any(fr_axes==to_axes):
+            raise ValueError('Rotation: invalid axis-to-self rotation is not allowed')
+        
+        if( u[0] == 'r' ):
+            pass
+        elif( u[0] == 'd' ):
+            angs = angs * math.pi/180
+                    
+        d_fr = np.maximum( np.amax(fr_axes), np.amax(to_axes) ) + 1
+        if(d_offs is None):
+            d = d_fr
+        elif(d_offs < d_fr):
+            raise ValueError('Rotation: offset vectors must have at least the dims of the rotation')
+        else:
+            d = d_offs
+        
+        # Assemble identity matrix
+        d = d.astype(int)
+        identity = np.zeros( [d,d] )
+        for i in range(d):
+            identity[i,i] = 1
+        out = identity.copy()
+        
+        # Now loop over all rotations in order and assemble the total matrix
+        for i in range(fr_axes.shape[0]): 
+            m = identity.copy()
+            c = np.cos(angs[i])
+            s = np.sin(angs[i])
+            m[fr_axes[i],fr_axes[i]] = c
+            m[to_axes[i],to_axes[i]] = c
+            m[to_axes[i],fr_axes[i]] = s
+            m[fr_axes[i],to_axes[i]] = -s
+            out = np.matmul(m,out)
+        
+        # Finally -- build the object
+        self.idim = d
+        self.odim = d
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = iunit
+        self.ounit = ounit
+        self.itype = itype
+        self.otype = otype
+        self.params = {                 \
+            'pre'    : pre,             \
+            'post'   : post,            \
+            'matrix' : out,             \
+            'matinv' : out.transpose(), \
+            }
+
+        
+        
+        
+        
+    
+    
+        
+        
+    
+    
         
         
             
@@ -307,46 +507,7 @@ class Scale(Linear):
 # Helper functions - module scope; not part of a particular object
 
 
-def _parse_prepost( dimspec, vec, objname, prepostname, dimname ) :
-    '''
-    _parse_prepost - internal routine to parse a pre-offset or post-offset
-    vector's dims during object construction
-    
-    
 
-    Parameters
-    ----------
-    dimspec : int or None
-        DESCRIPTION.
-    vec : np.ndarray or None
-        DESCRIPTION.
-    objname : string
-        the name of the object doing the parsing (for exceptions)
-    prepostname : string
-        'pre' or post' - vector name
-
-    Returns
-    -------
-    the dimensionality from the dimspec or vec size.
-
-    '''
-    if( dimspec is not None   and  not isinstance( dimspec, np.ndarray) ):
-        dimspec = np.array(dimspec)
-        
-    if( dimspec is not None and dimspec.size>1 ):
-        raise ValueError(f"{objname}: {dimname} must be a scalar")
-        
-    if( vec is not None ):
-        if( not isinstance( vec, np.ndarray ) ):
-            raise ValueError(f"{objname}: {prepostname} must be a 1-D numpy.ndarray vector or None")
-        if( len( vec.shape ) != 1 ):
-            raise ValueError(f"{objname}: {prepostname} must be a 1-D vector")
-        if( (dimspec is not None)  and (dimspec != vec.size[0]) ):
-            raise ValueError(f"{objname}: {prepostname} size must match {dimname}")
-        dimspec = vec.shape[0]
-        
-    return dimspec
-    
                 
             
                 

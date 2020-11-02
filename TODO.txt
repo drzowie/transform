@@ -1,5 +1,3 @@
-* Tests for Scale
-* Rot & tests
 * Polar & tests
 * FITS & tests
 * initial map() & tests

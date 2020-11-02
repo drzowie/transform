@@ -89,7 +89,7 @@ def test_001_Linear_matrix():
     except:
         pass
     else:
-        assert false,"Should have chucked an invalid-direction exception"
+        assert False,"Should have chucked an invalid-direction exception"
     d2 = a.apply(d1)
     d3 = b.invert(d1)
     assert np.all(d2==d3)
@@ -104,10 +104,63 @@ def test_002_Scale():
     assert a.idim == 2 and a.odim == 2 
     d1 = a.apply( np.array( [5,50] ) )
     assert all( d1 == np.array([15,150]) )
-    
-    
-    
-    
 
-
+def test_003_Rotation():
+    # Test implicit 2D rotation
+    a = t.Rotation( 0 )
+    assert a.idim == 2 and a.odim == 2
+    assert np.all(a.params['matrix']== np.array([[1,0],[0,1]]))
+    
+    # Test direction of implicit 2D rotation: matrix
+    a = t.Rotation( 90, u='deg' )
+    assert np.all( np.isclose( a.params['matrix'],          \
+                               np.array( [[0,-1], [1,0]] ), \
+                               atol=1e-15                   \
+                               ) )
+    # Test direction of implicit 2D rotation: actual vector application
+    d0 = np.array( [[1,0],[0,1]] )
+    d1 = a.apply( d0 )
+    assert np.all( np.isclose( d1,                          \
+                               np.array( [[0,1],[-1,0]] ),  \
+                               atol=1e-15 \
+                               ) )
+    # Test inverse
+    d2 = a.invert( d1 )
+    assert np.all( np.isclose( d2, d0, atol=1e-15 ) )
+    
+                
+    # Make sure default rotation is radians not degrees
+    a = t.Rotation( 90 )
+    assert not np.any( np.isclose( a.params['matrix'],           \
+                                   np.array( [[ 0,-1], [1,0]] ), \
+                                   atol=1e-15
+                                  ) )
+    
+    # Test rotation *from* Y *to* X (reverse sense from standard)  
+    a = t.Rotation([1,0,90],u='deg')
+    assert np.all( np.isclose( a.params['matrix'],           \
+                               np.array( [[0,1],[-1,0]] ),   \
+                               atol=1e-15 \
+                                   ) )
+    
+    # Test rotation order
+    a = t.Rotation([[0,1,90],[1,2,90]],u='deg')
+    assert a.idim==3
+    d0 = np.array( [[1,0,0],[0,1,0],[0,0,1]] )
+    d1 = a.apply(d0)
+    d1a = np.array( [[0,0,1],[-1,0,0],[0,-1,0]] )
+    assert np.all( np.isclose( d1, d1a, atol=1e-15 ) )
+    
+    # Test Euler angles
+    a = t.Rotation([[1,2,90],[0,1,90]],u='deg')
+    b = t.Rotation(euler= np.array( [90,0,90] ), u='deg')
+    d1a = a.apply(d0)
+    d1b = b.apply(d0)
+    d1c = np.array([[0,1,0],[0,0,1],[1,0,0]])
+    assert np.all( np.isclose( d1a, d1b, atol=1e-15) )
+    assert np.all( np.isclose( d1a, d1c, atol=1e-15) )
+    
+    
+    
+    
     
