@@ -81,4 +81,4 @@ def test_008_ArrayIndex():
     data2 = a.apply(data)
     assert( np.all(data2 == data[::-1]) ) 
     
-    
+

@@ -137,6 +137,10 @@ class Linear(Transform):
         return super().__str__()
     
     def _forward( self, data: np.ndarray ):
+        # Hammer data into NumPy form
+        if( not isinstance(data, np.ndarray) ):
+            data = np.array(data)
+            
         if( data.shape[-1] < self.idim ):
             raise ValueError('This Linear needs {self.idim}-vecs; source has {data.shape[0]}-vecs')
         
@@ -165,6 +169,9 @@ class Linear(Transform):
             return( data0 )
 
     def _reverse( self, data: np.ndarray ):
+        if( not isinstance(data, np.ndarray) ):
+            data = np.array(data)
+            
         if( data.shape[-1] < self.odim ):
             raise ValueError('This reverse-Linear needs {self.odim}-vecs; source has {data.shape[0]}-vecs')
         
@@ -521,6 +528,9 @@ class Offset(Linear):
         The amount to offset the data vectors
     '''
     def __init__(self, offset):
+        if( not isinstance(offset, np.ndarray)):
+            offset = offset + np.array(0)
+            
         if( len(np.shape(offset))>1 ):
             raise ValueError("Offset: input must be a vector")
         d = np.shape(offset)[0]

@@ -58,6 +58,10 @@ def test_001_Linear_pre_post():
     assert np.all( d2.shape == d1.shape )
     assert np.all( d2 == d1 + np.array([1,2,0]) )
     
+    # Test apply with a list
+    d2 = a.apply( [0,0] ) 
+    d2 = a.invert( [0,0] )
+    
 def test_001_Linear_matrix():
     ### Test identity matrix - basic functionality
     a = t.Linear( matrix = np.array( [[1,0],[0,1]] ) )
@@ -169,6 +173,14 @@ def test_003_Rotation():
     assert np.all( np.isclose( d1a, d1b, atol=1e-15) )
     assert np.all( np.isclose( d1a, d1c, atol=1e-15) )
     
+    assert( f"{a}" == "Transform( Linear/Rotation )")
+    
+    
+def test_004_Offset():
+    a = t.Offset([1,2])
+    assert( f"{a}" == "Transform( Linear/Offset )")
+    data = [0,0]
+    b = a.apply(data)
     
     
     
