@@ -7,9 +7,7 @@ import numpy as np
 import math as math
 from .core import Transform
 
- 
-       
-    
+
 class Linear(Transform):
     '''
     transform.Linear - linear transforms
