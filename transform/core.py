@@ -23,11 +23,25 @@ class Transform:
     an image.  The output is a resampled image.  The "map" method works well 
     with the FITS standard World Coordinate System (Greisen & Calabretta 2002, 
     A&A 395, 1061), to maintain both the natural pixel coordinate system of the 
-    array and an associated world coordinate system related to the pixel location.
+    array and an associated world coordinate system related to the pixel 
+    location.
     
     You can define and compose several transformationas, then apply them all
     at once to an image.  The image is interpolated only once, when all the
     composed transformations are applied.
+    
+    NOTE: Transform considers images to be 2-D arrays indexed in conventional, 
+    sane order: the pixel coordinate system is defined so that (0,0) is at the 
+    *center* of the LOWER, LEFT pixel of an image, with (1,0) being one pixel 
+    to the RIGHT and (0,1) being one pixel ABOVE the origin, i.e. pixel vectors
+    are considered to be (X,Y) by default. This indexing method agrees with 
+    *nearly the entire scientific world* aside from the NumPy community, which
+    indexes image arrays with (Y,X), and the SciPy community, which sometimes
+    indexes images arrays with (Y,-X) to preserve handedness.  For this reason,
+    you must reverse the order of normal Transform vector components before 
+    using them to index image pixels -- or compose your transform with the 
+    ArrayIndex subclasssed Transform to convert from sane coordinates to NumPy
+    array index coordinates.
      
     Examples
     --------
@@ -79,6 +93,9 @@ class Transform:
         
         - Wrap: produces a wrapped transformation of the form B^-1 o A o B; this
           construction is common mathematically.
+          
+        - ArrayIndex: reverses data vectors so that they can be used as array
+          indices in NumPy arrays, or vice versa.
       
     In addition, the transform.basic module is imported automatically into transform
     and defines:
@@ -360,9 +377,43 @@ class Identity(Transform):
             s = s + f" ({len(self.params)} param{plural})"
         self._strtmp = s
         return super().__str__()
-
     
-
+    # Identity is idempotent so override the inverse method
+    def inverse(self):
+        return(self)
+    
+    
+    # Non-idempotent test subclass
+    
+class PlusOne_(Transform):
+    '''
+    PlusOne_ -- non-configurable non-idempotent transform for testing
+    
+    PlusOne_ is a 1-d transform that just adds one to its argument.
+    It's useful for testing because it is non-idempotent (its inverse
+    is different from itself, unlike Identity)
+    '''
+    def __init__(self):
+        self.idim=1
+        self.odim=1
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = None
+        self.ounit = None
+        self.itype = None
+        self.otype = None
+        self.params = {}
+    
+    def _forward(self,data):
+        data[...,0] = data[...,0]+1
+    
+    def _reverse(self,data):
+        data[...,0] = data[...,0]-1
+        
+    def __str__(self):
+        self._strtmp="_PlusOne"
+        return super().__str__()
+    
     
 class Inverse(Transform):
     '''
@@ -434,32 +485,44 @@ class Composition(Transform):
     
     Parameters
     ----------
-    *args : Transform(s)
+    translist : List of Transform(s)
         The args are a collection of Transforms to compose.  They are composed
         in mathematical order (i.e. the last one in the arglist gets applied
         first to data in an apply() operation).
     '''
     
-    def __init__(self,*args):
-        if(len(args)<1):
-            raise AssertionError("Composition requires at least one Transform")
+    def __init__(self, translist):
+        if(not isinstance(translist,list)):
+            raise ValueError("Composition requires a list of Transforms")
+    
+        if(len(translist)<1):
+            raise ValueError("Composition requires at least one Transform")
             
-        for xf in args:
-            if(not(isinstance(xf,Transform))):
-                raise AssertionError("transform.Composition: expected a collection of Transforms")
+        complist = []
+        
+        ### Copy the args into the composelist, unwrapping compositions if
+        ### we find them.
+        for trans in translist:
+            print (f"trans is {trans}")
+            if(not(isinstance(trans,Transform))):
+                raise AssertionError("transform.Composition: got something that's not a Transform")
+            if( isinstance(trans,Composition)):
+                complist.extend(copy.deepcopy(trans.params['list']))
+            else:
+                complist.append(copy.deepcopy(trans))
             
-        self.idim       = args[-1].idim
-        self.odim       = args[0].odim
-        self.no_forward = any(map( (lambda arg: arg.no_forward), args))
-        self.no_reverse = any(map( (lambda arg: arg.no_reverse), args))
-        self.iunit      = args[-1].iunit
-        self.ounit      = args[0].ounit
-        self.itype      = args[-1].itype
-        self.otype      = args[0].otype
-        self.params     = {'list':copy.deepcopy(args)}
+        self.idim       = complist[-1].idim
+        self.odim       = complist[0].odim
+        self.no_forward = any(map( (lambda arg: arg.no_forward), complist))
+        self.no_reverse = any(map( (lambda arg: arg.no_reverse), complist))
+        self.iunit      = complist[-1].iunit
+        self.ounit      = complist[0].ounit
+        self.itype      = complist[-1].itype
+        self.otype      = complist[0].otype
+        self.params     = {'list':complist}
         
     def _forward(self,data):
-        for xf in reverse(self.params['list']):
+        for xf in self.params['list'][::-1]:
             data = xf.apply(data)
         return data
     
@@ -480,4 +543,69 @@ class Composition(Transform):
     
         self._strtmp = '( (' + ') o ('.join( strings ) + ') )'
         return (super().__str__())
+    
+class Wrap(Composition):
+    '''
+    transform.Wrap -- wrap a Transform around another one
+    
+    Wrap generates transforms of the form:
+        
+        W^-1 o T o W
+    
+    where T is a Transform and W is a wrapper Transform. This is
+    a common construct that permits T to work with a more convenient
+    representation of the data.  Note that W is executed first and 
+    W^-1 is executed last.
+    
+    Parameters
+    ----------
+    
+    *Main - Transform
+        The Transform to be wrapped
+    
+    *Wrapper - Transform
+        The wrapping transform
+    '''
+    
+    def __init__(self, T, W):
+        super().__init__(self, W.inverse(), T, W)
+    
+    ## No __str__ for Wrap since the Composition stringifier works just fine
+
+class ArrayIndex(Transform):
+    '''
+    transform.Arrayindex -- convert a vector to a NumPy array index
+    
+    This just reverses the order of the components of the vector, so that
+    they can be used to index an array with NumPy's wonky (...,Y,X) indexing.
+    Input and output dimensions are irrelevant -- the entire vector is always
+    reversed.
+    '''
+    def __init__(self):
+        self.idim = None
+        self.odim = None
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = None
+        self.ounit = None
+        self.itype = None
+        self.otype = None
+        self.params = {}
+        
+    def _forward(self,data):
+        return(data[::-1])
+    
+    def _reverse(self,data):
+        return(data[::-1])
+    
+    def inverse(self):
+        return self
+    
+    def __str__(self):
+        self._strtmp = "ArrayIndex"
+        return (super().__str__())
+
+
+        
+
     

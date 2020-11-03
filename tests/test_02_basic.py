@@ -104,6 +104,15 @@ def test_002_Scale():
     assert a.idim == 2 and a.odim == 2 
     d1 = a.apply( np.array( [5,50] ) )
     assert all( d1 == np.array([15,150]) )
+    
+    a = t.Scale( 3, dim=3 )
+    assert a.idim==3 and a.odim==3
+    assert np.all(np.isclose(a.params['matrix'],
+                             np.array([[3,0,0],[0,3,0],[0,0,3]]),
+                             atol=1e-15
+                             )
+                  )
+                                      
 
 def test_003_Rotation():
     # Test implicit 2D rotation
@@ -144,7 +153,7 @@ def test_003_Rotation():
                                    ) )
     
     # Test rotation order
-    a = t.Rotation([[0,1,90],[1,2,90]],u='deg')
+    a = t.Rotation([[1,2,90],[0,1,90]],u='deg')
     assert a.idim==3
     d0 = np.array( [[1,0,0],[0,1,0],[0,0,1]] )
     d1 = a.apply(d0)
@@ -152,7 +161,7 @@ def test_003_Rotation():
     assert np.all( np.isclose( d1, d1a, atol=1e-15 ) )
     
     # Test Euler angles
-    a = t.Rotation([[1,2,90],[0,1,90]],u='deg')
+    a = t.Rotation([[0,1,90],[1,2,90]],u='deg')
     b = t.Rotation(euler= np.array( [90,0,90] ), u='deg')
     d1a = a.apply(d0)
     d1b = b.apply(d0)

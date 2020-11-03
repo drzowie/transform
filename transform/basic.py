@@ -132,8 +132,9 @@ class Linear(Transform):
             }
             
     def __str__(self):
-        self._strtmp = 'Linear'
-        return (super().__str__())
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Linear'
+        return super().__str__()
     
     def _forward( self, data: np.ndarray ):
         if( data.shape[-1] < self.idim ):
@@ -222,13 +223,14 @@ class Linear(Transform):
             raise ValueError(f"{objname}: {dimname} must be a scalar")
         
         if( vec is not None ):
-            if( not isinstance( vec, np.ndarray ) ):
+            if( not (isinstance( vec, (np.ndarray,list,tuple) ))):
                 raise ValueError(f"{objname}: {prepostname} must be a 1-D numpy.ndarray vector or None")
-            if( len( vec.shape ) != 1 ):
+            
+            if( len( np.shape(vec) ) != 1 ):
                 raise ValueError(f"{objname}: {prepostname} must be a 1-D vector")
-            if( (dimspec is not None)  and (dimspec != vec.size[0]) ):
+            if( (dimspec is not None)  and (dimspec != np.shape(vec)[0])):
                 raise ValueError(f"{objname}: {prepostname} size must match {dimname}")
-            dimspec = vec.shape[0]
+            dimspec = np.shape(vec)[0]
     
         return dimspec
     
@@ -264,7 +266,7 @@ class Scale(Linear):
     --------
     
        a = t.Scale( 3, 2 )            # triple the length of a vector in 2-D
-       a = t.Scale( 3, d=2 )          # same but maybe clearer
+       a = t.Scale( 3, dim=2 )        # same but maybe clearer
        a = t.Scale( np.array([1,3]) ) # Triple the Y component of a vector
     
     Parameters
@@ -274,7 +276,7 @@ class Scale(Linear):
         This is either an ndarray vector representing the trace of the 
         scale matrix, or a scalar for a uniform scale.
         
-    d : int (optional; positional or keyword)
+    dim : int (optional; positional or keyword)
         This is an optional dimension specifier in case you pass in a scalar
         and no other dimensionality hints.
     
@@ -287,43 +289,49 @@ class Scale(Linear):
         the return data after hitting with the scale matrix
     ''' 
     def __init__(self,                                     
-                 /, scale: np.ndarray,  d=None, 
+                 /, scale: np.ndarray,  dim=None, 
                  *, post=None, pre=None,
                  iunit=None, ounit=None,
                  itype=None, otype=None
                  ):
        
-        d = self._parse_prepost( d, pre,  'Scale', 'Pre-offset',  'd' )
-        d = self._parse_prepost( d, post, 'Scale', 'Post-offset', 'd' )
+        dim = self._parse_prepost( dim, pre,  'Scale', 'Pre-offset',  'dim' )
+        dim = self._parse_prepost( dim, post, 'Scale', 'Post-offset', 'dim' )
+       
+        # Make sure these are NumPy arrays
+        if( pre is not None ):
+            pre =  pre + np.array(0)
+        if( post is not None ):
+            post = post+ np.array(0)
      
         if( not( isinstance( scale, np.ndarray ) ) ) :
             scale = np.array([scale])
         if(len(scale.shape) > 1):
            raise ValueError('Scale: scale parameter must be scalar or vector')
            
-        if( d is not None ):
-            if(scale.shape[0] != d  and  scale.shape[0] != 1):
+        if( dim is not None ):
+            if(scale.shape[0] != dim  and  scale.shape[0] != 1):
                 raise ValueError('Scale d must agree with size of scale vector')
             if(scale.shape[0] == 1):
-                scale = scale + np.zeros(d) # force broadcast to correct size
+                scale = scale + np.zeros(dim) # force broadcast to correct size
         else:
             if( scale.shape[0]==1 ):
-                d = 2
+                dim = 2
                 scale = scale + np.zeros(2)
             else:
-                d = scale.shape[0]
+                dim = scale.shape[0]
             
-        m = np.zeros([d,d])
-        for i in range(d):
+        m = np.zeros([dim,dim])
+        for i in range(dim):
             m[i,i]=scale[i]
             
-        m1 = np.zeros([d,d])
+        m1 = np.zeros([dim,dim])
         if(all(scale!=0)):
-            for i in range(d):
+            for i in range(dim):
                 m1[i,i]=1.0/scale[i]
         
-        self.idim       = d
-        self.odim       = d
+        self.idim       = dim
+        self.odim       = dim
         self.no_forward = False
         self.no_reverse = (any(scale == 0))
         self.iunit      = iunit
@@ -339,15 +347,13 @@ class Scale(Linear):
     
     def __str__(self):
         self.strtmp = "Linear/Scale"
-        return (super().__str__())
-    
-    
+        return super().__str__()
     
 class Rotation(Linear):
     '''
     Rotation - linear transform that just rotates vectors
     
-    Rotation transforms implement transforms of the form:
+    Rotation transforms implement operations of the form:
         
         data_out = (post) + (rmatrix x (data + pre))
         
@@ -370,20 +376,24 @@ class Rotation(Linear):
         
         ### Two ways to express Euler angles in 3D
         a = t.Rotation( euler=np.array( [10, 20, 30] ), u='deg') # axial vector
-        a = t.Rotation( [[1,2,10],[2,0,20],[1,2,30]], u='deg' )  # explicit axes
+        a = t.Rotation( [[0,1,30],[2,0,20],[1,2,10]], u='deg' )  # explicit axes
         
     Parameters
     ----------
     
     rot : numpy.ndarray or list or scalar or None
-        This is either a scalar or a collection of 1 or more 3-arrays. If it's
-        a scalar, it is implicitly a rotation from axis 0 toward axis 1.  
+        This is either a scalar or a list or tuple of 1 or more 3-arrays. If 
+        it's a scalar, it is implicitly a rotation from axis 0 toward axis 1.  
         If it's a collection of 3-arrays, the 0 and 1 elements are the "from"
         and "toward" axes of each rotation, and the 2 element is the amount
         of rotation.  The unit defaults to radians but can be set to degrees
         via the "u" parameter.  The dimension of the Transform is the largest
         axis referenced, or the dimension of the pre- or post- offset vectors,
         if they are larger.
+        
+        If you feed in a list or tuple, then the arrays are processed in 
+        *reverse* order (by analogy to function composition) -- check the
+        ordering of the euler-angle vs explicit-rotation demo above.
     
     /u : string (optional; keyword only; default 'rad')
         This is the angular unit.  Only the first character is checked: If 
@@ -421,7 +431,7 @@ class Rotation(Linear):
                 raise ValueError("Rotation: either rot or euler angles must be specified")
             if(len(euler) != 3):
                 raise ValueError("Rotation: euler angles must have 3 components (axial vector)")
-            rot = np.array( [ [1,2,euler[0]], [2,0,euler[1]], [0,1,euler[2]] ] );
+            rot = np.array( [ [0,1,euler[2]], [2,0,euler[1]], [1,2,euler[0]] ] );
         else:
             assert euler is None, "Rotation: must specify only one of rot and euler angles"
             if( not isinstance(rot, np.ndarray) ):
@@ -464,7 +474,7 @@ class Rotation(Linear):
         out = identity.copy()
         
         # Now loop over all rotations in order and assemble the total matrix
-        for i in range(fr_axes.shape[0]): 
+        for i in range(fr_axes.shape[0])[::-1]: 
             m = identity.copy()
             c = np.cos(angs[i])
             s = np.sin(angs[i])
@@ -489,6 +499,49 @@ class Rotation(Linear):
             'matrix' : out,             
             'matinv' : out.transpose(), 
             }
-
     
+    def __str__(self):
+        self._strtmp = "Linear/Rotation"
+        return super().__str__()
+
+class Offset(Linear):
+    '''
+    Offset - linear transform that just displaces vectors
+   
+    Offset transforms implement operations of the form:
+       
+        data_out =  data + offset
+    
+    where data_out, data, and offset are column vectors. 
+    
+    Parameters
+    ----------
+    
+    offset - np.ndarray (vector)
+        The amount to offset the data vectors
+    '''
+    def __init__(self, offset):
+        if( len(np.shape(offset))>1 ):
+            raise ValueError("Offset: input must be a vector")
+        d = np.shape(offset)[0]
         
+        self.idim = d
+        self.odim = d
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = None
+        self.ounit = None
+        self.itype = None
+        self.otype = None
+        self.params = {
+            'pre': offset,
+            'post': None,
+            'matrix' : None,
+            'matinv' : None,
+        }
+    
+    def __str__ (self):
+        self._strtmp = "Linear/Offset"
+        return super().__str__()
+    
+    

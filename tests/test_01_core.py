@@ -34,25 +34,51 @@ def test_004_inverse_constructor():
         assert (f"{b}"=="Transform( Inverse Identity )")
     else:
         assert (False)  # Should have thrown an error
-        
-def test_005_inverse_inverse():
+    
     a = t.Identity()
     b = t.Inverse(a)
     c = t.Inverse(b)
     assert ( f"{c}" == "Transform( Inverse Inverse Identity )")
 
-def test_006_method_inverse():
+def test_006_inverse_method():
     a = t.Identity()
+    b = a.inverse()  # Identity is idempotent -- should get same transform back
+    assert ( f"{b}" == f"{a}"  and  f"{b}"=="Transform( Identity )")
+    a = t.PlusOne_()
+    assert ( f"{a}" == "Transform( _PlusOne )")
+
+    # PlusOne_ is non-idempotent - should get Inverse
     b = a.inverse()
+    assert( f"{b}" == "Transform( Inverse _PlusOne )")
+    
+    # Inverting the inverse via method should unwrap the inversion
     c = b.inverse()
-    assert ( f"{c}" == f"{a}"  and  f"{b}"=="Transform( Inverse Identity )")
+    assert( f"{a}" == f"{c}")
+    
 
-def test_007_composition_constructor():
-    a = t.Identity()
+def test_007_composition():
+    a = t.PlusOne_()
     b = a.inverse()
-    c = t.Composition(a,b)
+    try:
+        c = t.Composition(a,b)
+        assert False,"composition of a non-list should throw an error"
+    except:
+        pass
+    
+    # Construct an inverse
+    c = t.Composition([a,b])
     d = c.inverse()
-    assert ( f"{c}" == "Transform( ( (Identity) o (Inverse Identity) ) )"\
-        and  f"{d}" == "Transform( Inverse ( (Identity) o (Inverse Identity) ) )")
+    assert ( f"{c}" == "Transform( ( (_PlusOne) o (Inverse _PlusOne) ) )"\
+        and  f"{d}" == "Transform( Inverse ( (_PlusOne) o (Inverse _PlusOne) ) )")
+        
+    # Check that Composition flattens compositions into one list
+    e = t.Composition([c,c])
+    assert( f"{e}" == "Transform( ( (_PlusOne) o (Inverse _PlusOne) o (_PlusOne) o (Inverse _PlusOne) ) )")
 
-
+def test_008_ArrayIndex():
+    a = t.ArrayIndex()
+    data = np.array([0,1,2,3,4])
+    data2 = a.apply(data)
+    assert( np.all(data2 == data[::-1]) ) 
+    
+    

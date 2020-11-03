@@ -59,7 +59,13 @@ Image manipulation
 
 Transforms can also be used on image data, to change the meaning of the
 intrinsic pixel coordinate system and/or resample the image to a new
-coordinate system.
+coordinate system.  To aid scientific usage, Transform can also interpret and 
+manipulate the World Coordinate System (WCS) tags present in many scientific
+image FITS headers.  This interpretation is managed through the 
+Transform.FITS object that is included with the package.  This is useful,
+e.g., for aligning images of the same subject collected with different 
+instruments provided that they have WCS tags attached.
+
 
 An example usage is::
 
