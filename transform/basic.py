@@ -12,7 +12,7 @@ from .core import Transform
     
 class Linear(Transform):
     '''
-    Linear - linear transforms
+    transform.Linear - linear transforms
     
     Linear tranforms consist of an offset and a matrix operation.  it 
     implements the transform:
@@ -203,8 +203,8 @@ class Linear(Transform):
 
     def _parse_prepost( self, dimspec, vec, objname, prepostname, dimname ) :
         '''
-        _parse_prepost - internal Linear method to parse a pre-offset or 
-        post-offset vector's dims during object construction.  This is 
+        _parse_prepost - internal transform.Linear method to parse a pre-offset 
+        or post-offset vector's dims during object construction.  This is 
         used by most of the Linear subclasses as well as by Linear itself.
         
         Parameters
@@ -241,16 +241,13 @@ class Linear(Transform):
     
         return dimspec
     
- 
-        
- 
     
 ##########
 # Subclassses of Linear (e.g. scale, rot)
  
 class Scale(Linear):
     '''
-    Scale - linear transform that just stretches vectors
+    transform.Scale - linear transform that just stretches vectors
     
     Scale transforms implement linear transforms of the form:
         
@@ -268,6 +265,8 @@ class Scale(Linear):
     you do not specify either of the offsets, the dimensionality defaults
     to 2 -- this is for simple scaling of image data.  To obtain a 1-D
     simple scale, specify d=1 in the construction parameters.
+    
+    Scale is a subclass of Linear.
     
     Examples
     --------
@@ -358,7 +357,7 @@ class Scale(Linear):
     
 class Rotation(Linear):
     '''
-    Rotation - linear transform that just rotates vectors
+    transform.Rotation - linear transform that just rotates vectors
     
     Rotation transforms implement operations of the form:
         
@@ -373,6 +372,8 @@ class Rotation(Linear):
     
     By default, angles are specified in radians.  They can also be specified
     in degrees if you specify.
+    
+    Rotation is a subclass of Linear.
     
     Examples
     --------
@@ -513,13 +514,15 @@ class Rotation(Linear):
 
 class Offset(Linear):
     '''
-    Offset - linear transform that just displaces vectors
+    transform.Offset - linear transform that just displaces vectors
    
     Offset transforms implement operations of the form:
        
         data_out =  data + offset
     
     where data_out, data, and offset are column vectors. 
+    
+    Offset is a subclass of transform.Linear.
     
     Parameters
     ----------
@@ -553,5 +556,62 @@ class Offset(Linear):
     def __str__ (self):
         self._strtmp = "Linear/Offset"
         return super().__str__()
+    
+class FITS(Linear):
+    '''
+    transform.FITS - linear World Coordinate System translation
+    
+    FITS Transforms implement the World Coordinate System (WCS) that is used in 
+    the FITS image standard that's popular among scientists.  (WCS: Greisen & 
+    Calabretta 2002; "http://arxiv.org/abs/astro-ph/0207407") WCS includes 
+    both linear and nonlinear components; at present FITS Transforms only 
+    represent the linear component.
+    
+    FITS Transforms convert vectors from standard (X,Y) image pixel 
+    coordinates (in which (0,0) is the center of the pixel at lower left of 
+    the image, X runs right, and Y runs up), to world coordinates using the
+    WCS information embedded in a FITS header.
+    
+    Scientific variable types and unit names from the FITS header are imported
+    into the Transform object, for future use although they are at present 
+    advisory only.
+    
+    You can also set the number of dimensions to represent in the header.  If
+    you do that, only the first few dimensions of the FITS header are imported
+    into the object, and matrix elements that mix in higher dimensions (etc.)
+    are ignored.  That is useful, e.g., for handling RGB images that are 
+    organized as (X,Y) image planes of each color (X,Y,C).  
+    
+    Note that the pixel coordinates are *not the same* as default NumPy array 
+    indices, since X is generally the smallest-stride index in the pixel 
+    coordinate system and NumPy arrays place the smallest stride at the *end*
+    of index vectors (so that normal indexing in NumPy treats pixel 
+    coordinates as (Y,X)).
+    
+    Because only the linear portion of the WCS standard is supported 
+    (at present), FITS is currently a subclass of Linear.  
+    
+    Parameters
+    ----------
+    
+    Header: An astropy.fits.ImageHDU or astropy.fits.Header or dictionary
+    
+    /dim: an optional limiting dimension
+    '''
+    def __init__(self, header, /, dim=None):
+        pass
+    
+    def __str__(self):
+        self.strtmp = "FITS"
+        return super().__str__()
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     
