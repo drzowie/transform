@@ -5,6 +5,8 @@ Transform subclasses for basic coordinate transforms
 """
 import numpy as np
 import math as math
+import astropy.io.fits as fits
+from astropy.io.fits import CompImageHDU, HDUList, Header, ImageHDU, PrimaryHDU
 from .core import Transform
 
 
@@ -603,7 +605,39 @@ class FITS(Linear):
         self.strtmp = "FITS"
         return super().__str__()
     
+    def parse_data(data, hdu=None):
+        '''
+        Parse data to return a Numpy array and WCS object.
+        '''
+
+        if isinstance(data, str):
+            return parse_data(fits.open(data), hdu=hdu)
+
+        elif isinstance(data, HDUList):
+            if hdu is None:
+                if len(data) > 1:
+                    raise ValueError("More than one Header Data Unit (HDU) is present,"
+                                     "please specify HDU to use with hdu=option")
+                else:
+                    hdu=0
+            return parse_data(data[hdu])
+
+
+        ### Add WCS structure
+        elif isinstance(data, (PrimaryHDU, ImageHDU, CompImageHDU)):
+            return data.data, WCS(data.header)
     
+        elif isinstance(data, tuple) and isinstance(data[0], np.ndarray):
+            if isinstance(data[1], Header):
+                return data[0], WCS(data[1])
+            else:
+                return data
+        elif isinstance(data, astropy.nddata.NDDataBase):
+            return data.data, data.wcs
+        else:
+            raise TypeError("data should either be an HDU object or a tuple "
+                            "of (array, WCS) or (array, Header)")
+
     
     
     
