@@ -75,7 +75,6 @@ class Linear(Transform):
         idim = None
         odim = None
         
-     
         ### Check if we got a matrix.  if we did, make sure it's 2-D and use
         ### it to set the idim and odim.
         if( matrix is not None ):   
@@ -141,10 +140,12 @@ class Linear(Transform):
         if( not isinstance(data, np.ndarray) ):
             data = np.array(data)
             
+        # check the dimesnions to see if the dat < input dimensions
         if( data.shape[-1] < self.idim ):
             raise ValueError('This Linear needs {self.idim}-vecs; source has {data.shape[0]}-vecs')
-        
-        ## Chop ending vector elements off if necessary
+ 
+#TO GO        
+#        ## Chop ending vector elements off if necessary
         data0 = data[...,0:self.idim]
         
         ## Handle pre-offset
@@ -174,8 +175,9 @@ class Linear(Transform):
             
         if( data.shape[-1] < self.odim ):
             raise ValueError('This reverse-Linear needs {self.odim}-vecs; source has {data.shape[0]}-vecs')
-        
-        ## Chop ending vector elements off if necessary
+
+#TO GO
+#        ## Chop ending vector elements off if necessary
         data0 = data[...,0:self.odim]
         
         ## Handle reversing the post-offset
@@ -608,7 +610,16 @@ class FITS(Linear):
     def parse_data(data, hdu=None):
         '''
         Parse data to return a Numpy array and WCS object.
+        If the dimensions 
         '''
+
+        ### reshape if needed
+        orig_shape = data.shape
+        if data.ndim == 1:
+            data = data.reshape((1, 1, data.size))
+        else:
+            data = data.reshape((data.shape[0], 1, data[0].size))
+
 
         if isinstance(data, str):
             return parse_data(fits.open(data), hdu=hdu)
@@ -622,8 +633,8 @@ class FITS(Linear):
                     hdu=0
             return parse_data(data[hdu])
 
-
         ### Add WCS structure
+        
         elif isinstance(data, (PrimaryHDU, ImageHDU, CompImageHDU)):
             return data.data, WCS(data.header)
     
@@ -632,15 +643,43 @@ class FITS(Linear):
                 return data[0], WCS(data[1])
             else:
                 return data
+
         elif isinstance(data, astropy.nddata.NDDataBase):
             return data.data, data.wcs
         else:
             raise TypeError("data should either be an HDU object or a tuple "
                             "of (array, WCS) or (array, Header)")
 
+
+        ### Do stuff with the data
+
+
+        ### Update the header
+
+
+
+        ### reshape the data to the original dimensions
+        out = out.reshape(og_shape)
+
+        # Finally -- build the object
+        self.idim = d
+        self.odim = d
+        self.no_forward = False
+        self.no_reverse = False # rotations are always invertible
+        self.iunit = iunit
+        self.ounit = ounit
+        self.itype = itype
+        self.otype = otype
+        self.params = {                 
+            'pre'    : None,             
+            'post'   : None,            
+            'matrix' : out,             
+            'matinv' : out.transpose(), 
+            }
+
     
-    
-    
+    def _forward( self, data: np.ndarray ):    
+        pass
     
     
     
