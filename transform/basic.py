@@ -62,7 +62,6 @@ class Linear(Transform):
         matrix is addressed in (row,column) format -- so if you use 
         nested-brackets notation for np.array(), then the innermost vectors
         are rows of the matrix.
-
     '''
     
     def __init__(self, *,                      
@@ -75,6 +74,7 @@ class Linear(Transform):
         idim = None
         odim = None
         
+     
         ### Check if we got a matrix.  if we did, make sure it's 2-D and use
         ### it to set the idim and odim.
         if( matrix is not None ):   
@@ -136,17 +136,12 @@ class Linear(Transform):
         return super().__str__()
     
     def _forward( self, data: np.ndarray ):
-        # Hammer data into NumPy form
-        if( not isinstance(data, np.ndarray) ):
-            data = np.array(data)
             
-        # check the dimesnions to see if the dat < input dimensions
         if( data.shape[-1] < self.idim ):
             raise ValueError('This Linear needs {self.idim}-vecs; source has {data.shape[0]}-vecs')
- 
-#TO GO        
-#        ## Chop ending vector elements off if necessary
-        data0 = data[...,0:self.idim]
+        
+        ## Chop ending vector elements off if necessary
+        data0 = data
         
         ## Handle pre-offset
         if( self.params['pre'] is not None ):
@@ -163,22 +158,15 @@ class Linear(Transform):
         if( self.params['post'] is not None ):
             data0 = data0 + self.params['post']
         
-        ## Handle re-attaching longer vector elements if necessary, and return
-        if( data.shape[-1] > self.idim ):        
-            return( np.append( data0, data[...,self.idim:], axis=-1 ) )
-        else:
-            return( data0 )
+        return( data0 )
 
     def _reverse( self, data: np.ndarray ):
-        if( not isinstance(data, np.ndarray) ):
-            data = np.array(data)
             
         if( data.shape[-1] < self.odim ):
             raise ValueError('This reverse-Linear needs {self.odim}-vecs; source has {data.shape[0]}-vecs')
-
-#TO GO
-#        ## Chop ending vector elements off if necessary
-        data0 = data[...,0:self.odim]
+        
+        ## Chop ending vector elements off if necessary
+        data0 = data
         
         ## Handle reversing the post-offset
         if( self.params['post'] is not None ):
@@ -195,11 +183,7 @@ class Linear(Transform):
         if( self.params['pre'] is not None ):
             data0 = data0 - self.params['pre']
        
-        ## Reattach the longer vector elements if necessary, and return
-        if( data.shape[-1] > self.odim ):
-            return( np.append( data0, data[...,self.odim:], axis=-1 ) )
-        else:
-            return( data0 )
+        return( data0 )
         
 
 
@@ -559,7 +543,7 @@ class Offset(Linear):
         self._strtmp = "Linear/Offset"
         return super().__str__()
     
-class FITS(Linear):
+class FITS(Transform):
     '''
     transform.FITS - linear World Coordinate System translation
     
@@ -590,9 +574,6 @@ class FITS(Linear):
     of index vectors (so that normal indexing in NumPy treats pixel 
     coordinates as (Y,X)).
     
-    Because only the linear portion of the WCS standard is supported 
-    (at present), FITS is currently a subclass of Linear.  
-    
     Parameters
     ----------
     
@@ -600,89 +581,52 @@ class FITS(Linear):
     
     /dim: an optional limiting dimension
     '''
-    def __init__(self, header, /, dim=None):
-        pass
+    def __init__(self, template=None):
+
+#generate the internal parameters is a WCS object from the template passed in
+#We will take the template and pass into the WCS constructor. This will  
+#create a WCS object, use to populate self.
+#1. store the wcs object in the params field
+#2. extract the information so the rest of the transform code can interface with 
+#3. as forward and reverse is not obvious, we should test on a single point (0,0) with a 1x2 array, with a N vector 
+#4. iotype from WCS object. 
     
-    def __str__(self):
-        self.strtmp = "FITS"
-        return super().__str__()
-    
-    def parse_data(data, hdu=None):
-        '''
-        Parse data to return a Numpy array and WCS object.
-        If the dimensions 
-        '''
-
-        ### reshape if needed
-        orig_shape = data.shape
-        if data.ndim == 1:
-            data = data.reshape((1, 1, data.size))
-        else:
-            data = data.reshape((data.shape[0], 1, data[0].size))
-
-
-        if isinstance(data, str):
-            return parse_data(fits.open(data), hdu=hdu)
-
-        elif isinstance(data, HDUList):
-            if hdu is None:
-                if len(data) > 1:
-                    raise ValueError("More than one Header Data Unit (HDU) is present,"
-                                     "please specify HDU to use with hdu=option")
-                else:
-                    hdu=0
-            return parse_data(data[hdu])
-
-        ### Add WCS structure
-        
-        elif isinstance(data, (PrimaryHDU, ImageHDU, CompImageHDU)):
-            return data.data, WCS(data.header)
-    
-        elif isinstance(data, tuple) and isinstance(data[0], np.ndarray):
-            if isinstance(data[1], Header):
-                return data[0], WCS(data[1])
-            else:
-                return data
-
-        elif isinstance(data, astropy.nddata.NDDataBase):
-            return data.data, data.wcs
-        else:
-            raise TypeError("data should either be an HDU object or a tuple "
-                            "of (array, WCS) or (array, Header)")
-
-
-        ### Do stuff with the data
-
-
-        ### Update the header
-
-
-
-        ### reshape the data to the original dimensions
-        out = out.reshape(og_shape)
-
         # Finally -- build the object
-        self.idim = d
-        self.odim = d
-        self.no_forward = False
+        self.idim = wcs_o.NAXIS
+        self.odim = wcs_o.NAXIS
+        self.no_forward = False 
         self.no_reverse = False # rotations are always invertible
-        self.iunit = iunit
-        self.ounit = ounit
+        self.iunit = wcs_o.CUNIT
+        self.ounit = wcs_o.CUNIT
         self.itype = itype
         self.otype = otype
         self.params = {                 
-            'pre'    : None,             
-            'post'   : None,            
-            'matrix' : out,             
-            'matinv' : out.transpose(), 
+            'wcs'    : wcs_o
             }
 
+
+#---forward and reverse should be tested, perhaps for a single point.
+# test them in a try: statement so the code does not croak
+# f and r process the data. these always recieve an ndarray
+# So need to reshape for wcs 
+# reshape on the way out
     
-    def _forward( self, data: np.ndarray ):    
-        pass
-    
-    
-    
-    
-    
+    def _forward( self, data ):
+
+#---reshape template for WCS (if needed)
+        wcs_o = wcs.all_pix2world( data , 0 )
+
+        return( wcs_o )
+
+    def _reverse( self, data ):
+
+#---reshape template for WCS (if needed)
+        wcs_o = wcs.all_world2pix( data , 0 )
+
+        return( wcs_o )
+
+       
+    def __str__(self):
+        self.strtmp = "FITS"
+        return super().__str__()
     

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import copy
-
+import numpy as np
 class Transform:
     '''Transform - Coordinate transforms, image warping, and N-D functions
     
@@ -140,12 +140,10 @@ class Transform:
         those sub-objects should be more terse than a regular stringification, 
         so there's a separate ._str_not_top_tmp flag that they set to turn off 
         the contextual portion of the string.
-
         Returns
         -------
         str
             the string.
-
         '''
         try:
             s=self._strtmp
@@ -191,7 +189,6 @@ class Transform:
         invert : Boolean, optional
           This is an optional flag indicating that the inverse of the transform
           is to be applied, rather than the transform itself.  
-
         Raises
         ------
         AssertionError
@@ -208,23 +205,46 @@ class Transform:
             embed (increase dimensionality of the vectors) or project (decrease
             dimensionality of the vectors); additional input dimensions, if 
             present, are appended to the output unchanged in either case.
-
         '''
         if(invert):    
             if(self.no_reverse):
                 raise AssertionError("This Transform ({self.__str__()}) is invalid in the reverse direction")
-            return self._reverse(data)
+            if( not isinstance(data, np.ndarray) ):
+                data = np.array(data)
+
+            data0 = data[...,0:self.odim]
+            data0 =  self._reverse(data)
+            
+            if( data.shape[-1] > self.odim):        
+                data = ( np.append( data0, data[...,self.idim:], axis=-1 ) )
+            else:
+                data = ( data0 )
+
+            return data
+
         else:  
             if(self.no_forward):
                 raise AssertionError("This Transform ({self.__str__()}) is invalid in the forward direction")
-            return self._forward(data)
+            if( not isinstance(data, np.ndarray) ):
+                data = np.array(data)
+
+            data0 = data[...,0:self.idim]
+            data0 = self._forward(data0)
+
+            ## Handle re-attaching longer vector elements if necessary, and return - note cant test against idim in appy
+
+            if( data.shape[-1] > self.idim):        
+                data = ( np.append( data0, data[...,self.idim:], axis=-1 ) )
+            else:
+                data = ( data0 )
+
+            return data
         
         
         
     def invert(self, data, invert=False):
         '''
         invert - syntactic sugar to apply the inverse of a transform (see apply)
-
         Parameters
         ----------
         data : ndarray
@@ -232,7 +252,6 @@ class Transform:
         invert : Boolean, optional
             This works just like the "invert" flag for apply(), but in the reverse
             sense:  if False (the default), the reverse transform is applied.  
-
         Returns
         -------
         ndarray
@@ -243,14 +262,12 @@ class Transform:
     def inverse(self):
         '''
         inverse - generate the functional inverse of a Transform
-
         For most Transform objects, <obj>.inverse() is functionally 
         equivalent to transform.Inverse(<obj>).  But the method is
         overloaded in the Inverse subclass, to produce a cleaner
         output.  So if you want the inverse of a generic Transform,
         you should use its inverse method rather than explicitly 
         constructing a transform.Inverse of it.
-
         Returns
         -------
         Transform
@@ -267,18 +284,15 @@ class Transform:
         This private method does the actual transformation.  It must be
         subclassed, and this method in Transform itself just raises an
         exception.
-
         Parameters
         ----------
         data : ndarray
             This is the data to transform (see apply()).
-
         Raises
         ------
         AssertionError
             The Transform._forward method always throws an error.  Subclasses
             should overload the operator and carry out the actual math there.
-
         Returns
         -------
         None
@@ -296,18 +310,15 @@ class Transform:
         This private method does the actual inverse transformation.  it must
         be subclassed, and this method in Transform itself just raises an
         exception.
-
         Parameters
         ----------
         data : ndarray
             This is the data to transform (see apply()).
-
         Raises
         ------
         AssertionError
             The Transform._reverse method always throws an error.  Subclasses
             should overload the operator and carry out the actual math there.
-
         Returns
         -------
         None
@@ -339,16 +350,13 @@ class Identity(Transform):
     **kwargs : arbitrary
         This is an optional list of keyword args that get stashed in the object,
         if specified.
-
     '''
     
     def __init__(self,**kwargs):
         '''
         Identity constructor - demonstrate accepting and stashing args
-
         
             
-
         '''
         self.idim = 1
         self.odim = 1
@@ -435,18 +443,15 @@ class Inverse(Transform):
     def __init__(self,t):
         '''
         Inverse constructor - invert a Transform
-
         Parameters
         ----------
         t : Transform object
             The Transform to invert
-
         Returns
         -------
         Transform
             The 
         
-
         '''
         self.idim       = t.odim
         self.odim       = t.idim
@@ -604,8 +609,3 @@ class ArrayIndex(Transform):
     def __str__(self):
         self._strtmp = "ArrayIndex"
         return (super().__str__())
-
-
-        
-
-    

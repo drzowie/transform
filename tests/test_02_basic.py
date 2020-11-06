@@ -172,9 +172,7 @@ def test_003_Rotation():
     d1c = np.array([[0,1,0],[0,0,1],[1,0,0]])
     assert np.all( np.isclose( d1a, d1b, atol=1e-15) )
     assert np.all( np.isclose( d1a, d1c, atol=1e-15) )
-    
     assert( f"{a}" == "Transform( Linear/Rotation )")
-    
     
 def test_004_Offset():
     a = t.Offset([1,2])
@@ -182,6 +180,11 @@ def test_004_Offset():
     data = [0,0]
     b = a.apply(data)
     
-    
-    
+def test_005_TestForNdims():
+    a = t.Scale( np.array([1,2,3]) )
+    assert a.idim == 3 and a.odim == 3 
+    d1 = a.apply( np.array([10,20,30]) )
+    assert all( d1 == np.array([10, 40, 90]) )
+
+
     
