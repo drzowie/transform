@@ -105,12 +105,13 @@ class Transform:
                 - Scale
                 - Rotation
                 - Offset
-        
-        - Polar: transformations to/from 2-D polar (or 3-D cylindrical) coordinates
-        
+                
         - WCS: linear transformations supporting the World Coordinate System
             specification used in FITS images to map array pixel coordinates to/from 
             real-world scientific coordinates
+            
+        - Polar: Convert Cartesian to linear or conformal (logarithmic) polar 
+            coordinates
           
         - Projective: the family of projective transformations in 2-D; these are 
             first-order nonlinear projections with some nice properties, and
@@ -355,8 +356,8 @@ class Identity(Transform):
         
             
         '''
-        self.idim = 1
-        self.odim = 1
+        self.idim = 0
+        self.odim = 0
         self.no_forward = 0
         self.no_reverse = 0
         self.iunit = ""
@@ -546,6 +547,8 @@ class Composition(Transform):
         self._strtmp = '( (' + ') o ('.join( strings ) + ') )'
         return (super().__str__())
     
+    
+    
 class Wrap(Composition):
     '''
     transform.Wrap -- wrap a Transform around another one
@@ -570,9 +573,11 @@ class Wrap(Composition):
     '''
     
     def __init__(self, T, W):
-        super().__init__(self, W.inverse(), T, W)
+        super().__init__([W.inverse(), T, W])
     
     ## No __str__ for Wrap since the Composition stringifier works just fine
+    
+    
 
 class ArrayIndex(Transform):
     '''

@@ -75,7 +75,12 @@ def test_007_composition():
     e = t.Composition([c,c])
     assert( f"{e}" == "Transform( ( (_PlusOne) o (Inverse _PlusOne) o (_PlusOne) o (Inverse _PlusOne) ) )")
 
-def test_008_ArrayIndex():
+def test_008_wrap():
+    a = t.PlusOne_()
+    b = t.Identity()
+    c = t.Wrap(b,a)    
+
+def test_009_ArrayIndex():
     a = t.ArrayIndex()
     assert(a.idim==0)
     assert(a.odim==0)
