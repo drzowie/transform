@@ -5,8 +5,10 @@ Transform subclasses for basic coordinate transforms
 """
 import numpy as np
 import math as math
-import astropy.io.fits as fits
+from astropy.io import fits
 from astropy.io.fits import CompImageHDU, HDUList, Header, ImageHDU, PrimaryHDU
+from astropy.wcs import WCS
+
 from .core import Transform
 
 
@@ -136,54 +138,41 @@ class Linear(Transform):
         return super().__str__()
     
     def _forward( self, data: np.ndarray ):
-            
-        if( data.shape[-1] < self.idim ):
-            raise ValueError('This Linear needs {self.idim}-vecs; source has {data.shape[0]}-vecs')
-        
-        ## Chop ending vector elements off if necessary
-        data0 = data
-        
+
         ## Handle pre-offset
         if( self.params['pre'] is not None ):
-            data0 = data0 + self.params['pre']
+            data = data + self.params['pre']
         
         ## Handle matrix
         m = self.params['matrix']
         if( m is not None ):
-            data0 = np.expand_dims(data0,-1)  # convert vectors to Mx1
-            data0 = np.matmul( m, data0 ) 
-            data0 = data0[...,:,0]               # convert back to vectors
+            data = np.expand_dims(data,-1)  # convert vectors to Mx1
+            data = np.matmul( m, data ) 
+            data = data[...,:,0]            # convert back to vectors
         
         ## Handle post-offset
         if( self.params['post'] is not None ):
-            data0 = data0 + self.params['post']
+            data = data + self.params['post']
         
-        return( data0 )
+        return( data )
 
-    def _reverse( self, data: np.ndarray ):
-            
-        if( data.shape[-1] < self.odim ):
-            raise ValueError('This reverse-Linear needs {self.odim}-vecs; source has {data.shape[0]}-vecs')
-        
-        ## Chop ending vector elements off if necessary
-        data0 = data
-        
+    def _reverse( self, data: np.ndarray ):           
         ## Handle reversing the post-offset
         if( self.params['post'] is not None ):
-            data0 = data0 - self.params['post']
+            data = data - self.params['post']
         
         ## Handle inverse-matrix
         m = self.params['matinv']
         if( m is not None ):
-            data0 = np.expand_dims(data0,-1)
-            data0 = np.matmul( m, data0 )
-            data0 = data0[...,:,0]
+            data = np.expand_dims(data,-1)
+            data = np.matmul( m, data )
+            data = data[...,:,0]
             
         ## Handle reversing the pre-offset
         if( self.params['pre'] is not None ):
-            data0 = data0 - self.params['pre']
+            data = data - self.params['pre']
        
-        return( data0 )
+        return( data )
         
 
 
@@ -543,90 +532,63 @@ class Offset(Linear):
         self._strtmp = "Linear/Offset"
         return super().__str__()
     
-class FITS(Transform):
+
+class WCS(Transform):
     '''
-    transform.FITS - linear World Coordinate System translation
+    transform.WCS - World Coordinate System translation
     
-    FITS Transforms implement the World Coordinate System (WCS) that is used in 
+    WCS Transforms implement the World Coordinate System that is used in 
     the FITS image standard that's popular among scientists.  (WCS: Greisen & 
     Calabretta 2002; "http://arxiv.org/abs/astro-ph/0207407") WCS includes 
     both linear and nonlinear components; at present FITS Transforms only 
     represent the linear component.
     
-    FITS Transforms convert vectors from standard (X,Y) image pixel 
+    FITS Transforms convert vectors standard (X,Y) image pixel 
     coordinates (in which (0,0) is the center of the pixel at lower left of 
     the image, X runs right, and Y runs up), to world coordinates using the
-    WCS information embedded in a FITS header.
+    WCS information embedded in a FITS header. The inverse does the inverse.
     
     Scientific variable types and unit names from the FITS header are imported
-    into the Transform object, for future use although they are at present 
+    into the Transform object for future use although they are at present 
     advisory only.
     
-    You can also set the number of dimensions to represent in the header.  If
-    you do that, only the first few dimensions of the FITS header are imported
-    into the object, and matrix elements that mix in higher dimensions (etc.)
-    are ignored.  That is useful, e.g., for handling RGB images that are 
-    organized as (X,Y) image planes of each color (X,Y,C).  
-    
-    Note that the pixel coordinates are *not the same* as default NumPy array 
-    indices, since X is generally the smallest-stride index in the pixel 
-    coordinate system and NumPy arrays place the smallest stride at the *end*
-    of index vectors (so that normal indexing in NumPy treats pixel 
-    coordinates as (Y,X)).
+    the FITS object uses the astropy WCS library "under the hood" and 
+    therefore implements all the nonlinear transforms described there.
     
     Parameters
     ----------
     
-    Header: An astropy.fits.ImageHDU or astropy.fits.Header or dictionary
+    Header: An astropy.fits.ImageHDU or astropy.fits.Header or file name
     
     /dim: an optional limiting dimension
     '''
-    def __init__(self, template=None):
+    def __init__(self, template):
 
-#generate the internal parameters is a WCS object from the template passed in
-#We will take the template and pass into the WCS constructor. This will  
-#create a WCS object, use to populate self.
-#1. store the wcs object in the params field
-#2. extract the information so the rest of the transform code can interface with 
-#3. as forward and reverse is not obvious, we should test on a single point (0,0) with a 1x2 array, with a N vector 
-#4. iotype from WCS object. 
+        wcs = WCS(template)
+        
+        test_coord = np.zeros(len(wcs.shape))
+        try:
+            wcs.wcs_world2pix(test_coord,0)
+        except: self.no_forward = 1
+        
+        try:
+            wcs.wcs_pix2world(test_coord,0)
+        except: self.no_reverse = 1
+        
+        
+        self.idim = len(wcs.shape)
+        self.odim = len(wcs.shape)
+        self.iunit = ['Pixels','Pixels']
+        self.ounit = wcs.CUNIT
+        self.itype = ['X','Y']
+        self.otype = 'Y'
+        self.params = {
+            wcs: wcs
+        }
     
-        # Finally -- build the object
-        self.idim = wcs_o.NAXIS
-        self.odim = wcs_o.NAXIS
-        self.no_forward = False 
-        self.no_reverse = False # rotations are always invertible
-        self.iunit = wcs_o.CUNIT
-        self.ounit = wcs_o.CUNIT
-        self.itype = itype
-        self.otype = otype
-        self.params = {                 
-            'wcs'    : wcs_o
-            }
-
-
-#---forward and reverse should be tested, perhaps for a single point.
-# test them in a try: statement so the code does not croak
-# f and r process the data. these always recieve an ndarray
-# So need to reshape for wcs 
-# reshape on the way out
-    
-    def _forward( self, data ):
-
-#---reshape template for WCS (if needed)
-        wcs_o = wcs.all_pix2world( data , 0 )
-
-        return( wcs_o )
-
-    def _reverse( self, data ):
-
-#---reshape template for WCS (if needed)
-        wcs_o = wcs.all_world2pix( data , 0 )
-
-        return( wcs_o )
-
-       
     def __str__(self):
-        self.strtmp = "FITS"
+        self.strtmp = "WCS"
         return super().__str__()
     
+    def _forward(self, data:np.ndarray ):
+        pass

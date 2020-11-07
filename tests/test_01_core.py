@@ -21,7 +21,7 @@ def test_002_identity_constructor():
 
 def test_003_identity_apply():
     a = t.Identity()
-    b = np.ndarray([1,2])
+    b = np.array([1,2])
     c = a.apply(b)
     assert( np.all(b==c) )
 
@@ -78,7 +78,8 @@ def test_007_composition():
 def test_008_wrap():
     a = t.PlusOne_()
     b = t.Identity()
-    c = t.Wrap(b,a)    
+    c = t.Wrap(b,a)  
+    assert( f"{c}" == "Transform( ( (Inverse _PlusOne) o (Identity) o (_PlusOne) ) )")
 
 def test_009_ArrayIndex():
     a = t.ArrayIndex()

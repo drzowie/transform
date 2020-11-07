@@ -214,9 +214,12 @@ class Transform:
                 
         if(invert):    
             if(self.no_reverse):
-                raise AssertionError("This Transform ({self.__str__()}) is invalid in the reverse direction")
+                raise AssertionError(f"This {self.__str__()} is invalid in the reverse direction")
 
-            if( self.odim > 0  and  data.shape[-1] > self.odim ):
+            if( data.shape[-1] < self.odim ):
+                raise ValueError(f"This {self.__str__()} requires {self.odim} dimensions; data have {data.shape[-1]}")
+ 
+            if(self.odim > 0  and  data.shape[-1] > self.odim ):
                 data0 = data[...,0:self.odim]
                 data0 = self._reverse(data0)
                 data = np.append( data0, data[...,self.idim:], axis=-1 )
@@ -228,6 +231,9 @@ class Transform:
         else:  
             if(self.no_forward):
                 raise AssertionError("This Transform ({self.__str__()}) is invalid in the forward direction")
+            
+            if( data.shape[-1] < self.idim ):
+                raise ValueError(f"This {self.__str__()} requires {self.idim} dimensions; data have {data.shape[-1]}")
 
             if ( self.idim > 0  and  data.shape[-1] > self.idim ):
                 data0 = data[...,0:self.idim]
