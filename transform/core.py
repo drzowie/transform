@@ -206,38 +206,35 @@ class Transform:
             dimensionality of the vectors); additional input dimensions, if 
             present, are appended to the output unchanged in either case.
         '''
+        
+        # Start by making sure we have an ndarray
+        if( not isinstance(data, np.ndarray) ):
+            data = np.array(data)
+                
         if(invert):    
             if(self.no_reverse):
                 raise AssertionError("This Transform ({self.__str__()}) is invalid in the reverse direction")
-            if( not isinstance(data, np.ndarray) ):
-                data = np.array(data)
 
-            data0 = data[...,0:self.odim]
-            data0 =  self._reverse(data)
-            
-            if( data.shape[-1] > self.odim):        
-                data = ( np.append( data0, data[...,self.idim:], axis=-1 ) )
+            if( self.odim > 0  and  data.shape[-1] > self.odim ):
+                data0 = data[...,0:self.odim]
+                data0 = self._reverse(data0)
+                data = np.append( data0, data[...,self.idim:], axis=-1 )
             else:
-                data = ( data0 )
-
+                data = self._reverse(data)
+                
             return data
 
         else:  
             if(self.no_forward):
                 raise AssertionError("This Transform ({self.__str__()}) is invalid in the forward direction")
-            if( not isinstance(data, np.ndarray) ):
-                data = np.array(data)
 
-            data0 = data[...,0:self.idim]
-            data0 = self._forward(data0)
-
-            ## Handle re-attaching longer vector elements if necessary, and return - note cant test against idim in appy
-
-            if( data.shape[-1] > self.idim):        
-                data = ( np.append( data0, data[...,self.idim:], axis=-1 ) )
+            if ( self.idim > 0  and  data.shape[-1] > self.idim ):
+                data0 = data[...,0:self.idim]
+                data0 = self._forward(data0)
+                data = np.append( data0, data[...,self.idim:], axis=-1 )
             else:
-                data = ( data0 )
-
+                data = self._forward(data)
+            
             return data
         
         
@@ -587,8 +584,8 @@ class ArrayIndex(Transform):
     reversed.
     '''
     def __init__(self):
-        self.idim = None
-        self.odim = None
+        self.idim = 0
+        self.odim = 0
         self.no_forward = False
         self.no_reverse = False
         self.iunit = None

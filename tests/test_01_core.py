@@ -77,6 +77,8 @@ def test_007_composition():
 
 def test_008_ArrayIndex():
     a = t.ArrayIndex()
+    assert(a.idim==0)
+    assert(a.odim==0)
     data = np.array([0,1,2,3,4])
     data2 = a.apply(data)
     assert( np.all(data2 == data[::-1]) ) 
