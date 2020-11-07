@@ -185,6 +185,15 @@ def test_005_TestForNdims():
     assert a.idim == 3 and a.odim == 3 
     d1 = a.apply( np.array([10,20,30]) )
     assert all( d1 == np.array([10, 40, 90]) )
+    
+def test_006_WCS():
+    a = t.FITS('sample.fits')
+    assert(a.idim == 2)
+    assert(a.odim == 2)
+    assert( np.isclose ( a.apply([[0,0]],0), np.array([[-386.15825,  -676.1092]]), atol=1e-4 ) )
+    
+    
+    
 
 
     

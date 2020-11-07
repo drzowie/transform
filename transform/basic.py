@@ -5,8 +5,6 @@ Transform subclasses for basic coordinate transforms
 """
 import numpy as np
 import math as math
-from astropy.io import fits
-from astropy.io.fits import CompImageHDU, HDUList, Header, ImageHDU, PrimaryHDU
 from astropy.wcs import WCS
 
 from .core import Transform
@@ -533,9 +531,9 @@ class Offset(Linear):
         return super().__str__()
     
 
-class WCS(Transform):
+class FITS(Transform):
     '''
-    transform.WCS - World Coordinate System translation
+    transform.FITS - World Coordinate System translation
     
     WCS Transforms implement the World Coordinate System that is used in 
     the FITS image standard that's popular among scientists.  (WCS: Greisen & 
@@ -548,12 +546,14 @@ class WCS(Transform):
     the image, X runs right, and Y runs up), to world coordinates using the
     WCS information embedded in a FITS header. The inverse does the inverse.
     
-    Scientific variable types and unit names from the FITS header are imported
-    into the Transform object for future use although they are at present 
-    advisory only.
-    
     the FITS object uses the astropy WCS library "under the hood" and 
-    therefore implements all the nonlinear transforms described there.
+    therefore implements all the nonlinear transforms described there It
+    also converts all recognized units to their SI-plus-degrees-system 
+    standard internal units.  
+    
+    In addition, FITS headers with CTYPE fields recognized by the Astropy
+    WCS library are converted by that library to standard units for that 
+    CTYPE.  To avoid the conversion, use different CTYPE fields.
     
     Parameters
     ----------
@@ -564,31 +564,66 @@ class WCS(Transform):
     '''
     def __init__(self, template):
 
-        wcs = WCS(template)
+        # Construct a WCS object -- that's what does the real work.
+        wcs_obj = WCS(template)
         
-        test_coord = np.zeros(len(wcs.shape))
+        # Test to make sure the object works.
+        test_coord = np.zeros([1,wcs_obj.wcs.naxis])
         try:
-            wcs.wcs_world2pix(test_coord,0)
+            wcs_obj.wcs_world2pix(test_coord,0)
+            self.no_forward = 0
         except: self.no_forward = 1
         
         try:
-            wcs.wcs_pix2world(test_coord,0)
+            wcs_obj.wcs_pix2world(test_coord,0)
+            self.no_reverse = 0
         except: self.no_reverse = 1
         
-        
-        self.idim = len(wcs.shape)
-        self.odim = len(wcs.shape)
+        self.idim = wcs_obj.wcs.naxis
+        self.odim = wcs_obj.wcs.naxis
         self.iunit = ['Pixels','Pixels']
-        self.ounit = wcs.CUNIT
+        self.ounit = wcs_obj.wcs.cunit
         self.itype = ['X','Y']
-        self.otype = 'Y'
+        self.otype = wcs_obj.wcs.ctype
         self.params = {
-            wcs: wcs
+            'wcs': wcs_obj
         }
     
     def __str__(self):
         self.strtmp = "WCS"
         return super().__str__()
     
-    def _forward(self, data:np.ndarray ):
-        pass
+    def _forward(self, data):
+        sh = data.shape
+       
+        if(len(sh)>2):
+            data = np.reshape( data, [ np.prod(sh[:-2]),sh[-1] ], order='C' )
+        elif(len(sh)==1):
+            data = np.expand_dims(data,0)
+            
+        data = self.params['wcs'].all_pix2world( data, 0 )
+        
+        if(len(sh)>2 or len(sh)==1):
+            data = np.reshape( data, sh, order='C' )
+        
+        return(data)
+    
+    def _reverse(self, data):
+        sh = data.shape
+        
+        if(len(sh)>2):
+            data = np.reshape( data, [ np.prod(sh[:-2]),sh[-1] ], order='C' )
+        elif(len(sh)==1):
+            data = np.expand_dims(data,0)
+        
+        data = self.params['wcs'].all_world2pix( data, 0 )
+        
+        if(len(sh)>2 or len(sh)==1):
+            data = np.reshape( data, sh, order='C' )
+        
+        return(data)
+    
+        
+            
+    
+        

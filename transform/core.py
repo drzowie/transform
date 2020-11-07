@@ -465,7 +465,7 @@ class Inverse(Transform):
         self.ounit      = t.iunit
         self.itype      = t.otype
         self.otype      = t.itype
-        self.params     = {'transform':copy.deepcopy(t)}
+        self.params     = {'transform':copy.copy(t)}
     
     def _forward(self, data):
         return(self.params['transform'].apply(data,invert=True))
@@ -516,9 +516,9 @@ class Composition(Transform):
             if(not(isinstance(trans,Transform))):
                 raise AssertionError("transform.Composition: got something that's not a Transform")
             if( isinstance(trans,Composition)):
-                complist.extend(copy.deepcopy(trans.params['list']))
+                complist.extend(copy.copy(trans.params['list']))
             else:
-                complist.append(copy.deepcopy(trans))
+                complist.append(copy.copy(trans))
             
         self.idim       = complist[-1].idim
         self.odim       = complist[0].odim
