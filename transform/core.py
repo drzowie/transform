@@ -2,6 +2,8 @@
 
 import copy
 import numpy as np
+import astropy
+
 class Transform:
     '''Transform - Coordinate transforms, image warping, and N-D functions
     
@@ -314,6 +316,7 @@ class Transform:
         This private method does the actual inverse transformation.  it must
         be subclassed, and this method in Transform itself just raises an
         exception.
+        
         Parameters
         ----------
         data : ndarray
@@ -333,6 +336,120 @@ class Transform:
             )
           
  
+    def map(self, data, /, 
+            method='s',
+            bound='none',
+            phot='radiance',
+            template=None
+            ):
+        '''
+        map - use a transform to remap a pixel array
+        
+        This method implements resampling of gridded data by applying the 
+        Transform to the implicit coordinate system of the sampled data.
+        The output data have the size of the template, or of the input
+        array.  
+        
+        The method works by using the inverse Transform to map *from* the 
+        output space back *to* the input space. The output data samples
+        are then interpolated from the locations in the input space.
+        
+        Parameters
+        ----------
+        
+        data : ndarray
+            This is the gridded data to resample.  Its must have at least
+            as many dimensions as the idim of the Transform (self).
+            
+        /method : string (default 'sample')
+            This string indicates the interpolation method to use.  Only
+            the first character is checked.  Possible values are:
+                
+                'sample' - use the value of the nearest-neighbor pixel in
+                    the input space.  Very fast, but produces aliasing.
+                    
+                'linear' - use <N>-linear interpolation. Marginaly bettter than
+                    sampling, but still produces phase and amplitude aliasing
+                
+                'cubic' - use <N>-cubic interpolation. This produces a smoother
+                    output than linear for enlargements
+                
+                'fourier' - use discrete Fourier coefficients. to interpolate
+                    between points.  This is useful for periodic data.
+                    
+                'gaussian' - use locally optimized Jacobian-driven filtering,
+                    with a Gaussian filter profile
+                    
+                'hanning' - use locally optimized Jacobian-drivn filtering,
+                    with a Hanning window profile
+                    
+        /phot : string (default 'radiance')
+            This string indicates the style of photometry to preserve in the
+            data. The default value is useful for most image data.
+            Only the first character is tested. Allowable values are:
+                
+                'radiance' or 'intensive' - output values approximate the local
+                value of the input data.
+                
+                'flux' or 'extensive' - output values are scaled to preserve
+                summed/integrated value over each region.
+        
+        /template : list or tuple or None (default None)
+            If present, this is the shape of the output data grid.  It must 
+            have dimensions that agree with the odim of the transform.  If the
+            input grid has the same dimensionality as the imput dimension of 
+            the Transform, the output must match the output dimensiln.  If the
+            input grid dimensionality is higher, then the output grid must
+            exceed the output dimension of the Transform by the same amount.
+        
+        Returns
+        -------
+        
+        The resampled data
+        '''
+        ##### Make sure we separate the data fork of we get an ImageHDU
+        if( isinstance( data, numpy.ndarray ) ):
+            data0 = data
+        elif( isinstance( data, astropy.ImageHDU) ):
+            data0 = data.data
+        else:
+            raise ValueError('Transform.map requires a numpy array or an astropy ImageHDU')
+            
+        methodChar = method[0]
+        
+        
+        ##### Set the output array size
+        if( template is None ):
+            template = data0.shape
+        
+        ##### Check input, output, and Transform dimensions all agree.
+        ##### Okay to pass in *more* dimensions (and let them get broadcast).
+        ##### Not okay to pass in *fewer* dimensions.
+        if( len(template) < self.odim ):
+            raise ValueError('map: Transform odim must match output data shape')
+        if( len(data0.shape) < self.idim ):
+            raise ValueError('map: Transform idim must match input data shape')
+        if( len(data0.shape) - self.idim  != len(template) - self.odim ):
+            raise ValueError('map: template and source dimensions must match')
+        
+        # Enumerate every pixel ( coords[...,Y,X,:] gets [X,Y,...] )
+        coords = np.mgrid[list( map( lambda i:range(i), iter(template)))].transpose()
+        
+        # Transform back to the input grid
+        icoords = self.invert(coords)
+        
+        # Figure the interpolation.
+        if(methodChar == 's'):
+            pass
+        
+        assert("map: still need interpolators!")
+        
+        
+        
+            
+            
+            
+    
 #######################################################################
 #######################################################################
 #    
@@ -511,17 +628,28 @@ class Composition(Transform):
         
         ### Copy the args into the composelist, unwrapping compositions if
         ### we find them.
+        idim = 0
+        odim = 0
         for trans in translist:
             print (f"trans is {trans}")
             if(not(isinstance(trans,Transform))):
                 raise AssertionError("transform.Composition: got something that's not a Transform")
+            ### Track input and output dimensions- keep first nonzero dim
+            ### in the list (in either direction), or use zero if there
+            ### aren't any.
+            if( idim==0 ):
+                idim = trans.idim
+            if( trans.odim != 0 ):
+                odim = trans.odim
             if( isinstance(trans,Composition)):
                 complist.extend(copy.copy(trans.params['list']))
             else:
                 complist.append(copy.copy(trans))
-            
-        self.idim       = complist[-1].idim
-        self.odim       = complist[0].odim
+        
+        
+        
+        self.idim       = idim
+        self.odim       = odim
         self.no_forward = any(map( (lambda arg: arg.no_forward), complist))
         self.no_reverse = any(map( (lambda arg: arg.no_reverse), complist))
         self.iunit      = complist[-1].iunit

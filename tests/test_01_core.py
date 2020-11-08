@@ -7,6 +7,9 @@ pytest test suite for the core module of Transform
 import transform as t
 import numpy as np
 
+
+
+
 def test_001_transform_constructor():
     try:
         a = t.Transform()
@@ -15,15 +18,24 @@ def test_001_transform_constructor():
     else:
         assert( False )# should have died
 
+
+
+
 def test_002_identity_constructor():
         a = t.Identity()
         assert(f"{a}" == "Transform( Identity )")
+
+
+
 
 def test_003_identity_apply():
     a = t.Identity()
     b = np.array([1,2])
     c = a.apply(b)
     assert( np.all(b==c) )
+
+
+
 
 def test_004_inverse_constructor():
     try:
@@ -40,6 +52,9 @@ def test_004_inverse_constructor():
     c = t.Inverse(b)
     assert ( f"{c}" == "Transform( Inverse Inverse Identity )")
 
+
+
+
 def test_006_inverse_method():
     a = t.Identity()
     b = a.inverse()  # Identity is idempotent -- should get same transform back
@@ -54,6 +69,8 @@ def test_006_inverse_method():
     # Inverting the inverse via method should unwrap the inversion
     c = b.inverse()
     assert( f"{a}" == f"{c}")
+
+
     
 
 def test_007_composition():
@@ -74,12 +91,29 @@ def test_007_composition():
     # Check that Composition flattens compositions into one list
     e = t.Composition([c,c])
     assert( f"{e}" == "Transform( ( (_PlusOne) o (Inverse _PlusOne) o (_PlusOne) o (Inverse _PlusOne) ) )")
+    
+    # Check that Composition tracks dimensions correctly.  In particular, idim/odim propagates through
+    # transforms with 0 dim to the first nonzero one
+    b = t.Identity()
+    c = t.Composition([b,b])
+    assert(c.idim==0 and c.odim==0)
+    
+    c = t.Composition([a,b])
+    assert(c.idim==1 and c.odim==1)
+    
+    c = t.Composition([b,a])
+    assert(c.idim==1 and c.odim==1)
+    
+    
+    
 
 def test_008_wrap():
     a = t.PlusOne_()
     b = t.Identity()
     c = t.Wrap(b,a)  
     assert( f"{c}" == "Transform( ( (Inverse _PlusOne) o (Identity) o (_PlusOne) ) )")
+
+
 
 def test_009_ArrayIndex():
     a = t.ArrayIndex()
