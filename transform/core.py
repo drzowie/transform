@@ -442,7 +442,7 @@ class Transform:
         if(methodChar == 's'):
             pass
         
-        assert("map: still need interpolators!")
+        assert("map: still needs interpolators!")
         
         
         
