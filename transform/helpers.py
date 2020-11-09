@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 Helper routines for the main Transform
+
+These are mainly to do with interpolation: several interpolators exist
+in numpy but they don't have clean treatments of boundary conditions, 
+or an orthogonal interface for the various common interpolation methods.
+
 """
 import numpy as np
+import copy
 
 def apply_boundary(vec, size, /, bound='f', rint=True):
     '''
@@ -75,7 +81,10 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         
     # rint if clled for
     if rint and not issubclass(vec.dtype.type, np.integer):
-        vec = (vec+0.5).astype('int')
+        vec = np.floor(vec+0.5).astype('int')
+    else:
+        vec = copy.copy(vec)
+        
     
     # Apply boundary conditions one dim at a time
     for ii in range(shape[-1]):

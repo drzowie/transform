@@ -3,7 +3,10 @@
 """
 Created on Sat Oct 31 22:48:57 2020
 
-@author: zowie
+Tests for the basic round of transforms in basic.py
+
+These are intended for use with pytest.
+
 """
 
 import transform as t
