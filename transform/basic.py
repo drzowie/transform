@@ -579,12 +579,26 @@ class FITS(Transform):
             self.no_reverse = 0
         except: self.no_reverse = 1
         
-        self.idim = wcs_obj.wcs.naxis
-        self.odim = wcs_obj.wcs.naxis
-        self.iunit = ['Pixels','Pixels']
-        self.ounit = wcs_obj.wcs.cunit
-        self.itype = ['X','Y']
-        self.otype = wcs_obj.wcs.ctype
+        # Generate input axis names and units - these are standard
+        # image axis names and "Pixels", since we're mapping from the
+        # pixel grid to the WCS system.  First three axes (0, 1, and 2)
+        # are called "X", "Y", and "Z".  Later axes are called "Coord <foo>"
+        # where <foo> is the index number starting at 3.
+        inames = ['X','Y','Z']
+        itype = inames[ 0 : (  min( len(inames), wcs_obj.wcs.naxis )  ) ]
+        while len(itype) < wcs_obj.wcs.naxis:
+            itype.append(f'Coord {len(itype)}')
+        iunit = ['Pixels'] * wcs_obj.wcs.naxis
+        
+        # Populate the object
+        # The WCS fields come in with exotic object types, so hammer
+        # them into numbers (idim/odim) or lists of strings (ounit/otype).
+        self.idim = wcs_obj.wcs.naxis + 0
+        self.odim = wcs_obj.wcs.naxis + 0
+        self.iunit = iunit
+        self.ounit = list( map( lambda un: f"{un}", wcs_obj.wcs.cunit) )
+        self.itype = itype
+        self.otype = list( map( lambda ty: f"{ty}", wcs_obj.wcs.ctype) )
         self.params = {
             'wcs': wcs_obj
         }
