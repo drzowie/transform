@@ -123,7 +123,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
 
 
 
-def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0):
+def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=True):
     '''
     sampleND - better N-dimensional lookup, with switchable boundaries.
     
@@ -214,6 +214,33 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0):
     -------
     The indexed data extracted from the source array, as a numpy ND array
     '''
+    if( not strict ):
+        raise ValueError("sampleND: strict dimensioning only, for now")
+        
+    if( not isinstance( index, np.ndarray ) ):
+        raise ValueError("sampleND: index must be a numpy array")
+        
+    if( not isinstance( source, np.ndarray ) ):
+        raise ValueError("sampleND: source must be a numpy array")
+    
+    if(strict):
+        if len(np.shape(source)) != np.shape(index)[-1]:
+            raise ValueError("sampleND: source shape must match index axis size")
+    
+    if(chunk is not None):
+        raise ValueError("sampleND: chunking is not yet supported")
+    
+    ## Convert to integer, and apply boundary conditions
+    index = apply_boundary( index, source.shape, bound=bound )
+    
+    ## Perform direct indexing
+    dexlist = map ( lambda ii: index[...,ii], range(index.shape[-1]) )
+    dexlist.reverse()
+    
+    return source[dexlist]
+    
+    
+    
 
 def interpND(source, /, index=None, method='s', bound='f', fillvalue=0):
     '''

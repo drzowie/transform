@@ -13,7 +13,7 @@ import numpy as np
 from transform.helpers import apply_boundary
 import copy
 
-def test_001_boundaries():
+def test_001_apply_boundary():
     
     vec = np.array([[0,2],[2,2],[3,2],[4,2],[-1,2],[-2,2],[-0.49,2],[-0.51,2],[-0.1,2],[-0.9,2]])
     
@@ -51,3 +51,6 @@ def test_001_boundaries():
     assert all(v0.flat==vec.flat)
     assert all(np.isclose(v1[:,0],[0,2,0,1,2,1,2.51,2.49,2.9,2.1],atol=1e-8))
     
+
+def test_002_sampND():
+    pass
