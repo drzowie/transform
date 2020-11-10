@@ -8,7 +8,6 @@ import math as math
 from astropy.wcs import WCS
 from .core import Transform
 
-
 class Linear(Transform):
     '''
     transform.Linear - linear transforms
@@ -638,6 +637,105 @@ class FITS(Transform):
         return(data)
     
         
-            
+class Radial(Transform):
+    '''
+    transform.Radial - Convert Cartesian to radial/cylindrical coordinates.
+    
+    Convert Cartesian to radial/cylindrical coordinates.  
+    (2-D/3-D; with inverse)
+
+    Converts 2-D Cartesian to radial (theta,r) coordinates.  You can choose
+    direct or conformal conversion.  Direct conversion preserves radial
+    distance from the origin; conformal conversion preserves local angles,
+    so that each small-enough part of the image only appears to be scaled
+    and rotated, not stretched.  Conformal conversion puts the radius on a
+    logarithmic scale, so that scaling of the original image plane is
+    equivalent to a simple offset of the transformed image plane.
+
+    If you use three or more dimensions, the higher dimensions are ignored,
+    yielding a conversion from Cartesian to cylindrical coordinates.  If you 
+    use higher dimensionality than 2, you must manually specify the origin or 
+    you will get dimension mismatch errors when you apply the transform.
+
+    
+    Parameters
+    ----------
+    
+    r0: If defined, this floating-point value causes t_radial to generate
+    (theta, ln(r/r0)) coordinates out.  Theta is in radians, and the
+    radial coordinate varies by 1 for each e-folding of the r0-scaled
+    distance from the input origin.  The logarithmic scaling is useful for
+    viewing both large and small things at the same time, and for keeping
+    shapes of small things preserved in the image.  
+        
+
+    origin: This is the origin of the expansion. Pass in a np.array. Default 
+    is set to np.array([0,0])
+
+    unit: Unit [default 'rad'] This is the angular unit to be used for the 
+    azimuth.
+    '''
+
+    def __init__(self, *,                      
+                 r0 = None,
+                 iunit = 'rad', 
+                 ounit  = 'rad', 
+                 itype = None, 
+                 otype  = None,
+                 idim  = 2, 
+                 odim = 2,
+                 origin = np.array([0,0])
+                ):
+        
+    
+        if( not( isinstance( origin, np.ndarray ) ) ) :
+            origin = np.array([origin])
+
+        if r0 in locals():
+            otype = ["Azimuth", "Ln radius"]
+        else:
+            otype = ["Azimuth", "Radius"]
+
+        ###Generate the object        
+        self.idim = idim
+        self.odim = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = iunit
+        self.ounit = ounit
+        self.itype = itype
+        self.otype = otype
+        self.params = {
+            'origin'  : origin,
+            'r0'      : r0,
+        }
+
+
+    def _forward( self, data ):
+
+        if self.iunit == 'deg':
+            angunit = 180 / np.pi
+        else:
+            angunit = 1.0
+
+        out = data.copy()
+        data[..., 0:2] -= self.params['origin'][0:2]
+        out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0]) % (2.0 * np.pi)) * angunit
+
+        if self.params['r0']:
+            out[..., 1] = 0.5 * np.log((data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0]) / (self.params['r0'] * self.params['r0']))
+        else:
+            out[..., 1] = np.sqrt(data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0])
+
+        return out
+
+
+    def _reverse( self, data ):
+        pass
+    
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Radial'
+        return super().__str__()        
     
         
