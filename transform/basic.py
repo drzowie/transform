@@ -6,7 +6,6 @@ Transform subclasses for basic coordinate transforms
 import numpy as np
 import math as math
 from astropy.wcs import WCS
-
 from .core import Transform
 
 
@@ -14,7 +13,7 @@ class Linear(Transform):
     '''
     transform.Linear - linear transforms
     
-    Linear tranforms consist of an offset and a matrix operation.  it 
+    Linear tranforms consist of an offset and a matrix operation.  It 
     implements the transform:
         
         data_out = (post) + (matrix x (data + pre))
@@ -196,7 +195,7 @@ class Linear(Transform):
         the dimensionality from the dimspec or vec size.
         
         '''
-        if( dimspec is not None   and  not isinstance( dimspec, np.ndarray) ):
+        if( dimspec is not None and not isinstance(dimspec, np.ndarray) ):
             dimspec = np.array(dimspec)
             
         if( dimspec is not None and dimspec.size>1 ):
@@ -530,6 +529,7 @@ class Offset(Linear):
         self._strtmp = "Linear/Offset"
         return super().__str__()
     
+
 
 class FITS(Transform):
     '''

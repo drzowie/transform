@@ -175,7 +175,7 @@ class Transform:
     def apply(self, data, invert=False):
        
         '''
-        Apply - apply a matheatical transform to a set of N-vectors
+        Apply - apply a mathematical transform to a set of N-vectors
         
         Parameters
         ----------
