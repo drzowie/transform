@@ -143,6 +143,18 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
     of values to be extracted from each indexed location in source.  Zero 
     values cause the corresponding dimension to be omitted.
     
+    The current implementation uses NumPy's explicit array indexing scheme.  
+    It assembles a direct, boundary-conditioned index into the source array
+    for every point to be output (including chunks if called for), then 
+    carries out the indexing operation and subsequently makes another pass to
+    fix up truncation boundary conditions if necessary.  It is undoubtedly 
+    quite slow compared to a Cython approach, but allows sampling and ranging 
+    just like its Perl/PDL predecessor, range().
+    
+    As with most general-purpose code, it seems to spend most of its lines 
+    parsing and conditioning the input.  The actual meat of the algorithm 
+    is quite simple and short.
+    
     Parameters
     ----------
     
@@ -189,26 +201,14 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
             'm' - mirror boundary conditions apply.  Indices reflect off each
                 boundary of the data, counting backward to the opposite 
                 boundary (where they reflect again).
-            
-        
-    method : string (default 'sample')
-        Only the first character of the string is checked.  This controls the 
-        interpolation method.  The character may be one of:
-            
-            's' - sample the nearest value of the array
-            
-            'l' - linearly interpolate from the hypercube surrounding each point
-            
-            'c' - cubic spline interpolation along each axis in order
-            
-            'f' - Fourier interpolation using discrete FFT coefficients
-       
         
     strict : Boolean (default True)
         The 'strict' parameter forces strict matching of index vector dimension
         to the number of axes in the source array.  If it is False, then the
         indexing vectors may be smaller than the number of indices in Source, 
         in which case the interpolation is broadcast over the additional axes.
+        Currently 'strict' is a placeholder indicating a direction for future
+        expansion.
 
     Returns
     -------
@@ -226,8 +226,20 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
     if(strict):
         if len(np.shape(source)) != np.shape(index)[-1]:
             raise ValueError("sampleND: source shape must match index axis size")
+            
+    if(fillvalue is None):
+        fillvalue = np.array([0])
+    elif( not isinstance(fillvalue, np.ndarray)):
+        fillvalue = np.array(fillvalue)
     
+    
+    # chunks are implemented by extending the index array.  The -1 axis has
+    # the index vectors in it (in x,y,... order).  The strategy is to loop
+    # over the passed-in chunk shape, adding new axes to the index as we go.
+    # Because axis order is the opposite direction from vector component order,
+    # we loop in reverse order. 
     if(chunk is not None):
+        
         if( not isinstance(chunk,np.ndarray ) ):
             chunk = np.array(chunk)
             
@@ -249,7 +261,7 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
             chunk = chunk + np.zeros( index.shape[-1] )
             
         # Now extend the index along each requested size of the chunk, to 
-        # return the requested subfield around each indexed point.
+        # return the requested chunk, starting at each indexed point.
         for ii in range( chunk.shape[0]-1, -1, -1 ):
             ch = chunk[ii]
             if(ch>0):
@@ -257,11 +269,6 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
                 # and increment the appropriate index along that dimension
                 index = np.expand_dims( index, axis=-2 ) + np.zeros([ch, index.shape[-1]])
                 index[...,ii] = index[...,ii] + np.mgrid[0:ch] 
-                
-    if(fillvalue is None):
-        fillvalue = np.array([0])
-    elif( not isinstance(fillvalue, np.ndarray)):
-        fillvalue = np.array(fillvalue)
     
     ## Convert to integer, and apply boundary conditions
     index = apply_boundary( index, source.shape, bound=bound )
@@ -278,10 +285,8 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
     ## Truncation -- hardwire negative indices to the fill value
     ## All values should be in-range after apply_boundary, so anything negative
     ## is a truncation value.
-    
     ## Note that dexlist has the vector index at the *start* (for the indexing
     ## operation), so the any operation happens along axis 0.
-    
     if any( map ( lambda s:s[0]=='t', bound ) ):
         retval = np.where( np.any(dexlist<np.array(0), axis=0), fillvalue, retval)
     
