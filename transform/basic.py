@@ -8,6 +8,8 @@ import math as math
 from astropy.wcs import WCS
 from .core import Transform
 
+
+
 class Linear(Transform):
     '''
     transform.Linear - linear transforms
@@ -731,7 +733,26 @@ class Radial(Transform):
 
 
     def _reverse( self, data ):
-        pass
+        if self.iunit == 'deg':
+            angunit = 180 / np.pi
+        else:
+            angunit = 1.0
+        
+        d0 = data[..., 0].copy() / angunit
+        d1 = np.expand_dims(data[..., 1], [1]).copy()
+        out = data.copy()
+
+        angVec = (np.expand_dims( np.cos(d0), [1]), np.expand_dims( -np.sin(d0), [1]))
+        out[..., 0:2] = np.stack(angVec, axis=-1).squeeze()
+        
+        if self.params['r0'] is not None:
+            out[..., 0:2] *= self.params['r0'] * np.exp(d1)
+        else:
+            out[..., 0:2] *= d1
+        out[..., 0:2] += self.params['origin'][0:2]
+
+        return out
+
     
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
