@@ -210,14 +210,13 @@ def test_007_Radial():
     d3 = np.array([ [2.3600555, 183.14202], [2.360116, 180.31362]])
     d4 = b.apply(x) 
     assert np.all( np.isclose(d3 , d4, atol=1e-1))
-    x = np.arange(4.).reshape(2,2)
-    c = t.Radial(origin=[130,130], r0=5)
-    d1 = np.array([[2.3600555, 3.600824], [2.360116, 3.5852597]])
-    d2 = c.apply(x)  
-    d3 = np.array([ [143.59141, 130], [88.207337, 38.681365]])
-    d4 = c.invert(x)
-    assert( np.all( np.isclose(d1 , d2, atol=1.0e-2)))
-    assert( np.all( np.isclose(d3 , d4, atol=1.0e-2)))
+    cd = t.Radial(origin=[130,130], r0=5)
+    bd1 = np.array([[2.3600555, 3.600824], [2.360116, 3.5852597]])
+    bd2 = cd.apply(x)
+    bd3 = np.array([ [143.59141, 130], [88.207337, 38.681365]])
+    bd4 = cd.invert(x)
+    assert(  np.allclose(bd1,bd2, atol=1e-2))
+    assert(  np.allclose(bd3,bd4, atol=1e-2))
 
     
     
