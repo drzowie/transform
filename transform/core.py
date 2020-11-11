@@ -408,7 +408,7 @@ class Transform:
         The resampled data
         '''
         ##### Make sure we separate the data fork of we get an ImageHDU
-        if( isinstance( data, numpy.ndarray ) ):
+        if( isinstance( data, np.ndarray ) ):
             data0 = data
         elif( isinstance( data, astropy.ImageHDU) ):
             data0 = data.data
