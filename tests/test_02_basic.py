@@ -198,13 +198,21 @@ def test_006_WCS():
     assert(a.iunit==['Pixels','Pixels'])
     assert(a.ounit==['arcsec','arcsec'])
     assert(a.otype==['Solar-X','Solar-Y'])
-    
     assert( np.all( np.isclose ( a.apply([[0,0]],0), np.array([[-386.15825,  -676.1092]]), atol=1e-4 ) ) )
 
-    
-    
-    
-    
 
+def test_007_Radial():
+    x = np.arange(4.).reshape(2,2)
+    b = t.Radial(origin=[130,130])
+    d1 = np.array([[131.0 , 130.0], [ 128.75,  127.27]])
+    d2 = b.invert(x)  
+    assert np.all( np.isclose(d1 , d2, atol=1e-1))
+    d3 = np.array([ [2.3600555, 183.14202], [2.360116, 180.31362]])
+    d4 = b.apply(x) 
+    assert np.all( np.isclose(d3 , d4, atol=1e-1))
+
+
+    
+    
 
     
