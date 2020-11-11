@@ -25,7 +25,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         Collection of vectors (in the final axis) to have boundaries applied
         
     size : list or array
-        List contianing the allowable size of each dimension in the index.  The
+        List containing the allowable size of each dimension in the index.  The
         allowable dimension is on the interval [0,size).
         
     bound : string or list of strings (default 'f')
@@ -62,7 +62,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         
     # I'm sure there's a better way to do this - explicitly broadcast
     # size if it's a scalar or a 1-element list
-    if( not isinstance(size,list) ):
+    if( not isinstance(size,(tuple,list,np.ndarray) )):
         size = list( map( lambda i:size, range(shape[-1])))
     elif(len(size)==1):
         size = list( map ( lambda i:size[0], range(shape[-1]))) 
@@ -93,7 +93,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
     
         ## forbid
         if    b=='f':
-            if not  (all(vec[...,ii] >= 0) and all(vec[...,ii] < s)):
+            if not  (np.all((vec[...,ii] >= 0) * (vec[...,ii] < s))):
                 raise ValueError("apply_boundary: boundary violation with 'forbid' condition")
         ## truncate      
         elif  b=='t': 
@@ -218,28 +218,74 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
         raise ValueError("sampleND: strict dimensioning only, for now")
         
     if( not isinstance( index, np.ndarray ) ):
-        raise ValueError("sampleND: index must be a numpy array")
+        index = np.array(index)
         
     if( not isinstance( source, np.ndarray ) ):
-        raise ValueError("sampleND: source must be a numpy array")
+        source = np.array(source)
     
     if(strict):
         if len(np.shape(source)) != np.shape(index)[-1]:
             raise ValueError("sampleND: source shape must match index axis size")
     
     if(chunk is not None):
-        raise ValueError("sampleND: chunking is not yet supported")
+        if( not isinstance(chunk,np.ndarray ) ):
+            chunk = np.array(chunk)
+            
+        if(len(chunk.shape)==0):
+            chunk = np.expand_dims( chunk, -1 )
+        elif(len(chunk.shape) > 1):
+            raise ValueError("sampleND: chunk must be a scalar or 1-D array")
+        
+        # Make sure the chunk size is an integer
+        if not issubclass(chunk.dtype.type, np.integer):
+            chunk = np.floor(chunk+0.5).astype('int')
+            
+        # Make sure no chunk sizes are negative (oops).  Zero is okay.
+        if( any(chunk < 0) ):
+            raise ValueError("sampleND: chunk size must be nonnegative")
+        
+        # Broadcast the chunk shape to the size of the index vector, if it's a scalar
+        if(chunk.shape[0] == 1):
+            chunk = chunk + np.zeros( index.shape[-1] )
+            
+        # Now extend the index along each requested size of the chunk, to 
+        # return the requested subfield around each indexed point.
+        for ii in range( chunk.shape[0]-1, -1, -1 ):
+            ch = chunk[ii]
+            if(ch>0):
+                # chunksize is greater than zero: insert the new dimension,
+                # and increment the appropriate index along that dimension
+                index = np.expand_dims( index, axis=-2 ) + np.zeros([ch, index.shape[-1]])
+                index[...,ii] = index[...,ii] + np.mgrid[0:ch] 
+                
+    if(fillvalue is None):
+        fillvalue = np.array([0])
+    elif( not isinstance(fillvalue, np.ndarray)):
+        fillvalue = np.array(fillvalue)
     
     ## Convert to integer, and apply boundary conditions
     index = apply_boundary( index, source.shape, bound=bound )
     
-    ## Perform direct indexing
-    dexlist = map ( lambda ii: index[...,ii], range(index.shape[-1]) )
-    dexlist.reverse()
+    ## Perform direct indexing.  Range() call reverses dim order, for
+    ## Python standard (...,Y,X) indexing.
+    dexlist = tuple( map ( lambda ii: index[...,ii], 
+                          range(index.shape[-1]-1,-1,-1 ) 
+                          ) 
+                    )
     
-    return source[dexlist]
+    retval = source[dexlist]
     
+    ## Truncation -- hardwire negative indices to the fill value
+    ## All values should be in-range after apply_boundary, so anything negative
+    ## is a truncation value.
     
+    ## Note that dexlist has the vector index at the *start* (for the indexing
+    ## operation), so the any operation happens along axis 0.
+    
+    if any( map ( lambda s:s[0]=='t', bound ) ):
+        retval = np.where( np.any(dexlist<np.array(0), axis=0), fillvalue, retval)
+    
+    return retval
     
 
 def interpND(source, /, index=None, method='s', bound='f', fillvalue=0):
