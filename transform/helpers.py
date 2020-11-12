@@ -8,6 +8,7 @@ or an orthogonal interface for the various common interpolation methods.
 
 """
 import numpy as np
+import numpy.fft as np.fft
 import copy
 from itertools import repeat
 
@@ -525,15 +526,16 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0, strict=F
         # On exit from the loop, all the hypercube indices have been stripped
         # off of region, which now just has dimension [<index-broadcast>]
         return region
-            
-            
-            
-            
-            
-        
-        
-        
     
+    # Fourier interpolation: find the Fourier components of the data, and 
+    # explicitly evaluate them at the provided points
+    elif(method[0]=='f'):
+
+        raise AssertionError("interpND: Fourier interpolation is not yet implemented")        
+    
+    else: 
         
-        
+        raise ValueError(f"interpND: valid methods are 'sample', 'linear', or 'cubic' (got '{method}')")
+
+
         
