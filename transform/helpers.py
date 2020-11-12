@@ -263,7 +263,7 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
             if(ch>0):
                 # chunksize is greater than zero: insert the new dimension,
                 # and increment the appropriate index along that dimension
-                index = np.expand_dims( index, axis=-2 ) + np.zeros([ch, index.shape[-1]])
+                index = np.expand_dims( index, axis=-2 ) + np.zeros([int(ch), index.shape[-1]])
                 index[...,ii] = index[...,ii] + np.mgrid[0:ch] 
     
     ## Convert to integer, and apply boundary conditions
@@ -456,7 +456,80 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0, strict=F
             )
         return value
     
-                               
+    ## Cubic:  grab a hypercube around each indexed point and calculate
+    ## a fittted cubic polynomial to it.
+    
+    elif(method[0]=='c'):
+        fldex = np.floor(index)
+        
+        # sample the ncube region around each point.  Dimensions of 
+        # region are [ <index-broadcast-dims>, <N fours> ]
+        # where N is the dimensionality of the index (that's what the chunk
+        # parameter does)
+        region = sampleND(source, 
+                          index=fldex - 1, 
+                          bound=bound, 
+                          fillvalue=fillvalue, 
+                          strict=strict, 
+                          chunk = np.array(
+                              list( repeat( int(4), index.shape[-1]) )
+                              )
+                          )
+        
+        # Grab the subpixel offset, and expand it to be broadcastable to 
+        # the new region.  At the end, alpha has dimension 
+        # [<index-broadcast-dims>, <N ones>, N]
+        b = np.expand_dims( index - fldex,
+                                tuple( range( -2,
+                                             -index.shape[-1]-2,
+                                             -1
+                                              ) 
+                                      ) 
+                                )
+        
+        # Now collapse by polynomial interpolation, one dim at a time
+        for ii in range(index.shape[-1]):
+            # a0 gets just-under sample; 
+            # a1 gets just-over sample;
+            # a1_a0 gets slope in innermost pair
+            a0 = region[...,1] 
+            a1 = region[...,2] 
+            a1_a0 = a1-a0
+
+            # s0 gets average lower slope
+            # a1 gets average upper slope
+            s0 = (region[...,2]-region[...,0]) * 0.5
+            s1 = (region[...,3]-region[...,1]) * 0.5
+            
+            # bb gets the correct vector component of b
+            bb = b[...,0,ii]
+            
+            # now collapse the region by polyomial interpolation.  
+            # Everything has the same dimensions as region, with 
+            # one dim lopped off the end
+            region = (
+                        a0 +
+                        bb * (
+                            s0 +
+                            bb * ( (3 * a1_a0 - 2*s0 - s1) +
+                                   bb * (s1 + s0 - 2*a1_a0)
+                                  )
+                            )
+                    )
+
+            # b needs to be collapsed also, to match the collapse of 
+            # region.  We just strip off one of the expanded dims, keeping
+            # the vector axis at the end.
+            b = b[...,0,:]
+        
+        # On exit from the loop, all the hypercube indices have been stripped
+        # off of region, which now just has dimension [<index-broadcast>]
+        return region
+            
+            
+            
+            
+            
         
         
         

@@ -217,6 +217,45 @@ def test_004_interpND_linear():
             ), atol=1e-4 )
         )
     
+def test_005_interpND_cubic():
+    ## Cubic interpolation reduces to linear if the data are linear
+    data = np.mgrid[0:5,0:500:100].transpose().sum(axis=-1)
+    dex = np.mgrid[ 1:2.1:0.2, 2:3:.2 ].transpose()
+    a = interpND(data, dex, method='c')
+    np.isclose(a, np.array(
+            [ [201, 201.2, 201.4, 201.6, 201.8, 202 ],
+              [221, 221.2, 221.4, 221.6, 221.8, 222 ],
+              [241, 241.2, 241.4, 241.6, 241.8, 242 ],
+              [261, 261.2, 261.4, 261.6, 261.8, 262 ],
+              [281, 281.2, 281.4, 281.6, 281.8, 282 ]
+             ]
+            ), 
+        atol=1e-4
+        )
+    data = np.array([0,0,0,1,0,0,0])
+    
+    ## Basic test of localization and negativity for impulse response
+    data = np.array([0,0,1,0,0])
+    x = np.arange(0,6.1,0.1)
+    # expand_dims call is necessary so that the arange is interpreted
+    # as a collection of 1-vectors, rather than as a single 61-vector
+    y = interpND(data, np.expand_dims(x,axis=-1), method='c', bound='e')
+
+    #  Check that the interpolated curve passes through the points in the data
+    assert all(np.isclose(y[ [0,10,20,30,40] ],
+                       [0,0,1,0,0],
+                       atol=1e-5
+                       )
+               )
+    
+    # Check: slight ringing just before and just after the impulse; 
+    # all positive during the impulse
+    assert all(y[1:10]<0)
+    assert all(y[11:30]>0)
+    assert all(y[31:40]<0)
+    
+    
+   
     
     
     
