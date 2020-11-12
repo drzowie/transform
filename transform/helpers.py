@@ -9,6 +9,7 @@ or an orthogonal interface for the various common interpolation methods.
 """
 import numpy as np
 import copy
+from itertools import repeat
 
 def apply_boundary(vec, size, /, bound='f', rint=True):
     '''
@@ -290,7 +291,7 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
     return retval
     
 
-def interpND(source, /, index=None, method='s', bound='f', fillvalue=0):
+def interpND(source, /, index=None, method='s', bound='f', fillvalue=0, strict=False):
     '''
     interpND - a better N-dimensional interpolator, with switchable boundaries.
     
@@ -355,7 +356,10 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0):
             'm' - mirror boundary conditions apply.  Indices reflect off each
                 boundary of the data, counting backward to the opposite 
                 boundary (where they reflect again).
-            
+    
+    fillvalue : scalar (default 0)
+        This is the value used to fill elements that are outside the bounds of
+        the source array, if the 'truncate' boundary condition is selected.
         
     method : string (default 'sample')
         Only the first character of the string is checked.  This controls the 
@@ -381,3 +385,82 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0):
     The indexed data extracted from the source array, as a numpy ND array
 
     '''
+    if not isinstance(index,np.ndarray):
+        index = np.array(index)
+        
+    if not isinstance(source, np.ndarray):
+        index = np.array(index)
+        
+    # Sample: just grab the nearest value using sampleND
+    if(method[0] == 's'):
+        return sampleND(source, 
+                        index=index, 
+                        bound=bound, 
+                        fillvalue=fillvalue)
+    
+    # Linear: grab the 2x...x2 hypercube containing the indexed point,
+    # then assemble weighting coefficients based on closeness of the indexed
+    # point to the corresponding corner of the hypercube.  (N-D version of the
+    # usual alpha/beta mult-and-sum)
+    elif(method[0] == 'l'):
+        fldex = np.floor(index)
+        # sample the ncube region around each point.  Dimensions of 
+        # region are [ <index-broadcast-dims>, <N twos> ]
+        # where N is the dimensionality of the index (that's what the chunk
+        # parameter does)
+        region = sampleND(source, 
+                          index=fldex, 
+                          bound=bound, 
+                          fillvalue=fillvalue, 
+                          strict=strict, 
+                          chunk = np.array(
+                              list( repeat( int(2), index.shape[-1]) )
+                              )
+                          )
+        
+        # Enumerate a hypercube with 0/1
+        # Dimension is [<N twos>, index-vec-dim-size-N]
+        ncube = np.mgrid[ tuple( repeat( range(2), index.shape[-1])) ].transpose()
+        
+        # Now assemble alpha/beta weighting coefficients
+        # expand the index dims by adding ncube dimensions
+        # alpha is [ <index-broadcast-dims>, <N 1's>, index-vec-dim-size-N ]
+        # This lets it broadcast against ncube which has N 2's.
+        # beta is the complement.
+        alpha = np.expand_dims( index - fldex,
+                                tuple( range( -2,
+                                             -index.shape[-1]-2,
+                                             -1
+                                              ) 
+                                      ) 
+                                )
+        beta = 1 - alpha
+        
+        # Now let the ncube corner coordinates (0 or 1) select alpha or or 
+        # beta coefficients. weight gets a total weighting value for each 
+        # corner of the ncube (which matches the chunk size in the output).
+        # Take the product along the vector axis to get weight, which 
+        # has dim [ <index-broadcast-dims>, <N twos> ] to match region.
+        wvec = np.where( ncube, alpha, beta )
+        weight = wvec.prod( axis=-1 )
+        
+        # finally... collapse by weighting-and-summing the region around each
+        # index value.  The twos are gone and we have only the 
+        # [ <index-broadcast-dims> ] left.
+        value = (region * weight).sum( 
+            axis=tuple( range( -1,
+                               -index.shape[-1]-1,
+                               -1
+                               )
+                       )
+            )
+        return value
+    
+                               
+        
+        
+        
+    
+        
+        
+        

@@ -10,9 +10,11 @@ Tests for the interpolation/helper routines in helpers.py
 """
 
 import numpy as np
+
+import transform as t
 from transform.helpers import apply_boundary
 from transform.helpers import sampleND
-import transform as t
+from transform.helpers import interpND
 import copy
 
 def test_001_apply_boundary():
@@ -173,4 +175,48 @@ def test_002_sampND():
     assert len(a.shape)==2
     assert np.all(a.shape==np.array([10,2]))
     assert np.all( a == [[3,4],[13,14],[23,24],[33,34],[43,44],[53,54],[63,64],[73,74],[83,84],[93,94]])
+    
+def test_003_interpND_sample():
+    data = np.mgrid[0:5,0:50:10].transpose().sum(axis=-1)
+    
+    # Test sampling. 
+    # It's just a pass-through to sampleND, so
+    # need for extensive testing here.
+    a = interpND(data, [1.2, 2.8], method='s')
+    assert a==31
+    
+def test_004_interpND_linear():
+    # Test linear interpolation
+    data = np.mgrid[0:5,0:50:10].transpose().sum(axis=-1)
+    
+    a = interpND(data, [1,3], method='l')
+    assert np.isclose(a, 31, atol=1e-5)
+    
+    a = interpND(data, [1.2,3], method='l')
+    assert np.isclose(a, 31.2, atol=1e-5)
+    
+    a = interpND(data, [1,2.8], method='l')
+    assert np.isclose(a, 29, atol=1e-5)
+    
+    a = interpND(data, [1.2,2.8], method='l')
+    assert np.isclose(a, 29.2, atol=1e-5)
+    
+    data = np.mgrid[0:5,0:500:100].transpose().sum(axis=-1)
+    dex = np.mgrid[ 1:2.1:0.2, 2:3.1:0.2 ].transpose()
+    a = interpND(data, dex, method='l')
+    assert all(a.shape==np.array([6,6]))
+    assert np.all(
+        np.isclose(a, np.array(
+            [ [201, 201.2, 201.4, 201.6, 201.8, 202 ],
+              [221, 221.2, 221.4, 221.6, 221.8, 222 ],
+              [241, 241.2, 241.4, 241.6, 241.8, 242 ],
+              [261, 261.2, 261.4, 261.6, 261.8, 262 ],
+              [281, 281.2, 281.4, 281.6, 281.8, 282 ],
+              [301, 301.2, 301.4, 301.6, 301.8, 302 ]
+             ]
+            ), atol=1e-4 )
+        )
+    
+    
+    
     
