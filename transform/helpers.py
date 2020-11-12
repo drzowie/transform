@@ -487,7 +487,7 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0, strict=F
                                       ) 
                                 )
         
-        # Now collapse by polynomial interpolation, one dim at a time
+        # Now collapse by cubic polynomial interpolation, one dim at a time
         for ii in range(index.shape[-1]):
             # a0 gets just-under sample; 
             # a1 gets just-over sample;
