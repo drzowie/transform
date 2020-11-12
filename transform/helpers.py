@@ -123,7 +123,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
 
 
 
-def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=True):
+def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=False):
     '''
     sampleND - better N-dimensional lookup, with switchable boundaries.
     
@@ -202,30 +202,25 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
                 boundary of the data, counting backward to the opposite 
                 boundary (where they reflect again).
         
-    strict : Boolean (default True)
+    strict : Boolean (default False)
         The 'strict' parameter forces strict matching of index vector dimension
         to the number of axes in the source array.  If it is False, then the
         indexing vectors may be smaller than the number of indices in Source, 
         in which case the interpolation is broadcast over the additional axes.
-        Currently 'strict' is a placeholder indicating a direction for future
-        expansion.
+  
 
     Returns
     -------
     The indexed data extracted from the source array, as a numpy ND array
     '''
-    if( not strict ):
-        raise ValueError("sampleND: strict dimensioning only, for now")
-        
     if( not isinstance( index, np.ndarray ) ):
         index = np.array(index)
         
     if( not isinstance( source, np.ndarray ) ):
         source = np.array(source)
     
-    if(strict):
-        if len(np.shape(source)) != np.shape(index)[-1]:
-            raise ValueError("sampleND: source shape must match index axis size")
+    if( strict and  len(source.shape) != index.shape[-1] ):
+        raise ValueError("sampleND: source shape must match index size when strict flag is set")
             
     if(fillvalue is None):
         fillvalue = np.array([0])
@@ -271,16 +266,18 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
                 index[...,ii] = index[...,ii] + np.mgrid[0:ch] 
     
     ## Convert to integer, and apply boundary conditions
-    index = apply_boundary( index, source.shape, bound=bound )
+    index = apply_boundary( index, source.shape[0:index.shape[-1]], bound=bound )
     
     ## Perform direct indexing.  Range() call reverses dim order, for
-    ## Python standard (...,Y,X) indexing.
-    dexlist = tuple( map ( lambda ii: index[...,ii], 
+    ## Python standard (...,Y,X) indexing.  We have to add an ellipsis object
+    ## to the start of the list after assembling it from the map.  Ick.
+    dexlist = list( map ( lambda ii: index[...,ii], 
                           range(index.shape[-1]-1,-1,-1 ) 
                           ) 
                     )
-    
-    retval = source[dexlist]
+    dexlist.insert(0,...)
+    dextuple = tuple(dexlist)
+    retval = source[dextuple]
     
     ## Truncation -- hardwire negative indices to the fill value
     ## All values should be in-range after apply_boundary, so anything negative
@@ -288,7 +285,7 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
     ## Note that dexlist has the vector index at the *start* (for the indexing
     ## operation), so the any operation happens along axis 0.
     if any( map ( lambda s:s[0]=='t', bound ) ):
-        retval = np.where( np.any(dexlist<np.array(0), axis=0), fillvalue, retval)
+        retval = np.where( np.any(dexlist[1:len(dexlist)]<np.array(0), axis=0), fillvalue, retval)
     
     return retval
     

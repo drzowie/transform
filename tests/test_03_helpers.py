@@ -144,10 +144,33 @@ def test_002_sampND():
     assert all(a.shape==np.array([4,4]))
     assert np.all( a== np.array( [[0,0,1,1],[0,0,1,1],[10,10,11,11],[10,10,11,11]] ))
     
-                  
+    ####
+    # Test non-strict indexing
+    datasource = np.mgrid[0:10,0:100:10].transpose().sum(axis=-1)
+    try:
+        a = sampleND(datasource,index=[3],strict=1)
+        assert False
+    except:
+        pass
+    a = sampleND(datasource,index=[3])
+    assert len(a.shape)==1
+    assert a.shape[0]==10
+    assert np.all(a == [3,13,23,33,43,53,63,73,83,93])
     
+    # Single dimension: treat as a single index
+    a = sampleND(datasource,index=[3,4])
+    assert len(a.shape)==0
+    assert a==43
     
+    # Two dimensions, 1x2: treat as a list of one 2D index
+    a = sampleND(datasource, index=[[3,4]])
+    assert len(a.shape)==1
+    assert a.shape[0]==1
+    assert a[0]==43
     
-    
-    
+    # Two dimensions, 2x1:  only innermost is index; they get broadcast as two rows of 10
+    a = sampleND(datasource, index = [[3],[4]])
+    assert len(a.shape)==2
+    assert np.all(a.shape==np.array([10,2]))
+    assert np.all( a == [[3,4],[13,14],[23,24],[33,34],[43,44],[53,54],[63,64],[73,74],[83,84],[93,94]])
     
