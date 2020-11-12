@@ -178,7 +178,7 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
         axis. If one of the chunk dimensions is 0, the corresponding axis is
         omitted from the output.
         
-    bound : string or list (default 'truncate')
+    bound : string or list (default 'forbid')
         This is either a string describing the boundary conditions to apply to 
         every axis in the input data, or a list of strings containing the
         boundary conditions on each axis.  The boundary conditions are listed
