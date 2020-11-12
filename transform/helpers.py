@@ -8,7 +8,6 @@ or an orthogonal interface for the various common interpolation methods.
 
 """
 import numpy as np
-import numpy.fft as np.fft
 import copy
 from itertools import repeat
 
