@@ -7,43 +7,47 @@ import astropy
 class Transform:
     '''Transform - Coordinate transforms, image warping, and N-D functions
     
-    The transform module defines a Transform object that represent N-dimensional
-    mathematical coordinate transformations.  The Transform objects can be
-    used to transform vectors and/or to resample images within the NumPy 
-    framework of structured arrays.  The base package is supplied
-    with subclasses that implement several general-purpose transformations; 
+    The transform module defines a Transform object that represents an 
+    N-dimensional mathematical coordinate transformation.  Transform objects 
+    can be used to transform vectors and/or to resample images within the NumPy 
+    framework of structured arrays.  The base package is supplied with 
+    subclasses that implement several general-purpose transformations; 
     additional subpackages supply suites of transformations for specialized 
     purposes (e.g. cartography and color manipulation).
     
     The simplest way to use a Transform object is to transform vector data
     between coordinate systems.  The "apply" method accepts an array or variable
-    whose 0th dimension is coordinate index (subsequent dimensions are
-    broadcast) and transforms the vectors into a different coordinate system.
+    whose final dimension is coordinate index (prior dimensions are broadcast)
+    and transforms the vectors according to the formulae embedded in the 
+    object.
     
     Transform also includes image resampling, via the "map" method.  You 
-    define a Transform object, then use it to remap a structured array such as 
-    an image.  The output is a resampled image.  The "map" method works well 
+    define a Transform object, then use it to remap an N-dimensional array 
+    such as an image (N=2) or collection of images (N=3).  The output is a
+    structured array (e.g., image) whose pixel coordinate system transformed
+    relative to the orginal array. The "map" method works closely with  
     with the FITS standard World Coordinate System (Greisen & Calabretta 2002, 
     A&A 395, 1061), to maintain both the natural pixel coordinate system of the 
     array and an associated world coordinate system related to the pixel 
-    location.
+    location.  A "FITS" Transform object is also provided that performs WCS
+    pixel-to-world coordinate transformations and their inverses.
     
-    You can define and compose several transformationas, then apply them all
-    at once to an image.  The image is interpolated only once, when all the
-    composed transformations are applied.
+    You can define and compose several transformationas, then apply or map 
+    them all at once on a data set.  The data are interpolated only once, whe
+    all the composed transformations are mapped.
     
     NOTE: Transform considers images to be 2-D arrays indexed in conventional, 
     sane order: the pixel coordinate system is defined so that (0,0) is at the 
     *center* of the LOWER, LEFT pixel of an image, with (1,0) being one pixel 
     to the RIGHT and (0,1) being one pixel ABOVE the origin, i.e. pixel vectors
     are considered to be (X,Y) by default. This indexing method agrees with 
-    *nearly the entire scientific world* aside from the NumPy community, which
+    nearly the entire scientific world aside from the NumPy community, which
     indexes image arrays with (Y,X), and the SciPy community, which sometimes
     indexes images arrays with (Y,-X) to preserve handedness.  For this reason,
-    you must reverse the order of normal Transform vector components before 
-    using them to index image pixels -- or compose your transform with the 
-    ArrayIndex subclasssed Transform to convert from sane coordinates to NumPy
-    array index coordinates.
+    if you use Transformed vectors directly to index array data (outside of
+    the map method) then you must reverse the order of normal Transform vector
+    components.  A handy ArrayIndex subclassed Transform is supplied, to do 
+    this conversion from sane coordinates to NumPy array index coordinates.
      
     Examples
     --------
@@ -108,8 +112,10 @@ class Transform:
                 - Rotation
                 - Offset
                 
-        - WCS: linear transformations supporting the World Coordinate System
-            specification used in FITS images to map array pixel coordinates to/from 
+        - FITS: transformation representing the conversion from standard pixel 
+            coordinates to world coordinates using the World Coordinate System
+            specification by Greisen & Calabretta -- this is typically used in
+            FITS-format images to map array pixel coordinates to/from 
             real-world scientific coordinates
             
         - Polar: Convert Cartesian to linear or conformal (logarithmic) polar 
@@ -181,19 +187,23 @@ class Transform:
         ----------
         data : ndarray
           This is the data to which the Transform should be applied.
-          The data should be a NumPy ndarray, with the 0 dim running across
-          vector dimension.  Subsequent dimensions are broadcast (e.g., 
-          a 2xWxH NumPy array is treated as a WxH array of 2-vectors).
-          The 0 dim must have sufficient size for the transform to work.
+          The data should be a NumPy ndarray, with the final axis 
+          running across vector dimension.  Earlier dimensions are broadcast
+          (e.g., a WxHx2 NumPy array is treated as a WxH array of 2-vectors).
+          The -1 axis must have sufficient size for the transform to work.
           If it is larger, then subsequent vector dimensions are ignored , so 
-          that (for example) a 2-D Transform can be applied to a 3xWxH NumPy 
+          that (for example) a 2-D Transform can be applied to a WxHx3 NumPy 
           array and the final WxH plane is transmitted unchanged.  
           
-        invert : Boolean, optional
+        invert : Boolean, (default False)
           This is an optional flag indicating that the inverse of the transform
-          is to be applied, rather than the transform itself.  
+          is to be applied, rather than the transform itself. 
+          
         Raises
         ------
+        ValueError
+          Dimensional mismatch or non-array inputs cause this to be thrown.
+          
         AssertionError
           This gets raised if the Transform won't work in the intended direction.
           That can happen because some mathematical transforms don't have inverses;
@@ -202,12 +212,12 @@ class Transform:
           
         Returns
         -------
-        ndarray
-            The transformed vector data are returned as a NumPy ndarray.  Most 
+        numpy.ndarray
+            The transformed vector data are returned as a numpy.ndarray.  Most 
             Transforms maintain the dimensionality of the source vectors.  Some 
             embed (increase dimensionality of the vectors) or project (decrease
             dimensionality of the vectors); additional input dimensions, if 
-            present, are appended to the output unchanged in either case.
+            present, are still appended to the output vectors in all any case.
         '''
         
         # Start by making sure we have an ndarray
@@ -251,13 +261,15 @@ class Transform:
     def invert(self, data, invert=False):
         '''
         invert - syntactic sugar to apply the inverse of a transform (see apply)
+        
         Parameters
         ----------
         data : ndarray
             The data to be transformed
         invert : Boolean, optional
             This works just like the "invert" flag for apply(), but in the reverse
-            sense:  if False (the default), the reverse transform is applied.  
+            sense:  if False (the default), the reverse transform is applied. 
+            
         Returns
         -------
         ndarray
@@ -273,7 +285,8 @@ class Transform:
         overloaded in the Inverse subclass, to produce a cleaner
         output.  So if you want the inverse of a generic Transform,
         you should use its inverse method rather than explicitly 
-        constructing a transform.Inverse of it.
+        constructing a transform.Inverse().
+        
         Returns
         -------
         Transform
@@ -290,22 +303,25 @@ class Transform:
         This private method does the actual transformation.  It must be
         subclassed, and this method in Transform itself just raises an
         exception.
+        
         Parameters
         ----------
         data : ndarray
             This is the data to transform (see apply()).
+            
         Raises
         ------
         AssertionError
-            The Transform._forward method always throws an error.  Subclasses
-            should overload the operator and carry out the actual math there.
+            The Transform._forward method always raises an exception.  Subclasses
+            should overload the method.
+            
         Returns
         -------
         None
             Subclassed _forward methods should return the manipulated ndarray.
         '''             
         raise AssertionError(\
-            "Transform._forward should always be overloaded."\
+            "Transform._forward should always be overloaded by a subclass."\
             )
         
         
@@ -321,18 +337,20 @@ class Transform:
         ----------
         data : ndarray
             This is the data to transform (see apply()).
+            
         Raises
         ------
         AssertionError
-            The Transform._reverse method always throws an error.  Subclasses
-            should overload the operator and carry out the actual math there.
+            The Transform._reverse method always raises an exception.  Subclasses
+            should overload the method.
+            
         Returns
         -------
         None
             Subclassed _reverse methods should return the manipulated ndarray.
         '''
         raise AssertionError(\
-            "Transform._reverse should always be overridden."\
+            "Transform._reverse should always be overloaded by a subclass."\
             )
           
  
@@ -346,9 +364,10 @@ class Transform:
         map - use a transform to remap a pixel array
         
         This method implements resampling of gridded data by applying the 
-        Transform to the implicit coordinate system of the sampled data.
-        The output data have the size of the template, or of the input
-        array.  
+        Transform to the implicit coordinate system of the sampled data,
+        and resampling the data to a new pixel grid matching the transformed
+        coordinates. The output data have their size determined by a supplied
+        template, or matched to the input array if no template is supplied.
         
         The method works by using the inverse Transform to map *from* the 
         output space back *to* the input space. The output data samples
@@ -358,8 +377,9 @@ class Transform:
         ----------
         
         data : ndarray
-            This is the gridded data to resample.  Its must have at least
-            as many dimensions as the idim of the Transform (self).
+            This is the gridded data to resample, such as an image.  It must 
+            have at least as many dimensions as the idim of the Transform 
+            (self).
             
         /method : string (default 'sample')
             This string indicates the interpolation method to use.  Only
@@ -382,7 +402,17 @@ class Transform:
                     
                 'hanning' - use locally optimized Jacobian-drivn filtering,
                     with a Hanning window profile
-                    
+            
+            Most The first four interpolation methods use the supplied "interpND"
+            general purpose interpolator and are subject to aliasing and other
+            effects outlined in a paper by DeForest (2004; Solar Physics 219, 3).
+            The last two use the numerical Jacobian derivative matrix (local 
+            linearization) of the coordinate transform to produce a variable, 
+            optimized filter function to reduce or aliminate aliasing.  Gaussian
+            sampling uses a Gaussian filter function with nice Fourier properties;
+            Hanning resampling sampling uses a Hanning-like filter function that
+            is more local than the Gaussian filter.
+
         /phot : string (default 'radiance')
             This string indicates the style of photometry to preserve in the
             data. The default value is useful for most image data.
@@ -393,8 +423,11 @@ class Transform:
                 
                 'flux' or 'extensive' - output values are scaled to preserve
                 summed/integrated value over each region.
+                
+            This option is not yet implemented and only intensive treatment
+            is supported at present.
         
-        /template : list or tuple or None (default None)
+        /template : list or tuple or HDU or FITS-header or None (default None)
             If present, this is the shape of the output data grid.  It must 
             have dimensions that agree with the odim of the transform.  If the
             input grid has the same dimensionality as the imput dimension of 
@@ -417,10 +450,11 @@ class Transform:
             
         methodChar = method[0]
         
-        
         ##### Set the output array size
         if( template is None ):
             template = data0.shape
+            
+        raise AssertionError("map: not implemented yet")
         
         ##### Check input, output, and Transform dimensions all agree.
         ##### Okay to pass in *more* dimensions (and let them get broadcast).
@@ -460,11 +494,14 @@ class Identity(Transform):
     '''
     transform.Identity -- identity transform
     
-    Identity produces a Transform that does nothing -- not very interesting.
+    Identity() produces a Transform that does nothing -- not very interesting.
     But it is a template for other types of Transform.  The constructor 
     accepts an arbitrary set of keyword arguments, to demonstrate stashing 
     arguments in an internal parameters field - but the parameters are not 
     used for anything.
+    
+    Identity() also demonstrates explicit idempotence:  its inverse() mthod
+    returns the original transform.
     
     Parameters
     ----------
@@ -606,8 +643,8 @@ class Composition(Transform):
     transform.Composition -- compose a list of one or more Transforms 
     
     Composition implements composite transforms.  It stores a copy of each of
-    the supplied Transforms in an internal list, and invokes them appropriately
-    to generate a compound operation. 
+    the supplied Transforms in an internal list, and when applied it invokes 
+    them in sequence as a compound operation. 
     
     Parameters
     ----------
@@ -711,7 +748,7 @@ class Wrap(Composition):
     
     ## No __str__ for Wrap since the Composition stringifier works just fine
     
-    
+
 
 class ArrayIndex(Transform):
     '''
@@ -721,6 +758,8 @@ class ArrayIndex(Transform):
     they can be used to index an array with NumPy's wonky (...,Y,X) indexing.
     Input and output dimensions are irrelevant -- the entire vector is always
     reversed.
+    
+    ArrayIndex is idempotent.
     '''
     def __init__(self):
         self.idim = 0
