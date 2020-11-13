@@ -7,7 +7,7 @@ import numpy as np
 import math as math
 from astropy.wcs import WCS
 from .core import Transform
-
+from astropy import units
 
 
 class Linear(Transform):
@@ -327,7 +327,8 @@ class Scale(Linear):
     def __str__(self):
         self.strtmp = "Linear/Scale"
         return super().__str__()
-    
+
+
 class Rotation(Linear):
     '''
     transform.Rotation - linear transform that just rotates vectors
@@ -500,7 +501,7 @@ class Offset(Linear):
     Parameters
     ----------
     
-    offset - np.ndarray (vector)
+    offset : np.ndarray (vector)
         The amount to offset the data vectors
     '''
     def __init__(self, offset):
@@ -663,19 +664,20 @@ class Radial(Transform):
     Parameters
     ----------
     
-    r0: If defined, this floating-point value causes t_radial to generate
+    r0: float y (optional; default = 0) If defined, this floating-point value causes t_radial to generate
     (theta, ln(r/r0)) coordinates out.  Theta is in radians, and the
     radial coordinate varies by 1 for each e-folding of the r0-scaled
     distance from the input origin.  The logarithmic scaling is useful for
     viewing both large and small things at the same time, and for keeping
     shapes of small things preserved in the image.  
         
-
     origin: This is the origin of the expansion. Pass in a np.array. Default 
     is set to np.array([0,0])
 
     unit: Unit [default 'rad'] This is the angular unit to be used for the 
     azimuth.
+    
+    angunit:
     '''
 
     def __init__(self, *,                      
@@ -686,7 +688,7 @@ class Radial(Transform):
                  otype  = None,
                  idim  = 2, 
                  odim = 2,
-                 origin = np.array([0,0])
+                 origin = np.zeros(2)
                 ):
         
     
@@ -697,6 +699,10 @@ class Radial(Transform):
             otype = ["Azimuth", "Ln radius"]
         else:
             otype = ["Azimuth", "Radius"]
+
+        angunit = 1.0*getattr(units, iunit)
+        angunit = angunit.to(units.radian)  
+        ounit = angunit.unit
 
         ###Generate the object        
         self.idim = idim
@@ -710,53 +716,174 @@ class Radial(Transform):
         self.params = {
             'origin'  : origin,
             'r0'      : r0,
+            'angunit' : angunit 
         }
 
 
     def _forward( self, data ):
 
-        if self.iunit == 'deg':
-            angunit = 180 / np.pi
-        else:
-            angunit = 1.0
+        out = np.ndarray(data.shape)
 
-        out = data.copy()
-        data[..., 0:2] -= self.params['origin'][0:2]
-        out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0]) % (2.0 * np.pi)) * angunit
+        origin = self.params['origin'][0:2]
+        if not np.all((origin == 0)):
+            data = data - origin
+        
+        out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0]) % (2.0 * np.pi)) / self.params['angunit']
 
         if self.params['r0']:
             out[..., 1] = 0.5 * np.log((data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0]) / (self.params['r0'] * self.params['r0']))
         else:
             out[..., 1] = np.sqrt(data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0])
-
         return out
-
 
     def _reverse( self, data ):
-        if self.iunit == 'deg':
-            angunit = 180 / np.pi
-        else:
-            angunit = 1.0
         
-        d0 = data[..., 0].copy() / angunit
+        d0 = data[..., 0].copy() * self.params['angunit']
         d1 = np.expand_dims(data[..., 1], [1]).copy()
-        out = data.copy()
-
+        out = np.ndarray(data.shape)
+        
         angVec = (np.expand_dims( np.cos(d0), [1]), np.expand_dims( -np.sin(d0), [1]))
-        out[..., 0:2] = np.stack(angVec, axis=-1).squeeze()
+        out = np.stack(angVec, axis=-1).squeeze()
         
         if self.params['r0'] is not None:
-            out[..., 0:2] *= self.params['r0'] * np.exp(d1)
+            out *= self.params['r0'] * np.exp(d1)
         else:
-            out[..., 0:2] *= d1
-        out[..., 0:2] += self.params['origin'][0:2]
-
+            out *= d1
+        
+        origin = self.params['origin'][0:2]
+        if not np.all((origin == 0)):
+            out = out + origin
         return out
 
-    
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
             self._strtmp = 'Radial'
         return super().__str__()        
     
+
+  
+
+class Spherical(Transform):
+    '''
+    transform.Spherical - Convert Cartesian to spherical coordinates.  
+    (3-D; with inverse)
+
+    Convert 3-D Cartesian to spherical (theta, phi, r) coordinates.  Theta
+    is longitude, centered on 0, and phi is latitude, also centered on 0.
+    Unless you specify Euler angles, the pole points in the +Z direction
+    and the prime meridian is in the +X direction.  The default is for
+    theta and phi to be in radians; you can select degrees if you want
+    them.
+
+    Just as the transform.Radial 2-D transform acts like a 3-D
+    cylindrical transform by ignoring third and higher dimensions,
+    Spherical acts like a hypercylindrical transform in four (or higher)
+    dimensions.  Also as with transform.Radial, you must manually specify
+    the origin if you want to use more dimensions than 3.
+
+    Parameters
+    ----------
+    
+    r0: float If defined, this floating-point value causes t_radial to generate
+    (theta, ln(r/r0)) coordinates out.  Theta is in radians, and the
+    radial coordinate varies by 1 for each e-folding of the r0-scaled
+    distance from the input origin.  The logarithmic scaling is useful for
+    viewing both large and small things at the same time, and for keeping
+    shapes of small things preserved in the image.  
         
+    origin: This is the origin of the expansion. Pass in a np.array. Default 
+    is set to np.array([0,0,0])
+
+    euler: This is a 3-vector containing Euler angles to change the angle of 
+    the pole and ordinate.  The first two numbers are the (theta, phi) angles
+    of the pole in a (+Z,+X) spherical expansion, and the last is the
+    angle that the new prime meridian makes with the meridian of a simply
+    tilted sphere. Pass in a np.array. Default 
+    is set to np.array([0,0,0])
+
+    unit: Unit [default 'rad'] This is the angular unit to be used for the 
+    azimuth. This option sets the angular unit to be used.  Acceptable values are
+    "degrees","radians".  Once genuine unit processing
+    comes online (a la Math::Units) any angular unit should be OK.
+    '''
+
+    def __init__(self, *,                      
+                 r0 = None,
+                 iunit = 'rad', 
+                 ounit  = 'rad', 
+                 itype = None, 
+                 otype  = None,
+                 idim  = 3, 
+                 odim = 3,
+                 origin = np.zeros(3)
+                ):
+
+        if( not( isinstance( origin, np.ndarray ) ) ) :
+            origin = np.array([origin])
+
+        if r0 in locals():
+            otype = ["Azimuth", "Ln radius"]
+        else:
+            otype = ["Azimuth", "Radius"]
+
+        angunit = 1.0*getattr(units, iunit)
+        angunit = angunit.to(units.radian)  
+        ounit = angunit.unit
+
+        ###Generate the object        
+        self.idim = idim
+        self.odim = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = iunit
+        self.ounit = ounit
+        self.itype = itype
+        self.otype = otype
+        self.params = {
+            'origin'  : origin,
+            'r0'      : r0,
+            'angunit' : angunit 
+            }
+
+    def _forward( self, data ):
+
+        out = data.copy()
+        data[..., 0:2] -= self.params['origin'][0:3]
+        
+        d0 = data[..., 0].copy()# * self.params['angunit']
+        d1 = data[..., 1].copy()# * self.params['angunit']
+        d2 = data[..., 2].copy()# * self.params['angunit']
+        
+        out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0]) % (2.0 * np.pi)) / self.params['angunit']
+
+        if self.params['r0']:
+            out[..., 1] = 0.5 * np.log((data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0]) / (self.params['r0'] * self.params['r0']))
+        else:
+            out[..., 1] = np.sqrt(data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0])
+        return out
+
+
+
+
+        #my($out) =   ($d->is_inplace) ? $data : $data->copy;
+
+        #my $tmp; # work around perl -d "feature"
+        #($tmp = $out->slice("(0)")) .= atan2($d1, $d0);
+        #($tmp = $out->slice("(2)")) .= sqrt($d0*$d0 + $d1*$d1 + $d2*$d2);
+        #($tmp = $out->slice("(1)")) .= asin($d2 / $out->slice("(2)"));
+
+        #($tmp = $out->slice("0:1")) /= $o->{angunit}
+          #if(defined $o->{angunit});
+
+        #$out;
+
+
+
+        
+    def _reverse( self, data ):
+        pass
+        
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Spherical'
+        return super().__str__()    
