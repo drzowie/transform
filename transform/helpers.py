@@ -362,36 +362,39 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
         the source array, if the 'truncate' boundary condition is selected.
         
     method : string (default 'sample')
-        Only the first character of the string is checked.  This controls the 
-        interpolation method.  The character may be one of:
+        This controls the interpolation method.  The character may be one of:
             
-            'n' - nearest value of the array
+            'n' - nearest-value interpolate (sample) the array.
             
-            'l' - Linearly interpolate from the hypercube surrounding each point.
+            'l' - linearly interpolate from the hypercube surrounding each point.
             
-            'c' - Use cubic spline interpolation along each axis in order.
-            
-            'f' - Use Fourier interpolation using discrete FFT coefficients; note,
-                this involves taking the FFT of the entire input dataset, which
-                is then discarded -- therefore this method benefits strongly
-                from vectorization.  Because of the way Fourier interpolation is
-                implemented (via explicit evaluation of a complex exponential)
-                you can do Laplace interpolation also, by feeding in complex
-                coordinates.  This usage is hairy and I have not tested it.
-      
             's' - Use sinc-function weighting in the input plane; the sinc 
                 function has zeroes at integer pixel offsets and is enumerated 
-                for 6 pixels in all directions.
+                for 8 pixels in all directions.
             
             'z' - Use Lanczos-function weighting in the input plane; the sinc 
                 function has zeroes at integer pixel offsets, and the a parameter
                 is 3.
-            
-            'g' - Use Gaussian weighted interpolation with 1 pixel FWHM; the kernel
-                is enumerated for 3 pixels in all directions.
-            
+                
             'h' - Use Hanning window (overlapping sin^2) interpolation; the kernel
                 is enumerated for 1 full pixel in all directions.
+            
+            'g' - Use Gaussian weighted smoothing with 1 pixel FW; the kernel
+                is enumerated for 3 pixels in all directions. Note that this
+                method does not guarantee the value of integer-indexed samples
+                will match the value in the array itself.
+            
+            'c' - cubic-spline interpolate.  
+            
+            'f' - fourier interpolate using discrete FFT coefficients; note,
+                this involves taking the FFT of the entire input dataset, which
+                is then discarded -- therefore this method benefits strongly
+                from vectorization.  Because of the way Fourier interpolation is
+                implemented (via explicit evaluation of a complex exponential)
+                you can do Laplace "interpolation" also, by feeding in 
+                complex coordinates.
+      
+  
         
     strict : Boolean (default True)
         The 'strict' parameter forces strict matching of index vector dimension
@@ -553,7 +556,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
     elif(method[0] in ('c','s','z','g','h')):
         fldex = np.floor(index)
         
-        size = {'c':4, 's':12, 'z':6, 'g':6, 'h':2}[method]
+        size = {'c':4, 's':16, 'z':6, 'g':6, 'h':2}[method]
         offset = (size/2)-1
         
         # sample the ncube region around each point.  Dimensions of 
@@ -585,7 +588,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
         
         #######
         ## Cubic interpolation
-        if(method=='c'):
+        if(method[0]=='c'):
             for ii in range(index.shape[-1]):
                 # a0 gets just-under sample; 
                 # a1 gets just-over sample;
@@ -624,28 +627,25 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
             # off of region, which now just has dimension [<index-broadcast>]
             return region
     
-        elif(method in ('s','z','g','h')):
+        elif(method[0] in ('s','z','g','h')):
             
-            of = ( 1-b
-                  - offset - 1 + 
-                  + np.mgrid[ tuple( map( lambda i:range(size), range(index.shape[-1]) ))].transpose()
+            of = ( (1 - b) - (offset + 1) +
+                  np.mgrid[ tuple( map( lambda i:range(size), range(index.shape[-1]) ))].transpose()
             )
             
-            print(f"of shape is {of.shape}; of is {of}")
+
             for ii in range(index.shape[-1]):
                 bb = of[...,ii]
-                print(f"bb shapes is {bb.shape}")
                 if(method=='s'):     ## sinc
                     k = np.sinc(bb)
                 elif(method=='z'):   ## lanczos
                     k = 3 * np.sinc(bb) * np.sinc(bb/3)
                 elif(method=='g'):   ## Gaussian
-                    k = np.exp( - np.log(0.5) * bb * bb )
+                    k = np.exp( - bb * bb / 0.5 / 0.5 )
                 elif(method=='h'):
                     k = (1 + np.cos( np.pi * bb ))/2
                 else:
                     raise AssertionError("This can't happen")
-                print(f"region shape is {region.shape}; k shape is {k.shape}")
                 
                 region = ( k * region ).sum(axis=-1) / k.sum(axis=-1)
                 

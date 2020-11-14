@@ -267,6 +267,31 @@ def test_006_interpND_fft():
     assert b.dtype in(np.dtype('complex64'),np.dtype('complex128'))
     assert all( np.isclose( b, aa, atol=1e-12))
                                               
+def test_007_interpND_filtermethods():
+    
+    a = np.array([1,0,0,1,1,0,0,0])
+    dex = np.expand_dims(np.mgrid[0:7.1:0.1].transpose().astype(float),1)-0.5
+    
+    # Verify that pixel values are reproduced -- all but 'g'
+    for m in ('s','z','h'):
+        b = interpND(a, dex, bound='t',method=m)
+        assert( all( np.isclose( 
+            b[np.array( [5,15,25,35,45,55])], 
+            [1,0,0,1,1,0],
+            atol=1e-10 
+            ))
+            )
+        
+    # Hand-check a couple of Gaussian values
+    b = interpND(a, dex, bound='t', method='g')
+    assert( np.isclose(b[5], 0.96466,atol=1e-5))
+    assert( np.isclose(b[0], 0.5, atol=1e-3) )
+    assert( np.isclose(b[10],0.5, atol=1e-3) )
+    assert( np.isclose(b[20],0,   atol=1e-3) )
+
+    # Verify that the filter functions can reproduce a 2D pattern
+    a = np.array([[1,0,0,0],[0,1,0,0],[1,1,1,1],[0,0,0,1]])
+    
     
     
     
