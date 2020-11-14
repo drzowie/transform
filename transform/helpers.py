@@ -493,9 +493,9 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                                 )
         
         # Make a vector of frequency along each axis.  Index mgrid with a 
-        # list of ranges running over each source.  Shape is:
+        # collection of ranges running over each source.  Shape is:
         #   [ <useful-index-dims>, <index-N> ]
-        freq = np.mgrid[ list(
+        freq = np.mgrid[ tuple(
                                map( lambda i:range(0,source.shape[i]), 
                                  range( -1, -1 - index.shape[-1], -1 )
                                )

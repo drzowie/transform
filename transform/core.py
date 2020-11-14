@@ -495,7 +495,7 @@ class Transform:
             raise ValueError('map: template and source dimensions must match')
         
         # Enumerate every pixel ( coords[...,Y,X,:] gets [X,Y,...] )
-        coords = np.mgrid[list( map( lambda i:range(i), iter(template)))].transpose()
+        coords = np.mgrid[tuple( map( lambda i:range(i), iter(template)))].transpose()
         
         # Transform back to the input grid
         icoords = self.invert(coords)
