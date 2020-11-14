@@ -254,7 +254,23 @@ def test_005_interpND_cubic():
     assert all(y[11:30]>0)
     assert all(y[31:40]<0)
     
+def test_006_interpND_fft():
+    a = np.array([1,0,0,1,1,0,0,0])
+    b = interpND(a, np.array([[0],[1],[2],[3],[4],[5],[6],[7]]), method='f')
+    assert b.shape[0]==8
+    assert b.dtype in (np.dtype('double'),np.dtype('float'))
+    assert all( np.isclose( b, a, atol=1e-12) )
     
+    aa = a + 0j
+    b = interpND(aa, np.array([[0],[1],[2],[3],[4],[5],[6],[7]]), method='f')
+    assert b.shape[0]==8
+    assert b.dtype in(np.dtype('complex64'),np.dtype('complex128'))
+    assert all( np.isclose( b, aa, atol=1e-12))
+                                              
+    
+    
+    
+     
    
     
     

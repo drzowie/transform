@@ -475,6 +475,8 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
             )
         return value
     
+    
+    #########################
     ## Cubic:  grab a hypercube around each indexed point and calculate
     ## a fittted cubic polynomial to it.
     
@@ -545,8 +547,11 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
         # off of region, which now just has dimension [<index-broadcast>]
         return region
     
-    # Fourier interpolation: find the Fourier components of the data, and 
-    # explicitly evaluate them at the provided points
+    
+    ############################
+    ## Fourier interpolation: find the Fourier components of the data, and 
+    ## explicitly evaluate them at the provided points
+
     elif(method[0]=='f'):
 
         # FFT the source along all (and only) the axes used by the index.
@@ -555,24 +560,22 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                                 )
         
         # Make a vector of frequency along each axis.  Index mgrid with a 
-        # list of range objects running over each source.  Leave vector index
-        # at the end.
+        # list of ranges running over each source.  Shape is:
+        #   [ <useful-index-dims>, <index-N> ]
         freq = np.mgrid[ list(
                                map( lambda i:range(0,source.shape[i]), 
                                  range( -1, -1 - index.shape[-1], -1 )
                                )
                             )
             ].transpose().astype(float)
-        # convert from 0:n to 0:PI along each axis
+        # convert from 0:n to 0:2PI along each axis
         for i in range(index.shape[-1]):
             freq[...,i] = freq[...,i] * np.pi * 2 / freq.shape[-2-i]
             
         # Now freq has shape [<useful-source-dims>,index-N], and contains the
         # angular rate (in radians/pixel-value) for each location in the 
-        # sourcefft.  Now we have to get it to broadcast with index, which
-        # has shape [<index-bc-dims>,index-N].  
-        #
-        # To do that, we pad index into "bcdex" to have shape:
+        # sourcefft.  W have to get it to broadcast with index, which
+        # has shape [<index-bc-dims>,index-N]. We pad index into "bcdex" to:
         #   [<index-bc-dims>,<1s-for-useful-source-dims>,<index-N>]
         bcdex = np.expand_dims( index, tuple( range( -2,-2-index.shape[-1],-1 )))
         
@@ -603,8 +606,12 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                             )
         # result has been collapsed and now has shape:
         #   [ <source-bc>, <index-bc-dims> ]
-        # which is what we want.
-            
+        # which is what we want.  Now check for complex indices and/or
+        # source.  If both are not complex, then return the real part only.
+        complexes = (np.dtype('complex64'), np.dtype('complex128'))
+        if( not ((source.dtype in complexes) or (index.dtype in complexes) )):
+            result = result.real
+                
         return result
         
                                                   
