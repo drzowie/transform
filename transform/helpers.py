@@ -421,6 +421,9 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
     # then assemble weighting coefficients based on closeness of the indexed
     # point to the corresponding corner of the hypercube.  (N-D version of the
     # usual alpha/beta mult-and-sum)
+    # 
+    # linear is implemented differently than the other filters because 
+    # it is simpler to broadcast.  This makes it slightly faster.
     elif(method[0] == 'l'):
         fldex = np.floor(index)
         # sample the ncube region around each point.  Dimensions of 
@@ -474,80 +477,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                        )
             )
         return value
-    
-    
-    #########################
-    ## Cubic:  grab a hypercube around each indexed point and calculate
-    ## a fittted cubic polynomial to it.
-    
-    elif(method[0]=='c'):
-        fldex = np.floor(index)
         
-        # sample the ncube region around each point.  Dimensions of 
-        # region are [ <index-broadcast-dims>, <N fours> ]
-        # where N is the dimensionality of the index (that's what the chunk
-        # parameter does)
-        region = sampleND(source, 
-                          index=fldex - 1, 
-                          bound=bound, 
-                          fillvalue=fillvalue, 
-                          strict=strict, 
-                          chunk = np.array(
-                              list( repeat( int(4), index.shape[-1]) )
-                              )
-                          )
-        
-        # Grab the subpixel offset, and expand it to be broadcastable to 
-        # the new region.  At the end, alpha has dimension 
-        # [<index-broadcast-dims>, <N ones>, N]
-        b = np.expand_dims( index - fldex,
-                                tuple( range( -2,
-                                             -index.shape[-1]-2,
-                                             -1
-                                              ) 
-                                      ) 
-                                )
-        
-        # Now collapse by cubic polynomial interpolation, one dim at a time
-        for ii in range(index.shape[-1]):
-            # a0 gets just-under sample; 
-            # a1 gets just-over sample;
-            # a1_a0 gets slope in innermost pair
-            a0 = region[...,1] 
-            a1 = region[...,2] 
-            a1_a0 = a1-a0
-
-            # s0 gets average lower slope
-            # a1 gets average upper slope
-            s0 = (region[...,2]-region[...,0]) * 0.5
-            s1 = (region[...,3]-region[...,1]) * 0.5
-            
-            # bb gets the correct vector component of b
-            bb = b[...,0,ii]
-            
-            # now collapse the region by polyomial interpolation.  
-            # Everything has the same dimensions as region, with 
-            # one dim lopped off the end
-            region = (
-                        a0 +
-                        bb * (
-                            s0 +
-                            bb * ( (3 * a1_a0 - 2*s0 - s1) +
-                                   bb * (s1 + s0 - 2*a1_a0)
-                                  )
-                            )
-                    )
-
-            # b needs to be collapsed also, to match the collapse of 
-            # region.  We just strip off one of the expanded dims, keeping
-            # the vector axis at the end.
-            b = b[...,0,:]
-        
-        # On exit from the loop, all the hypercube indices have been stripped
-        # off of region, which now just has dimension [<index-broadcast>]
-        return region
-    
-    
     ############################
     ## Fourier interpolation: find the Fourier components of the data, and 
     ## explicitly evaluate them at the provided points
@@ -614,9 +544,117 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                 
         return result
         
+    #####################
+    ## Collapsible filter interpolation
+    ## This implements cubic, sinc, Lanczos, Gaussian, and Hanning 
+    ## interpolation, which differ in the size of region they sample
+    ## and also in the actual formula.
                                                   
-    elif(method[0]=='s'):
-        raise AssertionError("interpND: sinc interpolation is not yet implemented")
+    elif(method[0] in ('c','s','z','g','h')):
+        fldex = np.floor(index)
+        
+        size = {'c':4, 's':12, 'z':6, 'g':6, 'h':2}[method]
+        offset = (size/2)-1
+        
+        # sample the ncube region around each point.  Dimensions of 
+        # region are [ <index-broadcast-dims>, <N size's> ]
+        # where N is the dimensionality of the index (that's what the chunk
+        # parameter does)
+        region = sampleND(source, 
+                          index=fldex - offset, 
+                          bound=bound, 
+                          fillvalue=fillvalue, 
+                          strict=strict, 
+                          chunk = np.array(
+                              list( repeat( int(size), index.shape[-1]) )
+                              )
+                          )
+        
+        # Grab the subpixel offset, and expand it to be broadcastable to 
+        # the new region.  At the end, b has dimension 
+        # [<index-broadcast-dims>, <N ones>, N]
+        b = np.expand_dims( index - fldex,
+                                tuple( range( -2,
+                                             -index.shape[-1]-2,
+                                             -1
+                                              ) 
+                                      ) 
+                                )
+        
+        ### Now collapse one dim at a time according to method
+        
+        #######
+        ## Cubic interpolation
+        if(method=='c'):
+            for ii in range(index.shape[-1]):
+                # a0 gets just-under sample; 
+                # a1 gets just-over sample;
+                # a1_a0 gets slope in innermost pair
+                a0 = region[...,1] 
+                a1 = region[...,2] 
+                a1_a0 = a1-a0
+
+                # s0 gets average lower slope
+                # a1 gets average upper slope
+                s0 = (region[...,2]-region[...,0]) * 0.5
+                s1 = (region[...,3]-region[...,1]) * 0.5
+                
+                # bb gets the correct vector component of b
+                bb = b[...,0,ii]
+                
+                # now collapse the region by polyomial interpolation.  
+                # Everything has the same dimensions as region, with 
+                # one dim lopped off the end
+                region = (
+                            a0 +
+                            bb * (
+                                s0 +
+                                bb * ( (3 * a1_a0 - 2*s0 - s1) +
+                                      bb * (s1 + s0 - 2*a1_a0)
+                                      )
+                                )
+                            )
+                
+                # b needs to be collapsed also, to match the collapse of 
+                # region.  We just strip off one of the expanded dims, keeping
+                # the vector axis at the end.
+                b = b[...,0,:]
+        
+            # On exit from the loop, all the hypercube indices have been stripped
+            # off of region, which now just has dimension [<index-broadcast>]
+            return region
+    
+        elif(method in ('s','z','g','h')):
+            
+            of = ( 1-b
+                  - offset - 1 + 
+                  + np.mgrid[ tuple( map( lambda i:range(size), range(index.shape[-1]) ))].transpose()
+            )
+            
+            print(f"of shape is {of.shape}; of is {of}")
+            for ii in range(index.shape[-1]):
+                bb = of[...,ii]
+                print(f"bb shapes is {bb.shape}")
+                if(method=='s'):     ## sinc
+                    k = np.sinc(bb)
+                elif(method=='z'):   ## lanczos
+                    k = 3 * np.sinc(bb) * np.sinc(bb/3)
+                elif(method=='g'):   ## Gaussian
+                    k = np.exp( - np.log(0.5) * bb * bb )
+                elif(method=='h'):
+                    k = (1 + np.cos( np.pi * bb ))/2
+                else:
+                    raise AssertionError("This can't happen")
+                print(f"region shape is {region.shape}; k shape is {k.shape}")
+                
+                region = ( k * region ).sum(axis=-1) / k.sum(axis=-1)
+                
+                of = of[...,0,:]
+                
+            return region
+
+        raise AssertionError("This shouldn't ever happen")
+ 
         
     else: 
         
