@@ -291,7 +291,7 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
     return retval
     
 
-def interpND(source, /, index=None, method='s', bound='f', fillvalue=0, strict=False):
+def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=False):
     '''
     interpND - a better N-dimensional interpolator, with switchable boundaries.
     
@@ -365,14 +365,33 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0, strict=F
         Only the first character of the string is checked.  This controls the 
         interpolation method.  The character may be one of:
             
-            's' - sample the nearest value of the array
+            'n' - nearest value of the array
             
-            'l' - linearly interpolate from the hypercube surrounding each point
+            'l' - Linearly interpolate from the hypercube surrounding each point.
             
-            'c' - cubic spline interpolation along each axis in order
+            'c' - Use cubic spline interpolation along each axis in order.
             
-            'f' - Fourier interpolation using discrete FFT coefficients
-       
+            'f' - Use Fourier interpolation using discrete FFT coefficients; note,
+                this involves taking the FFT of the entire input dataset, which
+                is then discarded -- therefore this method benefits strongly
+                from vectorization.  Because of the way Fourier interpolation is
+                implemented (via explicit evaluation of a complex exponential)
+                you can do Laplace interpolation also, by feeding in complex
+                coordinates.  This usage is hairy and I have not tested it.
+      
+            's' - Use sinc-function weighting in the input plane; the sinc 
+                function has zeroes at integer pixel offsets and is enumerated 
+                for 6 pixels in all directions.
+            
+            'z' - Use Lanczos-function weighting in the input plane; the sinc 
+                function has zeroes at integer pixel offsets, and the a parameter
+                is 3.
+            
+            'g' - Use Gaussian weighted interpolation with 1 pixel FWHM; the kernel
+                is enumerated for 3 pixels in all directions.
+            
+            'h' - Use Hanning window (overlapping sin^2) interpolation; the kernel
+                is enumerated for 1 full pixel in all directions.
         
     strict : Boolean (default True)
         The 'strict' parameter forces strict matching of index vector dimension
@@ -392,7 +411,7 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0, strict=F
         index = np.array(index)
         
     # Sample: just grab the nearest value using sampleND
-    if(method[0] == 's'):
+    if(method[0] == 'n'):
         return sampleND(source, 
                         index=index, 
                         bound=bound, 
@@ -530,11 +549,71 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0, strict=F
     # explicitly evaluate them at the provided points
     elif(method[0]=='f'):
 
-        raise AssertionError("interpND: Fourier interpolation is not yet implemented")        
-    
+        # FFT the source along all (and only) the axes used by the index.
+        sourcefft = np.fft.fftn(source,
+                                axes=range( -1, -1 - index.shape[-1], -1 )
+                                )
+        
+        # Make a vector of frequency along each axis.  Index mgrid with a 
+        # list of range objects running over each source.  Leave vector index
+        # at the end.
+        freq = np.mgrid[ list(
+                               map( lambda i:range(0,source.shape[i]), 
+                                 range( -1, -1 - index.shape[-1], -1 )
+                               )
+                            )
+            ].transpose().astype(float)
+        # convert from 0:n to 0:PI along each axis
+        for i in range(index.shape[-1]):
+            freq[...,i] = freq[...,i] * np.pi * 2 / freq.shape[-2-i]
+            
+        # Now freq has shape [<useful-source-dims>,index-N], and contains the
+        # angular rate (in radians/pixel-value) for each location in the 
+        # sourcefft.  Now we have to get it to broadcast with index, which
+        # has shape [<index-bc-dims>,index-N].  
+        #
+        # To do that, we pad index into "bcdex" to have shape:
+        #   [<index-bc-dims>,<1s-for-useful-source-dims>,<index-N>]
+        bcdex = np.expand_dims( index, tuple( range( -2,-2-index.shape[-1],-1 )))
+        
+        # Now generate the overall phase and the Fourier basis values,
+        # with size [<index-bc-dims>,<useful-source-dims>].
+        phase = (bcdex * freq).sum(axis=-1)
+        basis = np.exp( 1j * phase )
+        
+        # Now it's all over but the shouting.  We want to sum coefficients
+        # in the sourcefft, but it may have additional axes "along for the
+        # ride" -- so we have to pad with ones.  bcsourcefft gets size:
+        #  [ <source-bc>, <1s-for-index-bc-dims>, <useful-source-dims> ]
+        bcsourcefft = np.expand_dims( sourcefft, 
+                        tuple( range(-1-index.shape[-1],
+                                     -1-index.shape[-1]-(len(index.shape)-1),
+                                     -1
+                                    )
+                             )
+                        )
+        
+        result = (bcsourcefft * basis).mean( 
+                            axis = tuple(
+                                range( -1, 
+                                       -1 - index.shape[-1],
+                                       -1
+                                       )
+                                )
+                            )
+        # result has been collapsed and now has shape:
+        #   [ <source-bc>, <index-bc-dims> ]
+        # which is what we want.
+            
+        return result
+        
+                                                  
+    elif(method[0]=='s'):
+        raise AssertionError("interpND: sinc interpolation is not yet implemented")
+        
     else: 
         
-        raise ValueError(f"interpND: valid methods are 'sample', 'linear', or 'cubic' (got '{method}')")
+        raise ValueError(f"interpND: valid methods are 'n','l','c','f','s','z','g', or 'h')")
 
 
         

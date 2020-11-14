@@ -383,9 +383,13 @@ class Transform:
             
         /method : string (default 'sample')
             This string indicates the interpolation method to use.  Only
-            the first character is checked.  Possible values are:
+            the first character is checked.  Possible values are those 
+            used for transform.helpers.interpND, plus the anti-aliasing
+            filters "Gaussian" and "Hanning".  Items marked with "(*)"
+            don't preserve the original value even on pixel centers under 
+            ideal sampling conditions.
                 
-                'sample' - use the value of the nearest-neighbor pixel in
+                'nearest' - use the value of the nearest-neighbor pixel in
                     the input space.  Very fast, but produces aliasing.
                     
                 'linear' - use <N>-linear interpolation. Marginaly bettter than
@@ -397,11 +401,35 @@ class Transform:
                 'fourier' - use discrete Fourier coefficients. to interpolate
                     between points.  This is useful for periodic data.
                     
-                'gaussian' - use locally optimized Jacobian-driven filtering,
-                    with a Gaussian filter profile
+                'sinc' (*)    - sinc-function weighting in the input plane; this
+                    is equivalent to a hard frequency cutoff in Fourier space in
+                    the input plane. The sinc function has zeroes at integer 
+                    input-pixel offsets, and is enumerated for 6 input pixels in 
+                    all directions.  This limited enumeration introduces small
+                    sidelobes in Fourier space.
                     
-                'hanning' - use locally optimized Jacobian-drivn filtering,
-                    with a Hanning window profile
+                'zlanczos' (*) - Lanczos-function weighting in the input plane;
+                    this is equivalent to a trapezoidal filter in Fourier space
+                    in the input space.  The inner sinc function has zeros at
+                    integer input-pixel offsets, and the a parameter is 3, so
+                    the kernel extends for 3 input pixels in all directions.
+                
+                'gaussian' (*) - N-gaussian window weighted sampling in the input plane;
+                    the gaussian has a full width half maximum (FWHM) of 1 pixel and
+                    is enumerated for 3 input pixels in all directions
+                        
+                'hanning' (*) - hanning-window weighted sampling in the input plane
+                    Hanning window (sin^2) weighting in the input plane
+                                    
+                'Gaussian' (*) - use locally optimized Jacobian-driven filtering,
+                    with a Gaussian filter profile in the output plane; the Gaussian
+                    has a full width half maximum (FWHM) of 1 output pixel and is
+                    enumerated for 3 output pixels in all directions [note 
+                    capital 'G'].
+                    
+                'Hanning' - use locally optimized Jacobian-driven filtering,
+                    with a Hanning window profile in the output plane [note 
+                    capital 'H']
             
             Most The first four interpolation methods use the supplied "interpND"
             general purpose interpolator and are subject to aliasing and other

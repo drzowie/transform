@@ -176,13 +176,13 @@ def test_002_sampND():
     assert np.all(a.shape==np.array([10,2]))
     assert np.all( a == [[3,4],[13,14],[23,24],[33,34],[43,44],[53,54],[63,64],[73,74],[83,84],[93,94]])
     
-def test_003_interpND_sample():
+def test_003_interpND_nearest():
     data = np.mgrid[0:5,0:50:10].transpose().sum(axis=-1)
     
     # Test sampling. 
     # It's just a pass-through to sampleND, so
     # need for extensive testing here.
-    a = interpND(data, [1.2, 2.8], method='s')
+    a = interpND(data, [1.2, 2.8], method='n')
     assert a==31
     
 def test_004_interpND_linear():
