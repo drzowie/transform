@@ -176,6 +176,36 @@ def test_002_sampND():
     assert np.all(a.shape==np.array([10,2]))
     assert np.all( a == [[3,4],[13,14],[23,24],[33,34],[43,44],[53,54],[63,64],[73,74],[83,84],[93,94]])
     
+    #
+    # Test chunk order
+    # 
+    
+    # First - double-check that two elements resolve correctly in an mgrid
+    datasource = np.mgrid[0:6,0:60:10].transpose().sum(axis=-1)
+    dexes = np.array([[1,2],[3,4]])
+    a = t.sampleND(datasource, dexes)
+    assert a.shape[0]==2
+    assert len(a.shape)==1
+    assert all(a==np.array([21,43]))
+    
+    # Make sure chunk samples are in the correct direction -- (...,Y,X)
+    a = t.sampleND(datasource, dexes, chunk=[2,2])
+    assert len(a.shape)==3
+    assert a.shape[0]==2 and a.shape[1]==2 and a.shape[2]==2
+    assert np.all( a == np.array([[[21,22],[31,32]],[[43,44],[53,54]]]))
+    
+    # Make sure that chunk sizes are handled right
+    a = t.sampleND(datasource, dexes, chunk=[3,2])
+    assert len(a.shape)==3
+    assert a.shape[0]==2 and a.shape[1]==2 and a.shape[2]==3
+    assert np.all( a[0] == np.array([[21,22,23],[31,32,33]])) 
+    assert np.all( a[1] == np.array([[43,44,45],[53,54,55]]))
+    
+    
+    
+    
+    
+    
 def test_003_interpND_nearest():
     data = np.mgrid[0:5,0:50:10].transpose().sum(axis=-1)
     

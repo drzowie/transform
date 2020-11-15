@@ -3,6 +3,7 @@
 import copy
 import numpy as np
 import astropy
+from transform.helpers import interpND
 
 class Transform:
     '''Transform - Coordinate transforms, image warping, and N-D functions
@@ -354,14 +355,14 @@ class Transform:
             )
           
  
-    def map(self, data, /, 
-            method='s',
-            bound='none',
+    def resample(self, data, /, 
+            method='n',
+            bound='t',
             phot='radiance',
-            template=None
+            template=None 
             ):
         '''
-        map - use a transform to remap a pixel array
+        resample - use a transform to resample pixel array
         
         This method implements resampling of gridded data by applying the 
         Transform to the implicit coordinate system of the sampled data,
@@ -372,6 +373,9 @@ class Transform:
         The method works by using the inverse Transform to map *from* the 
         output space back *to* the input space. The output data samples
         are then interpolated from the locations in the input space.
+        
+        For most scientific remapping you don't want resample, you want map(),
+        which handles WCS and autoscaling.
         
         Parameters
         ----------
@@ -401,14 +405,14 @@ class Transform:
                 'fourier' - use discrete Fourier coefficients. to interpolate
                     between points.  This is useful for periodic data.
                     
-                'sinc' (*)    - sinc-function weighting in the input plane; this
+                'sinc'    - sinc-function weighting in the input plane; this
                     is equivalent to a hard frequency cutoff in Fourier space in
                     the input plane. The sinc function has zeroes at integer 
                     input-pixel offsets, and is enumerated for 6 input pixels in 
                     all directions.  This limited enumeration introduces small
                     sidelobes in Fourier space.
                     
-                'zlanczos' (*) - Lanczos-function weighting in the input plane;
+                'zlanczos' - Lanczos-function weighting in the input plane;
                     this is equivalent to a trapezoidal filter in Fourier space
                     in the input space.  The inner sinc function has zeros at
                     integer input-pixel offsets, and the a parameter is 3, so
@@ -418,8 +422,11 @@ class Transform:
                     the gaussian has a full width half maximum (FWHM) of 1 pixel and
                     is enumerated for 3 input pixels in all directions
                         
-                'hanning' (*) - hanning-window weighted sampling in the input plane
+                'hanning' - hanning-window weighted sampling in the input plane
                     Hanning window (sin^2) weighting in the input plane
+                    
+                'rounded' - hanning-like window weighted sampling, with a narrower
+                    (1/2 pixel) crossover at the pixel boundaries
                                     
                 'Gaussian' (*) - use locally optimized Jacobian-driven filtering,
                     with a Gaussian filter profile in the output plane; the Gaussian
@@ -430,16 +437,22 @@ class Transform:
                 'Hanning' - use locally optimized Jacobian-driven filtering,
                     with a Hanning window profile in the output plane [note 
                     capital 'H']
+                    
+                'Rounded' - use a 1/4-pixel-wide Hanning window with locally-
+                    optimized Jacobian-driven filtering in the output plane
+                    
+                'ZLanczos' - use a Lanczos filter in the output plane
             
-            Most The first four interpolation methods use the supplied "interpND"
+            Most The first seven interpolation methods use the supplied "interpND"
             general purpose interpolator and are subject to aliasing and other
             effects outlined in a paper by DeForest (2004; Solar Physics 219, 3).
             The last two use the numerical Jacobian derivative matrix (local 
             linearization) of the coordinate transform to produce a variable, 
-            optimized filter function to reduce or aliminate aliasing.  Gaussian
+            optimized filter function that reduces or eliminates aliasing.  Gaussian
             sampling uses a Gaussian filter function with nice Fourier properties;
-            Hanning resampling sampling uses a Hanning-like filter function that
+            Hanning resampling uses a Hanning-like filter function that
             is more local than the Gaussian filter.
+            
 
         /phot : string (default 'radiance')
             This string indicates the style of photometry to preserve in the
@@ -454,7 +467,7 @@ class Transform:
                 
             This option is not yet implemented and only intensive treatment
             is supported at present.
-        
+            
         /template : list or tuple or HDU or FITS-header or None (default None)
             If present, this is the shape of the output data grid.  It must 
             have dimensions that agree with the odim of the transform.  If the
@@ -462,6 +475,7 @@ class Transform:
             the Transform, the output must match the output dimensiln.  If the
             input grid dimensionality is higher, then the output grid must
             exceed the output dimension of the Transform by the same amount.
+
         
         Returns
         -------
@@ -482,7 +496,6 @@ class Transform:
         if( template is None ):
             template = data0.shape
             
-        raise AssertionError("map: not implemented yet")
         
         ##### Check input, output, and Transform dimensions all agree.
         ##### Okay to pass in *more* dimensions (and let them get broadcast).
@@ -495,17 +508,21 @@ class Transform:
             raise ValueError('map: template and source dimensions must match')
         
         # Enumerate every pixel ( coords[...,Y,X,:] gets [X,Y,...] )
-        coords = np.mgrid[tuple( map( lambda i:range(i), iter(template)))].transpose()
-        
-        # Transform back to the input grid
-        icoords = self.invert(coords)
-        
+        icoords = self.invert(
+            np.mgrid[ 
+                tuple( map( lambda i:range(0,template[i]), range(len(template)-1,-1,-1)))
+                ].transpose()
+            )
+        print(f"icoords shape is f{icoords.shape}")
         # Figure the interpolation.
-        if(methodChar == 's'):
-            pass
+        if(methodChar in {'H','G','R'}):
+            assert("map: anti-aliased methods are not yet supported")
+            
+        output = interpND(data0, icoords, method=methodChar, bound=bound)
         
-        assert("map: still needs interpolators!")
+        return(output)
         
+    
         
         
             

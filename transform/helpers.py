@@ -272,10 +272,11 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
     ## Perform direct indexing.  Range() call reverses dim order, for
     ## Python standard (...,Y,X) indexing.  We have to add an ellipsis object
     ## to the start of the list after assembling it from the map.  Ick.
-    dexlist = list( map ( lambda ii: index[...,ii], 
-                          range(index.shape[-1]-1,-1,-1 ) 
-                          ) 
-                    )
+    dexlist = list( 
+                map ( lambda ii: index[...,ii], 
+                     range(index.shape[-1]-1,-1,-1) 
+                     ) 
+                )
     dexlist.insert(0,...)
     dextuple = tuple(dexlist)
     retval = source[dextuple]
@@ -378,6 +379,11 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                 
             'h' - Use Hanning window (overlapping sin^2) interpolation; the kernel
                 is enumerated for 1 full pixel in all directions.
+                
+            'r' - Use rounded corners (quasi-Hanning) interpolation; this imposes
+                a Hanning rolloff over 1/2 a pixel width around pixel boundaries.
+                The result is smoother than sampling, but preserves vestiges of
+                pixel edges.
             
             'g' - Use Gaussian weighted smoothing with 1 pixel FW; the kernel
                 is enumerated for 3 pixels in all directions. Note that this
@@ -553,10 +559,10 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
     ## interpolation, which differ in the size of region they sample
     ## and also in the actual formula.
                                                   
-    elif(method[0] in ('c','s','z','g','h')):
+    elif(method[0] in ('c','s','z','g','h','r')):
         fldex = np.floor(index)
         
-        size = {'c':4, 's':16, 'z':6, 'g':6, 'h':2}[method]
+        size = {'c':4, 's':16, 'z':6, 'g':6, 'h':2, 'r':2}[method]
         offset = (size/2)-1
         
         # sample the ncube region around each point.  Dimensions of 
@@ -627,7 +633,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
             # off of region, which now just has dimension [<index-broadcast>]
             return region
     
-        elif(method[0] in ('s','z','g','h')):
+        elif(method[0] in ('s','z','g','h','r')):
             
             of = ( (1 - b) - (offset + 1) +
                   np.mgrid[ tuple( map( lambda i:range(size), range(index.shape[-1]) ))].transpose()
@@ -644,6 +650,9 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                     k = np.exp( - bb * bb / 0.5 / 0.5 )
                 elif(method=='h'):
                     k = (1 + np.cos( np.pi * bb ))/2
+                elif(method=='r'):
+                    k = (1 + np.cos( np.pi * np.clip( np.abs(bb) * 2-0.5,0,1)))/2
+                    print()
                 else:
                     raise AssertionError("This can't happen")
                 
