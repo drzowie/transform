@@ -359,7 +359,7 @@ class Transform:
             method='n',
             bound='t',
             phot='radiance',
-            template=None 
+            shape=None 
             ):
         '''
         resample - use a transform to resample pixel array
@@ -368,7 +368,7 @@ class Transform:
         Transform to the implicit coordinate system of the sampled data,
         and resampling the data to a new pixel grid matching the transformed
         coordinates. The output data have their size determined by a supplied
-        template, or matched to the input array if no template is supplied.
+        shape vector, or matched to the input array if no shape is supplied.
         
         The method works by using the inverse Transform to map *from* the 
         output space back *to* the input space. The output data samples
@@ -468,13 +468,12 @@ class Transform:
             This option is not yet implemented and only intensive treatment
             is supported at present.
             
-        /template : list or tuple or HDU or FITS-header or None (default None)
-            If present, this is the shape of the output data grid.  It must 
-            have dimensions that agree with the odim of the transform.  If the
-            input grid has the same dimensionality as the imput dimension of 
-            the Transform, the output must match the output dimensiln.  If the
-            input grid dimensionality is higher, then the output grid must
-            exceed the output dimension of the Transform by the same amount.
+        /shape : list or tuple None (default None)
+            If present, this is the shape of the output data grid, in regular
+            array index format (directly comparable to the .shape of the 
+            output).  The elements of shape, if specified, should be in 
+            (...,Y,X) order just like the .shape attribute of a numpy array
+            (vs. the (X,Y,...) order of vectors and indices)
 
         
         Returns
@@ -493,27 +492,26 @@ class Transform:
         methodChar = method[0]
         
         ##### Set the output array size
-        if( template is None ):
-            template = data0.shape
-            
+        if( shape is None ):
+            shape = data0.shape
         
         ##### Check input, output, and Transform dimensions all agree.
         ##### Okay to pass in *more* dimensions (and let them get broadcast).
         ##### Not okay to pass in *fewer* dimensions.
-        if( len(template) < self.odim ):
+        if( len(shape) < self.odim ):
             raise ValueError('map: Transform odim must match output data shape')
         if( len(data0.shape) < self.idim ):
             raise ValueError('map: Transform idim must match input data shape')
-        if( len(data0.shape) - self.idim  != len(template) - self.odim ):
-            raise ValueError('map: template and source dimensions must match')
+        if( len(data0.shape) - self.idim  != len(shape) - self.odim ):
+            raise ValueError('map: shape and source dimensions must match')
         
         # Enumerate every pixel ( coords[...,Y,X,:] gets [X,Y,...] )
         icoords = self.invert(
             np.mgrid[ 
-                tuple( map( lambda i:range(0,template[i]), range(len(template)-1,-1,-1)))
+                tuple( map( lambda i:range(shape[-i-1]), range(len(shape)) ))
                 ].transpose()
             )
-        print(f"icoords shape is f{icoords.shape}")
+
         # Figure the interpolation.
         if(methodChar in {'H','G','R'}):
             assert("map: anti-aliased methods are not yet supported")
@@ -713,7 +711,6 @@ class Composition(Transform):
         idim = 0
         odim = 0
         for trans in translist:
-            print (f"trans is {trans}")
             if(not(isinstance(trans,Transform))):
                 raise AssertionError("transform.Composition: got something that's not a Transform")
             ### Track input and output dimensions- keep first nonzero dim

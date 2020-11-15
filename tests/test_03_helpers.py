@@ -300,7 +300,7 @@ def test_006_interpND_fft():
 def test_007_interpND_filtermethods():
     
     a = np.array([1,0,0,1,1,0,0,0])
-    dex = np.expand_dims(np.mgrid[0:7.1:0.1].transpose().astype(float),1)-0.5
+    dex = np.mgrid[0:7.1:0.1,].transpose().astype(float)-0.5
     
     # Verify that pixel values are reproduced -- all but 'g'
     for m in ('s','z','h'):
@@ -321,8 +321,13 @@ def test_007_interpND_filtermethods():
 
     # Verify that the filter functions can reproduce a 2D pattern
     a = np.array([[1,0,0,0],[0,1,0,0],[1,1,1,1],[0,0,0,1]])
+    dex = np.mgrid[0:4,0:4].transpose()
+    b = t.interpND(a,dex,method='h')
+    assert np.all(np.isclose(a,b,atol=1e-9))
     
     
+    
+
     
     
      

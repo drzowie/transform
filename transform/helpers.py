@@ -267,7 +267,8 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
                 index[...,ii] = index[...,ii] + np.mgrid[0:ch] 
     
     ## Convert to integer, and apply boundary conditions
-    index = apply_boundary( index, source.shape[0:index.shape[-1]], bound=bound )
+    ## Size is extracted from source shape -- which is in reverse order of course
+    index = apply_boundary( index, source.shape[-1:-index.shape[-1]-1:-1], bound=bound )
     
     ## Perform direct indexing.  Range() call reverses dim order, for
     ## Python standard (...,Y,X) indexing.  We have to add an ellipsis object
@@ -652,7 +653,6 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                     k = (1 + np.cos( np.pi * bb ))/2
                 elif(method=='r'):
                     k = (1 + np.cos( np.pi * np.clip( np.abs(bb) * 2-0.5,0,1)))/2
-                    print()
                 else:
                     raise AssertionError("This can't happen")
                 
