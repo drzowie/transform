@@ -123,4 +123,16 @@ def test_009_ArrayIndex():
     data2 = a.apply(data)
     assert( np.all(data2 == data[::-1]) ) 
     
+      
+def test_010_WCS():
+    a = t.WCS('sample.fits')
+    assert(a.idim == 2)
+    assert(a.odim == 2)
+    assert(len(a.itype)==2 and len(a.otype)==2 and len(a.iunit)==2 and len(a.ounit)==2)
+    assert(a.itype == ['X','Y'])
+    assert(a.iunit==['Pixels','Pixels'])
+    assert(a.ounit==['arcsec','arcsec'])
+    assert(a.otype==['Solar-X','Solar-Y'])
+    assert( np.all( np.isclose ( a.apply([[0,0]],0), np.array([[-386.15825,  -676.1092]]), atol=1e-4 ) ) )
+
 
