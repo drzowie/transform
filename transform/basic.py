@@ -689,7 +689,6 @@ class Radial(Transform):
     unit: Unit [default 'rad'] This is the angular unit to be used for the 
     azimuth.
     
-    angunit:
     '''
 
     def __init__(self, *,                      
@@ -796,13 +795,6 @@ class Spherical(Transform):
 
     Parameters
     ----------
-    
-    r0: float If defined, this floating-point value causes t_radial to generate
-    (theta, ln(r/r0)) coordinates out.  Theta is in radians, and the
-    radial coordinate varies by 1 for each e-folding of the r0-scaled
-    distance from the input origin.  The logarithmic scaling is useful for
-    viewing both large and small things at the same time, and for keeping
-    shapes of small things preserved in the image.  
         
     origin: This is the origin of the expansion. Pass in a np.array. Default 
     is set to np.array([0,0,0])
