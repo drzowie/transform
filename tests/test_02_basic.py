@@ -202,15 +202,6 @@ def test_006_WCS():
 
 
 def test_007_Radial():
-    print(
-        '''
-        WARNING
-        -------
-        
-        Radial tests short-circuited in master for now
-        '''
-        )
-    return
     x = np.arange(4.).reshape(2,2)
     b = t.Radial(origin=[130,130])
     d1 = np.array([[131.0 , 130.0], [ 128.75,  127.27]])
@@ -227,7 +218,21 @@ def test_007_Radial():
     assert(  np.allclose(bd1,bd2, atol=1e-2))
     assert(  np.allclose(bd3,bd4, atol=1e-2))
 
-    
-    
 
-    
+def test_008_Spherical():
+    x = np.arange(27.).reshape(3,3,3)
+    a = t.Spherical(origin=[130,130,130])
+    d1 = a.apply(x)  
+    d2 = np.array( [[[ -2.36005547,  -0.60999482, 223.43902972],
+                     [ -2.36014704,  -0.60986414, 218.24298385],
+                     [ -2.36024305,  -0.60972709, 213.04694318]],
+                    [[ -2.36034384,  -0.60958318, 207.8509081 ],
+                     [ -2.36044978,  -0.60943189, 202.65487904],
+                     [ -2.36056127,  -0.60927262, 197.45885647]],
+                    [[ -2.36067877,  -0.60910475, 192.26284092],
+                     [ -2.36080275,  -0.60892754, 187.06683298],
+                     [ -2.36093379,  -0.60874019, 181.87083329]]] )
+    assert(  np.allclose(d1,d2, atol=1e-2))
+    d3 = a.invert(d1) 
+    d4 = x
+    assert(  np.allclose(d3,d4, atol=1e-2))
