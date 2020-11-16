@@ -813,8 +813,7 @@ class Spherical(Transform):
     comes online (a la Math::Units) any angular unit should be OK.
     '''
 
-    def __init__(self, *,                      
-                 r0 = None,
+    def __init__(self, *,
                  iunit = 'rad', 
                  ounit  = 'rad', 
                  itype = None, 
@@ -826,11 +825,6 @@ class Spherical(Transform):
 
         if( not( isinstance( origin, np.ndarray ) ) ) :
             origin = np.array([origin])
-
-        if r0 in locals():
-            otype = ["Azimuth", "Ln radius"]
-        else:
-            otype = ["Azimuth", "Radius"]
 
         angunit = 1.0*getattr(units, iunit)
         angunit = angunit.to(units.radian)  
@@ -847,7 +841,6 @@ class Spherical(Transform):
         self.otype = otype
         self.params = {
             'origin'  : origin,
-            'r0'      : r0,
             'angunit' : angunit 
             }
 
