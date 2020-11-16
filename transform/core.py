@@ -520,7 +520,151 @@ class Transform:
         
         return(output)
         
-    
+    def remap(self, data, /, 
+            method='n',
+            bound='t',
+            phot='radiance',
+            shape=None,
+            template=None,
+            irange=None,
+            orange=None,
+            justify=False,
+            rectify=True,
+            wcs=None
+            ):
+        '''
+        remap - use a transform to remap scientific data
+        
+        This method implements resampling of gridded data by applying the 
+        Transform to the underlying scientific coordinate system of the 
+        scientific data.  The incoming data are either a NumPy array or an 
+        object with attributes 'data' (which must be a NumPy array) and 
+        either 'header' (which, if present, must contain a FITS header 
+        with WCS info) or 'wcs' (which must be an astropy.wcs WCS object).
+        
+        remap can therefore accept and manipulate various objects including 
+        astropy.io.fits HDUs, dictionaries, and SunPy map objects.  
+        
+        
+        The return value has the same attributes (data and either header or 
+        wcs) that were passed in.  If the data object is a recognized 
+        class (e.g. astropy.io.fits image HDU, or SunPy map), the same type 
+        of object is returned.  Otherwise a simple dictionary is returned.
+        
+        Output data are scaled or autoscaled according to the keyword 
+        arguments as described below.  If irange, orange, or a full WCS
+        specification (as a FITS header or WCS object) are supplied, then 
+        the data are scaled accordingly.  If not, they are autoscaled to
+        fit the shape of the output pixel array.
+        
+        The actual resampling is carried out with the resample() method.
+        
+        Parameters
+        ----------
+        
+        data : ndarray
+            This is the gridded data to resample, such as an image.  It must 
+            have at least as many dimensions as the idim of the Transform 
+            (self).
+            
+        /method : string (default 'sample')
+            This string indicates the interpolation method to use.  Only
+            the first character is checked.  Possible values are those 
+            used for transform.helpers.interpND, plus the anti-aliasing
+            filters "Gaussian" and "Hanning".  Items marked with "(*)"
+            don't preserve the original value even on pixel centers under 
+            ideal sampling conditions.
+                
+                'nearest' - use the value of the nearest-neighbor pixel in
+                    the input space.  Very fast, but produces aliasing.
+                    
+                'linear' - use <N>-linear interpolation. Marginaly bettter than
+                    sampling, but still produces phase and amplitude aliasing
+                
+                'cubic' - use <N>-cubic interpolation. This produces a smoother
+                    output than linear for enlargements
+                
+                'fourier' - use discrete Fourier coefficients. to interpolate
+                    between points.  This is useful for periodic data.
+                    
+                'sinc'    - sinc-function weighting in the input plane; this
+                    is equivalent to a hard frequency cutoff in Fourier space in
+                    the input plane. The sinc function has zeroes at integer 
+                    input-pixel offsets, and is enumerated for 6 input pixels in 
+                    all directions.  This limited enumeration introduces small
+                    sidelobes in Fourier space.
+                    
+                'zlanczos' - Lanczos-function weighting in the input plane;
+                    this is equivalent to a trapezoidal filter in Fourier space
+                    in the input space.  The inner sinc function has zeros at
+                    integer input-pixel offsets, and the a parameter is 3, so
+                    the kernel extends for 3 input pixels in all directions.
+                
+                'gaussian' (*) - N-gaussian window weighted sampling in the input plane;
+                    the gaussian has a full width half maximum (FWHM) of 1 pixel and
+                    is enumerated for 3 input pixels in all directions
+                        
+                'hanning' - hanning-window weighted sampling in the input plane
+                    Hanning window (sin^2) weighting in the input plane
+                    
+                'rounded' - hanning-like window weighted sampling, with a narrower
+                    (1/2 pixel) crossover at the pixel boundaries
+                                    
+                'Gaussian' (*) - use locally optimized Jacobian-driven filtering,
+                    with a Gaussian filter profile in the output plane; the Gaussian
+                    has a full width half maximum (FWHM) of 1 output pixel and is
+                    enumerated for 3 output pixels in all directions [note 
+                    capital 'G'].
+                    
+                'Hanning' - use locally optimized Jacobian-driven filtering,
+                    with a Hanning window profile in the output plane [note 
+                    capital 'H']
+                    
+                'Rounded' - use a 1/4-pixel-wide Hanning window with locally-
+                    optimized Jacobian-driven filtering in the output plane
+                    
+                'ZLanczos' - use a Lanczos filter in the output plane
+            
+            Most The first seven interpolation methods use the supplied "interpND"
+            general purpose interpolator and are subject to aliasing and other
+            effects outlined in a paper by DeForest (2004; Solar Physics 219, 3).
+            The last two use the numerical Jacobian derivative matrix (local 
+            linearization) of the coordinate transform to produce a variable, 
+            optimized filter function that reduces or eliminates aliasing.  Gaussian
+            sampling uses a Gaussian filter function with nice Fourier properties;
+            Hanning resampling uses a Hanning-like filter function that
+            is more local than the Gaussian filter.
+            
+
+        /phot : string (default 'radiance')
+            This string indicates the style of photometry to preserve in the
+            data. The default value is useful for most image data.
+            Only the first character is tested. Allowable values are:
+                
+                'radiance' or 'intensive' - output values approximate the local
+                value of the input data.
+                
+                'flux' or 'extensive' - output values are scaled to preserve
+                summed/integrated value over each region.
+                
+            This option is not yet implemented and only intensive treatment
+            is supported at present.
+            
+        /shape : list or tuple None (default None)
+            If present, this is the shape of the output data grid, in regular
+            array index format (directly comparable to the .shape of the 
+            output).  The elements of shape, if specified, should be in 
+            (...,Y,X) order just like the .shape attribute of a numpy array
+            (vs. the (X,Y,...) order of vectors and indices)
+
+        
+        Returns
+        -------
+        
+        The resampled data
+        '''
+        
+        raise AssertionError("remap is not yet implemented")
         
         
             

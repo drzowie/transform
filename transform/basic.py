@@ -5,7 +5,9 @@ Transform subclasses for basic coordinate transforms
 """
 import numpy as np
 import math as math
-import astropy as ap
+import astropy 
+import astropy.wcs
+ap = astropy
 from .core import Transform
 
 
