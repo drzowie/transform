@@ -807,13 +807,6 @@ class Spherical(Transform):
     origin: This is the origin of the expansion. Pass in a np.array. Default 
     is set to np.array([0,0,0])
 
-    euler: This is a 3-vector containing Euler angles to change the angle of 
-    the pole and ordinate.  The first two numbers are the (theta, phi) angles
-    of the pole in a (+Z,+X) spherical expansion, and the last is the
-    angle that the new prime meridian makes with the meridian of a simply
-    tilted sphere. Pass in a np.array. Default 
-    is set to np.array([0,0,0])
-
     unit: Unit [default 'rad'] This is the angular unit to be used for the 
     azimuth. This option sets the angular unit to be used.  Acceptable values are
     "degrees","radians".  Once genuine unit processing
