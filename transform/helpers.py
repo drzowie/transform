@@ -286,7 +286,9 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
     ## All values should be in-range after apply_boundary, so anything negative
     ## is a truncation value.
     ## Note that dexlist has the vector index at the *start* (for the indexing
-    ## operation), so the any operation happens along axis 0.
+    ## operation), so the any operation happens along axis 0.  The range in
+    ## dexlist starts at 1 instead of 0, to skip over the ellipsis object that
+    ## got inserted just above.
     if any( map ( lambda s:s[0]=='t', bound ) ):
         retval = np.where( np.any(dexlist[1:len(dexlist)]<np.array(0), axis=0), fillvalue, retval)
     
@@ -300,8 +302,9 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
     You supply source data in reversed dimension order (...,Y,X) and index
     data as a collection of vectors pointing into the source.  The index is
     collapsed one dimension by interpolation into source: the contents along
-    the final dimension axis are a vector indexing as [X,Y,..] a location in 
-    the source;  other prior axes in the index are broadcast.
+    the final dimension axis are a vector that points (as [X,Y,..]) to a 
+    location in the source;  other prior axes in the index are broadcast and 
+    allow indexing a collection of locations simultaneously.
     
     If source has more axes than the length of the index vectors, then those
     axes are broadcast: the return value of the interpolation is a collection
@@ -317,9 +320,9 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
     axis to have the same size as the number of source dimensions, so that
     the interpolation result is a single value for each index vector.
 
-    Note that interpND indexes axes in reverse order: in the 2-D case of 
-    image interpolation, the source array *axes* are treated as being in 
-    (image-plane, Y, X) order and the 2-vector *values* in index are
+    Note that interpND indexes axes in reverse order: for example, in the 2-D 
+    case of image interpolation, the source array *axes* are treated as being 
+    in (image-plane, Y, X) order and the 2-vector *values* in index are
     considered to be in (X,Y) order.   
 
     Parameters
@@ -370,38 +373,48 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
             
             'l' - linearly interpolate from the hypercube surrounding each point.
             
-            's' - Use sinc-function weighting in the input plane; the sinc 
-                function has zeroes at integer pixel offsets and is enumerated 
-                for 8 pixels in all directions.
+            'c' - cubic-spline interpolate from the 4-pixel hypercube around 
+                each point.  Cubic splines reproduce the value and the first 
+                and second derivatives of the data at original pixel centers. 
             
-            'z' - Use Lanczos-function weighting in the input plane; the sinc 
-                function has zeroes at integer pixel offsets, and the a parameter
-                is 3.
+            's' - Use sinc-function filtering in the input plane; the sinc 
+                function has zeroes at integer pixel offsets, so it reproduces
+                the source data when evaluated at pixel centers.  The sidelobes
+                fall off slowly, so the sinc is enumerated for 8 pixels in all 
+                directions.  The sinc-function weighting is equivalent to a 
+                hard cutoff filter in the frequency domain.
+            
+            'z' - Use Lanczos-function weighting in the input plane; this is
+                a modified sinc that rolls off smoothly over 3 pixels.  It is 
+                equivalent to an approximate trapezoid filter in the frequency
+                domain. Like the sinc function, the Lanczos filter has zeroes
+                at integer pixel offsets, so it reproduces the source data when
+                evaluated at pixel centers.
                 
-            'h' - Use Hanning window (overlapping sin^2) interpolation; the kernel
-                is enumerated for 1 full pixel in all directions.
+            'h' - Use Hanning window (overlapping sin^2) interpolation; the 
+                kernel is enumerated for 1 full pixel in all directions.  The
+                Hanning function produces smooth transitions between pixels, but
+                introduces ripple for smoothly varying curves.
                 
             'r' - Use rounded corners (quasi-Hanning) interpolation; this imposes
                 a Hanning rolloff over 1/2 a pixel width around pixel boundaries.
                 The result is smoother than sampling, but preserves vestiges of
-                pixel edges.
+                pixel edges.  It can be useful for rendering pixelated data and
+                leaving pixel edges both visible and unobtrusive.
             
             'g' - Use Gaussian weighted smoothing with 1 pixel FW; the kernel
                 is enumerated for 3 pixels in all directions. Note that this
                 method does not guarantee the value of integer-indexed samples
                 will match the value in the array itself.
             
-            'c' - cubic-spline interpolate.  
-            
-            'f' - fourier interpolate using discrete FFT coefficients; note,
+            'f' - fourier interpolate using discrete FFT coefficients; this
+                is useful for periodic data such as wave patterns.  Note,
                 this involves taking the FFT of the entire input dataset, which
                 is then discarded -- therefore this method benefits strongly
                 from vectorization.  Because of the way Fourier interpolation is
                 implemented (via explicit evaluation of a complex exponential)
-                you can do Laplace "interpolation" also, by feeding in 
-                complex coordinates.
-      
-  
+                you can do Laplacian analytically continued "interpolation" also, 
+                by feeding in complex-valued coordinates.
         
     strict : Boolean (default True)
         The 'strict' parameter forces strict matching of index vector dimension

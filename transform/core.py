@@ -513,8 +513,8 @@ class Transform:
             )
 
         # Figure the interpolation.
-        if(methodChar in {'H','G','R'}):
-            assert("map: anti-aliased methods are not yet supported")
+        if(methodChar in {'G','H','R','Z'}):
+            assert("Transform.resample: anti-aliased methods are not yet supported")
             
         output = interpND(data0, icoords, method=methodChar, bound=bound)
         
@@ -667,15 +667,21 @@ class Transform:
         raise AssertionError("remap is not yet implemented")
         
         
+        
             
             
-            
-    
+#######################################################################   
 #######################################################################
 #######################################################################
 #    
-# Basic subclasses for Identity, Inverse, and Composition
+# Core subclasse:
+#   - Identity     - demo and/or test class
+#   - Inverse      - inverse of an arbitrary Transform
+#   - Composition  - composition of two or more transformst
 #
+#   - Wrap         - shorthand for ( W o T o W^-1 )
+#   - PlusOne_     - test class (non idempotent)
+#   - ArrayIndex   - reverse the order of vectors from (x,y,...) to (...,y,x)
     
 class Identity(Transform):
     '''
