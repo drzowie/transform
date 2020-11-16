@@ -500,7 +500,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                                 )
         
         # Make a vector of frequency along each axis.  Index mgrid with a 
-        # collection of ranges running over each source.  Shape is:
+        # collection of ranges running over each source axis.  Shape is:
         #   [ <useful-index-dims>, <index-N> ]
         freq = np.mgrid[ tuple(
                                map( lambda i:range(0,source.shape[i]), 
@@ -514,19 +514,24 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
             
         # Now freq has shape [<useful-source-dims>,index-N], and contains the
         # angular rate (in radians/pixel-value) for each location in the 
-        # sourcefft.  W have to get it to broadcast with index, which
-        # has shape [<index-bc-dims>,index-N]. We pad index into "bcdex" to:
+        # sourcefft.  We have to get it to broadcast with index, which
+        # has shape [<index-bc-dims>,index-N]. To do this, pad index into bcdex 
+        # with shape:
         #   [<index-bc-dims>,<1s-for-useful-source-dims>,<index-N>]
         bcdex = np.expand_dims( index, tuple( range( -2,-2-index.shape[-1],-1 )))
         
         # Now generate the overall phase and the Fourier basis values,
-        # with size [<index-bc-dims>,<useful-source-dims>].
+        # with size [<index-bc-dims>,<useful-source-dims>].  
+        # The overall Fourier phase is just the sum of the phases introduced
+        # along each axis of the source -- so we do the sum explicitly.
         phase = (bcdex * freq).sum(axis=-1)
         basis = np.exp( 1j * phase )
         
         # Now it's all over but the shouting.  We want to sum coefficients
         # in the sourcefft, but it may have additional axes "along for the
-        # ride" -- so we have to pad with ones.  bcsourcefft gets size:
+        # ride" -- so we have to pad the source with additional axes between
+        # those full-broadcast axes and the index broadcast dims.  bcsourcefft
+        # gets the shape:
         #  [ <source-bc>, <1s-for-index-bc-dims>, <useful-source-dims> ]
         bcsourcefft = np.expand_dims( sourcefft, 
                         tuple( range(-1-index.shape[-1],
@@ -537,7 +542,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                         )
         
         # Now collapse the useful-source-dims out of result by summing.
-        # This carries out the Fourier sum at eac location, and also gives
+        # This carries out the Fourier sum at each location, and also gives
         # us the shape: 
         #   [ <source-bc>, <index-bc-dims> ]
         # which is what we want to return.
