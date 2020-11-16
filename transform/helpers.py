@@ -536,7 +536,8 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
         # Now generate the overall phase and the Fourier basis values,
         # with size [<index-bc-dims>,<useful-source-dims>].  
         # The overall Fourier phase is just the sum of the phases introduced
-        # along each axis of the source -- so we do the sum explicitly.
+        # along each axis of the source -- so we do the sum explicitly.  The 
+        # Fourier basis elements are just complex exponentials of the phase.
         phase = (bcdex * freq).sum(axis=-1)
         basis = np.exp( 1j * phase )
         
@@ -554,9 +555,12 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                              )
                         )
         
-        # Now collapse the useful-source-dims out of result by summing.
-        # This carries out the Fourier sum at each location, and also gives
-        # us the shape: 
+        # Now collapse the useful-source-dims out of result by summing over
+        # all Fourier coefficients multiplied times the calculated value
+        # of the corresponding basis element.  This carries out the Fourier 
+        # sum at each location.  We collapse by mean and not by sum, because
+        # this an *inverse* Fourier transform to get back to the spatial 
+        # domain.  The final shape of result is just:
         #   [ <source-bc>, <index-bc-dims> ]
         # which is what we want to return.
         result = (bcsourcefft * basis).mean( 
