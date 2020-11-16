@@ -190,7 +190,7 @@ def test_005_TestForNdims():
     assert all( d1 == np.array([10, 40, 90]) )
     
 def test_006_WCS():
-    a = t.FITS('sample.fits')
+    a = t.WCS('sample.fits')
     assert(a.idim == 2)
     assert(a.odim == 2)
     assert(len(a.itype)==2 and len(a.otype)==2 and len(a.iunit)==2 and len(a.ounit)==2)

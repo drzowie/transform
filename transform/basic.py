@@ -5,7 +5,7 @@ Transform subclasses for basic coordinate transforms
 """
 import numpy as np
 import math as math
-from astropy.wcs import WCS
+import astropy as ap
 from .core import Transform
 
 
@@ -536,9 +536,9 @@ class Offset(Linear):
     
 
 
-class FITS(Transform):
+class WCS(Transform):
     '''
-    transform.FITS - World Coordinate System translation
+    transform.WCS - World Coordinate System translation
     
     WCS Transforms implement the World Coordinate System that is used in 
     the FITS image standard that's popular among scientists.  (WCS: Greisen & 
@@ -546,12 +546,12 @@ class FITS(Transform):
     both linear and nonlinear components; at present FITS Transforms only 
     represent the linear component.
     
-    FITS Transforms convert vectors in standard (X,Y) image pixel 
+    WCS Transforms convert vectors in standard (X,Y) image pixel 
     coordinates (in which (0,0) is the center of the pixel at lower left of 
     the image, X runs right, and Y runs up), to world coordinates using the
     WCS information embedded in a FITS header. The inverse does the inverse.
     
-    The FITS object uses the astropy WCS library "under the hood" and 
+    The Transform.WCS  object uses the astropy WCS library "under the hood" and 
     therefore implements all the nonlinear transforms described there.
    
     NOTE
@@ -577,7 +577,7 @@ class FITS(Transform):
     def __init__(self, template):
 
         # Construct a WCS object -- that's what does the real work.
-        wcs_obj = WCS(template)
+        wcs_obj = ap.wcs.WCS(template)
         
         # Test to make sure the object works.
         test_coord = np.zeros([1,wcs_obj.wcs.naxis])
