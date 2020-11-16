@@ -536,6 +536,11 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                              )
                         )
         
+        # Now collapse the useful-source-dims out of result by summing.
+        # This carries out the Fourier sum at eac location, and also gives
+        # us the shape: 
+        #   [ <source-bc>, <index-bc-dims> ]
+        # which is what we want to return.
         result = (bcsourcefft * basis).mean( 
                             axis = tuple(
                                 range( -1, 
@@ -544,10 +549,8 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                                        )
                                 )
                             )
-        # result has been collapsed and now has shape:
-        #   [ <source-bc>, <index-bc-dims> ]
-        # which is what we want.  Now check for complex indices and/or
-        # source.  If both are not complex, then return the real part only.
+        # Now check for complex indices and/or source.  If both are not 
+        # complex, then return the real part only.
         complexes = (np.dtype('complex64'), np.dtype('complex128'))
         if( not ((source.dtype in complexes) or (index.dtype in complexes) )):
             result = result.real
