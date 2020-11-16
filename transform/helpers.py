@@ -661,23 +661,33 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
     
         elif(method[0] in ('s','z','g','h','r')):
             
+            # of gets the offset of each pixel in the sampled subregion, 
+            # relative to the requested location.  This requires indexing 
+            # mgrid with an asssembled tuple of ranges.  
             of = ( (1 - b) - (offset + 1) +
                   np.mgrid[ tuple( map( lambda i:range(size), range(index.shape[-1]) ))].transpose()
             )
             
 
+            # Now loop over axes, collapsing them in turn until we get to the 
+            # size we need
             for ii in range(index.shape[-1]):
                 bb = of[...,ii]
+
                 if(method=='s'):     ## sinc
                     k = np.sinc(bb)
+
                 elif(method=='z'):   ## lanczos
                     k = 3 * np.sinc(bb) * np.sinc(bb/3)
+
                 elif(method=='g'):   ## Gaussian
                     k = np.exp( - bb * bb / 0.5 / 0.5 )
-                elif(method=='h'):
-                    k = (1 + np.cos( np.pi * bb ))/2
-                elif(method=='r'):
-                    k = (1 + np.cos( np.pi * np.clip( np.abs(bb) * 2-0.5,0,1)))/2
+
+                elif(method=='h'):   ## Hanning (no need to divide by 2 since we normalize by k)
+                    k = (1 + np.cos( np.pi * bb ))
+                    
+                elif(method=='r'):   ## Rounded-corners (hanning over 1/2 pixel)
+                    k = (1 + np.cos( np.pi * np.clip( np.abs(bb) * 2-0.5,0,1)))
                 else:
                     raise AssertionError("This can't happen")
                 
