@@ -10,9 +10,11 @@ Tests for the interpolation/helper routines in helpers.py
 """
 
 import numpy as np
+
+import transform as t
 from transform.helpers import apply_boundary
 from transform.helpers import sampleND
-import transform as t
+from transform.helpers import interpND
 import copy
 
 def test_001_apply_boundary():
@@ -144,10 +146,192 @@ def test_002_sampND():
     assert all(a.shape==np.array([4,4]))
     assert np.all( a== np.array( [[0,0,1,1],[0,0,1,1],[10,10,11,11],[10,10,11,11]] ))
     
-                  
+    ####
+    # Test non-strict indexing
+    datasource = np.mgrid[0:10,0:100:10].transpose().sum(axis=-1)
+    try:
+        a = sampleND(datasource,index=[3],strict=1)
+        assert False
+    except:
+        pass
+    a = sampleND(datasource,index=[3])
+    assert len(a.shape)==1
+    assert a.shape[0]==10
+    assert np.all(a == [3,13,23,33,43,53,63,73,83,93])
+    
+    # Single dimension: treat as a single index
+    a = sampleND(datasource,index=[3,4])
+    assert len(a.shape)==0
+    assert a==43
+    
+    # Two dimensions, 1x2: treat as a list of one 2D index
+    a = sampleND(datasource, index=[[3,4]])
+    assert len(a.shape)==1
+    assert a.shape[0]==1
+    assert a[0]==43
+    
+    # Two dimensions, 2x1:  only innermost is index; they get broadcast as two rows of 10
+    a = sampleND(datasource, index = [[3],[4]])
+    assert len(a.shape)==2
+    assert np.all(a.shape==np.array([10,2]))
+    assert np.all( a == [[3,4],[13,14],[23,24],[33,34],[43,44],[53,54],[63,64],[73,74],[83,84],[93,94]])
+    
+    #
+    # Test chunk order
+    # 
+    
+    # First - double-check that two elements resolve correctly in an mgrid
+    datasource = np.mgrid[0:6,0:60:10].transpose().sum(axis=-1)
+    dexes = np.array([[1,2],[3,4]])
+    a = t.sampleND(datasource, dexes)
+    assert a.shape[0]==2
+    assert len(a.shape)==1
+    assert all(a==np.array([21,43]))
+    
+    # Make sure chunk samples are in the correct direction -- (...,Y,X)
+    a = t.sampleND(datasource, dexes, chunk=[2,2])
+    assert len(a.shape)==3
+    assert a.shape[0]==2 and a.shape[1]==2 and a.shape[2]==2
+    assert np.all( a == np.array([[[21,22],[31,32]],[[43,44],[53,54]]]))
+    
+    # Make sure that chunk sizes are handled right
+    a = t.sampleND(datasource, dexes, chunk=[3,2])
+    assert len(a.shape)==3
+    assert a.shape[0]==2 and a.shape[1]==2 and a.shape[2]==3
+    assert np.all( a[0] == np.array([[21,22,23],[31,32,33]])) 
+    assert np.all( a[1] == np.array([[43,44,45],[53,54,55]]))
     
     
     
+    
+    
+    
+def test_003_interpND_nearest():
+    data = np.mgrid[0:5,0:50:10].transpose().sum(axis=-1)
+    
+    # Test sampling. 
+    # It's just a pass-through to sampleND, so
+    # need for extensive testing here.
+    a = interpND(data, [1.2, 2.8], method='n')
+    assert a==31
+    
+def test_004_interpND_linear():
+    # Test linear interpolation
+    data = np.mgrid[0:5,0:50:10].transpose().sum(axis=-1)
+    
+    a = interpND(data, [1,3], method='l')
+    assert np.isclose(a, 31, atol=1e-5)
+    
+    a = interpND(data, [1.2,3], method='l')
+    assert np.isclose(a, 31.2, atol=1e-5)
+    
+    a = interpND(data, [1,2.8], method='l')
+    assert np.isclose(a, 29, atol=1e-5)
+    
+    a = interpND(data, [1.2,2.8], method='l')
+    assert np.isclose(a, 29.2, atol=1e-5)
+    
+    data = np.mgrid[0:5,0:500:100].transpose().sum(axis=-1)
+    dex = np.mgrid[ 1:2.1:0.2, 2:3.1:0.2 ].transpose()
+    a = interpND(data, dex, method='l')
+    assert all(a.shape==np.array([6,6]))
+    assert np.all(
+        np.isclose(a, np.array(
+            [ [201, 201.2, 201.4, 201.6, 201.8, 202 ],
+              [221, 221.2, 221.4, 221.6, 221.8, 222 ],
+              [241, 241.2, 241.4, 241.6, 241.8, 242 ],
+              [261, 261.2, 261.4, 261.6, 261.8, 262 ],
+              [281, 281.2, 281.4, 281.6, 281.8, 282 ],
+              [301, 301.2, 301.4, 301.6, 301.8, 302 ]
+             ]
+            ), atol=1e-4 )
+        )
+    
+def test_005_interpND_cubic():
+    ## Cubic interpolation reduces to linear if the data are linear
+    data = np.mgrid[0:5,0:500:100].transpose().sum(axis=-1)
+    dex = np.mgrid[ 1:2.1:0.2, 2:3:.2 ].transpose()
+    a = interpND(data, dex, method='c')
+    np.isclose(a, np.array(
+            [ [201, 201.2, 201.4, 201.6, 201.8, 202 ],
+              [221, 221.2, 221.4, 221.6, 221.8, 222 ],
+              [241, 241.2, 241.4, 241.6, 241.8, 242 ],
+              [261, 261.2, 261.4, 261.6, 261.8, 262 ],
+              [281, 281.2, 281.4, 281.6, 281.8, 282 ]
+             ]
+            ), 
+        atol=1e-4
+        )
+    data = np.array([0,0,0,1,0,0,0])
+    
+    ## Basic test of localization and negativity for impulse response
+    data = np.array([0,0,1,0,0])
+    x = np.arange(0,6.1,0.1)
+    # expand_dims call is necessary so that the arange is interpreted
+    # as a collection of 1-vectors, rather than as a single 61-vector
+    y = interpND(data, np.expand_dims(x,axis=-1), method='c', bound='e')
+
+    #  Check that the interpolated curve passes through the points in the data
+    assert all(np.isclose(y[ [0,10,20,30,40] ],
+                       [0,0,1,0,0],
+                       atol=1e-5
+                       )
+               )
+    
+    # Check: slight ringing just before and just after the impulse; 
+    # all positive during the impulse
+    assert all(y[1:10]<0)
+    assert all(y[11:30]>0)
+    assert all(y[31:40]<0)
+    
+def test_006_interpND_fft():
+    a = np.array([1,0,0,1,1,0,0,0])
+    b = interpND(a, np.array([[0],[1],[2],[3],[4],[5],[6],[7]]), method='f')
+    assert b.shape[0]==8
+    assert b.dtype in (np.dtype('double'),np.dtype('float'))
+    assert all( np.isclose( b, a, atol=1e-12) )
+    
+    aa = a + 0j
+    b = interpND(aa, np.array([[0],[1],[2],[3],[4],[5],[6],[7]]), method='f')
+    assert b.shape[0]==8
+    assert b.dtype in(np.dtype('complex64'),np.dtype('complex128'))
+    assert all( np.isclose( b, aa, atol=1e-12))
+                                              
+def test_007_interpND_filtermethods():
+    
+    a = np.array([1,0,0,1,1,0,0,0])
+    dex = np.mgrid[0:7.1:0.1,].transpose().astype(float)-0.5
+    
+    # Verify that pixel values are reproduced -- all but 'g'
+    for m in ('s','z','h'):
+        b = interpND(a, dex, bound='t',method=m)
+        assert( all( np.isclose( 
+            b[np.array( [5,15,25,35,45,55])], 
+            [1,0,0,1,1,0],
+            atol=1e-10 
+            ))
+            )
+        
+    # Hand-check a couple of Gaussian values
+    b = interpND(a, dex, bound='t', method='g')
+    assert( np.isclose(b[5], 0.96466,atol=1e-5))
+    assert( np.isclose(b[0], 0.5, atol=1e-3) )
+    assert( np.isclose(b[10],0.5, atol=1e-3) )
+    assert( np.isclose(b[20],0,   atol=1e-3) )
+
+    # Verify that the filter functions can reproduce a 2D pattern
+    a = np.array([[1,0,0,0],[0,1,0,0],[1,1,1,1],[0,0,0,1]])
+    dex = np.mgrid[0:4,0:4].transpose()
+    b = t.interpND(a,dex,method='h')
+    assert np.all(np.isclose(a,b,atol=1e-9))
+    
+    
+    
+
+    
+    
+     
+   
     
     
     

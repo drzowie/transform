@@ -9,6 +9,7 @@ or an orthogonal interface for the various common interpolation methods.
 """
 import numpy as np
 import copy
+from itertools import repeat
 
 def apply_boundary(vec, size, /, bound='f', rint=True):
     '''
@@ -123,7 +124,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
 
 
 
-def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=True):
+def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=False):
     '''
     sampleND - better N-dimensional lookup, with switchable boundaries.
     
@@ -177,7 +178,7 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
         axis. If one of the chunk dimensions is 0, the corresponding axis is
         omitted from the output.
         
-    bound : string or list (default 'truncate')
+    bound : string or list (default 'forbid')
         This is either a string describing the boundary conditions to apply to 
         every axis in the input data, or a list of strings containing the
         boundary conditions on each axis.  The boundary conditions are listed
@@ -202,30 +203,25 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
                 boundary of the data, counting backward to the opposite 
                 boundary (where they reflect again).
         
-    strict : Boolean (default True)
+    strict : Boolean (default False)
         The 'strict' parameter forces strict matching of index vector dimension
         to the number of axes in the source array.  If it is False, then the
         indexing vectors may be smaller than the number of indices in Source, 
         in which case the interpolation is broadcast over the additional axes.
-        Currently 'strict' is a placeholder indicating a direction for future
-        expansion.
+  
 
     Returns
     -------
     The indexed data extracted from the source array, as a numpy ND array
     '''
-    if( not strict ):
-        raise ValueError("sampleND: strict dimensioning only, for now")
-        
     if( not isinstance( index, np.ndarray ) ):
         index = np.array(index)
         
     if( not isinstance( source, np.ndarray ) ):
         source = np.array(source)
     
-    if(strict):
-        if len(np.shape(source)) != np.shape(index)[-1]:
-            raise ValueError("sampleND: source shape must match index axis size")
+    if( strict and  len(source.shape) != index.shape[-1] ):
+        raise ValueError("sampleND: source shape must match index size when strict flag is set")
             
     if(fillvalue is None):
         fillvalue = np.array([0])
@@ -267,20 +263,24 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
             if(ch>0):
                 # chunksize is greater than zero: insert the new dimension,
                 # and increment the appropriate index along that dimension
-                index = np.expand_dims( index, axis=-2 ) + np.zeros([ch, index.shape[-1]])
+                index = np.expand_dims( index, axis=-2 ) + np.zeros([int(ch), index.shape[-1]])
                 index[...,ii] = index[...,ii] + np.mgrid[0:ch] 
     
     ## Convert to integer, and apply boundary conditions
-    index = apply_boundary( index, source.shape, bound=bound )
+    ## Size is extracted from source shape -- which is in reverse order of course
+    index = apply_boundary( index, source.shape[-1:-index.shape[-1]-1:-1], bound=bound )
     
     ## Perform direct indexing.  Range() call reverses dim order, for
-    ## Python standard (...,Y,X) indexing.
-    dexlist = tuple( map ( lambda ii: index[...,ii], 
-                          range(index.shape[-1]-1,-1,-1 ) 
-                          ) 
-                    )
-    
-    retval = source[dexlist]
+    ## Python standard (...,Y,X) indexing.  We have to add an ellipsis object
+    ## to the start of the list after assembling it from the map.  Ick.
+    dexlist = list( 
+                map ( lambda ii: index[...,ii], 
+                     range(index.shape[-1]-1,-1,-1) 
+                     ) 
+                )
+    dexlist.insert(0,...)
+    dextuple = tuple(dexlist)
+    retval = source[dextuple]
     
     ## Truncation -- hardwire negative indices to the fill value
     ## All values should be in-range after apply_boundary, so anything negative
@@ -288,12 +288,12 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=T
     ## Note that dexlist has the vector index at the *start* (for the indexing
     ## operation), so the any operation happens along axis 0.
     if any( map ( lambda s:s[0]=='t', bound ) ):
-        retval = np.where( np.any(dexlist<np.array(0), axis=0), fillvalue, retval)
+        retval = np.where( np.any(dexlist[1:len(dexlist)]<np.array(0), axis=0), fillvalue, retval)
     
     return retval
     
 
-def interpND(source, /, index=None, method='s', bound='f', fillvalue=0):
+def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=False):
     '''
     interpND - a better N-dimensional interpolator, with switchable boundaries.
     
@@ -358,20 +358,50 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0):
             'm' - mirror boundary conditions apply.  Indices reflect off each
                 boundary of the data, counting backward to the opposite 
                 boundary (where they reflect again).
-            
+    
+    fillvalue : scalar (default 0)
+        This is the value used to fill elements that are outside the bounds of
+        the source array, if the 'truncate' boundary condition is selected.
         
     method : string (default 'sample')
-        Only the first character of the string is checked.  This controls the 
-        interpolation method.  The character may be one of:
+        This controls the interpolation method.  The character may be one of:
             
-            's' - sample the nearest value of the array
+            'n' - nearest-value interpolate (sample) the array.
             
-            'l' - linearly interpolate from the hypercube surrounding each point
+            'l' - linearly interpolate from the hypercube surrounding each point.
             
-            'c' - cubic spline interpolation along each axis in order
+            's' - Use sinc-function weighting in the input plane; the sinc 
+                function has zeroes at integer pixel offsets and is enumerated 
+                for 8 pixels in all directions.
             
-            'f' - Fourier interpolation using discrete FFT coefficients
-       
+            'z' - Use Lanczos-function weighting in the input plane; the sinc 
+                function has zeroes at integer pixel offsets, and the a parameter
+                is 3.
+                
+            'h' - Use Hanning window (overlapping sin^2) interpolation; the kernel
+                is enumerated for 1 full pixel in all directions.
+                
+            'r' - Use rounded corners (quasi-Hanning) interpolation; this imposes
+                a Hanning rolloff over 1/2 a pixel width around pixel boundaries.
+                The result is smoother than sampling, but preserves vestiges of
+                pixel edges.
+            
+            'g' - Use Gaussian weighted smoothing with 1 pixel FW; the kernel
+                is enumerated for 3 pixels in all directions. Note that this
+                method does not guarantee the value of integer-indexed samples
+                will match the value in the array itself.
+            
+            'c' - cubic-spline interpolate.  
+            
+            'f' - fourier interpolate using discrete FFT coefficients; note,
+                this involves taking the FFT of the entire input dataset, which
+                is then discarded -- therefore this method benefits strongly
+                from vectorization.  Because of the way Fourier interpolation is
+                implemented (via explicit evaluation of a complex exponential)
+                you can do Laplace "interpolation" also, by feeding in 
+                complex coordinates.
+      
+  
         
     strict : Boolean (default True)
         The 'strict' parameter forces strict matching of index vector dimension
@@ -384,3 +414,263 @@ def interpND(source, /, index=None, method='s', bound='f', fillvalue=0):
     The indexed data extracted from the source array, as a numpy ND array
 
     '''
+    if not isinstance(index,np.ndarray):
+        index = np.array(index)
+        
+    if not isinstance(source, np.ndarray):
+        index = np.array(index)
+        
+    # Sample: just grab the nearest value using sampleND
+    if(method[0] == 'n'):
+        return sampleND(source, 
+                        index=index, 
+                        bound=bound, 
+                        fillvalue=fillvalue)
+    
+    # Linear: grab the 2x...x2 hypercube containing the indexed point,
+    # then assemble weighting coefficients based on closeness of the indexed
+    # point to the corresponding corner of the hypercube.  (N-D version of the
+    # usual alpha/beta mult-and-sum)
+    # 
+    # linear is implemented differently than the other filters because 
+    # it is simpler to broadcast.  This makes it slightly faster.
+    elif(method[0] == 'l'):
+        fldex = np.floor(index)
+        # sample the ncube region around each point.  Dimensions of 
+        # region are [ <index-broadcast-dims>, <N twos> ]
+        # where N is the dimensionality of the index (that's what the chunk
+        # parameter does)
+        region = sampleND(source, 
+                          index=fldex, 
+                          bound=bound, 
+                          fillvalue=fillvalue, 
+                          strict=strict, 
+                          chunk = np.array(
+                              list( repeat( int(2), index.shape[-1]) )
+                              )
+                          )
+        
+        # Enumerate a hypercube with 0/1
+        # Dimension is [<N twos>, index-vec-dim-size-N]
+        ncube = np.mgrid[ tuple( repeat( range(2), index.shape[-1])) ].transpose()
+        
+        # Now assemble alpha/beta weighting coefficients
+        # expand the index dims by adding ncube dimensions
+        # alpha is [ <index-broadcast-dims>, <N 1's>, index-vec-dim-size-N ]
+        # This lets it broadcast against ncube which has N 2's.
+        # beta is the complement.
+        alpha = np.expand_dims( index - fldex,
+                                tuple( range( -2,
+                                             -index.shape[-1]-2,
+                                             -1
+                                              ) 
+                                      ) 
+                                )
+        beta = 1 - alpha
+        
+        # Now let the ncube corner coordinates (0 or 1) select alpha or or 
+        # beta coefficients. weight gets a total weighting value for each 
+        # corner of the ncube (which matches the chunk size in the output).
+        # Take the product along the vector axis to get weight, which 
+        # has dim [ <index-broadcast-dims>, <N twos> ] to match region.
+        wvec = np.where( ncube, alpha, beta )
+        weight = wvec.prod( axis=-1 )
+        
+        # finally... collapse by weighting-and-summing the region around each
+        # index value.  The twos are gone and we have only the 
+        # [ <index-broadcast-dims> ] left.
+        value = (region * weight).sum( 
+            axis=tuple( range( -1,
+                               -index.shape[-1]-1,
+                               -1
+                               )
+                       )
+            )
+        return value
+        
+    ############################
+    ## Fourier interpolation: find the Fourier components of the data, and 
+    ## explicitly evaluate them at the provided points
+
+    elif(method[0]=='f'):
+
+        # FFT the source along all (and only) the axes used by the index.
+        sourcefft = np.fft.fftn(source,
+                                axes=range( -1, -1 - index.shape[-1], -1 )
+                                )
+        
+        # Make a vector of frequency along each axis.  Index mgrid with a 
+        # collection of ranges running over each source.  Shape is:
+        #   [ <useful-index-dims>, <index-N> ]
+        freq = np.mgrid[ tuple(
+                               map( lambda i:range(0,source.shape[i]), 
+                                 range( -1, -1 - index.shape[-1], -1 )
+                               )
+                            )
+            ].transpose().astype(float)
+        # convert from 0:n to 0:2PI along each axis
+        for i in range(index.shape[-1]):
+            freq[...,i] = freq[...,i] * np.pi * 2 / freq.shape[-2-i]
+            
+        # Now freq has shape [<useful-source-dims>,index-N], and contains the
+        # angular rate (in radians/pixel-value) for each location in the 
+        # sourcefft.  W have to get it to broadcast with index, which
+        # has shape [<index-bc-dims>,index-N]. We pad index into "bcdex" to:
+        #   [<index-bc-dims>,<1s-for-useful-source-dims>,<index-N>]
+        bcdex = np.expand_dims( index, tuple( range( -2,-2-index.shape[-1],-1 )))
+        
+        # Now generate the overall phase and the Fourier basis values,
+        # with size [<index-bc-dims>,<useful-source-dims>].
+        phase = (bcdex * freq).sum(axis=-1)
+        basis = np.exp( 1j * phase )
+        
+        # Now it's all over but the shouting.  We want to sum coefficients
+        # in the sourcefft, but it may have additional axes "along for the
+        # ride" -- so we have to pad with ones.  bcsourcefft gets size:
+        #  [ <source-bc>, <1s-for-index-bc-dims>, <useful-source-dims> ]
+        bcsourcefft = np.expand_dims( sourcefft, 
+                        tuple( range(-1-index.shape[-1],
+                                     -1-index.shape[-1]-(len(index.shape)-1),
+                                     -1
+                                    )
+                             )
+                        )
+        
+        # Now collapse the useful-source-dims out of result by summing.
+        # This carries out the Fourier sum at eac location, and also gives
+        # us the shape: 
+        #   [ <source-bc>, <index-bc-dims> ]
+        # which is what we want to return.
+        result = (bcsourcefft * basis).mean( 
+                            axis = tuple(
+                                range( -1, 
+                                       -1 - index.shape[-1],
+                                       -1
+                                       )
+                                )
+                            )
+        # Now check for complex indices and/or source.  If both are not 
+        # complex, then return the real part only.
+        complexes = (np.dtype('complex64'), np.dtype('complex128'))
+        if( not ((source.dtype in complexes) or (index.dtype in complexes) )):
+            result = result.real
+                
+        return result
+        
+    #####################
+    ## Collapsible filter interpolation
+    ## This implements cubic, sinc, Lanczos, Gaussian, and Hanning 
+    ## interpolation, which differ in the size of region they sample
+    ## and also in the actual formula.
+                                                  
+    elif(method[0] in ('c','s','z','g','h','r')):
+        fldex = np.floor(index)
+        
+        size = {'c':4, 's':16, 'z':6, 'g':6, 'h':2, 'r':2}[method]
+        offset = (size/2)-1
+        
+        # sample the ncube region around each point.  Dimensions of 
+        # region are [ <index-broadcast-dims>, <N size's> ]
+        # where N is the dimensionality of the index (that's what the chunk
+        # parameter does)
+        region = sampleND(source, 
+                          index=fldex - offset, 
+                          bound=bound, 
+                          fillvalue=fillvalue, 
+                          strict=strict, 
+                          chunk = np.array(
+                              list( repeat( int(size), index.shape[-1]) )
+                              )
+                          )
+        
+        # Grab the subpixel offset, and expand it to be broadcastable to 
+        # the new region.  At the end, b has dimension 
+        # [<index-broadcast-dims>, <N ones>, N]
+        b = np.expand_dims( index - fldex,
+                                tuple( range( -2,
+                                             -index.shape[-1]-2,
+                                             -1
+                                              ) 
+                                      ) 
+                                )
+        
+        ### Now collapse one dim at a time according to method
+        
+        #######
+        ## Cubic interpolation
+        if(method[0]=='c'):
+            for ii in range(index.shape[-1]):
+                # a0 gets just-under sample; 
+                # a1 gets just-over sample;
+                # a1_a0 gets slope in innermost pair
+                a0 = region[...,1] 
+                a1 = region[...,2] 
+                a1_a0 = a1-a0
+
+                # s0 gets average lower slope
+                # a1 gets average upper slope
+                s0 = (region[...,2]-region[...,0]) * 0.5
+                s1 = (region[...,3]-region[...,1]) * 0.5
+                
+                # bb gets the correct vector component of b
+                bb = b[...,0,ii]
+                
+                # now collapse the region by polyomial interpolation.  
+                # Everything has the same dimensions as region, with 
+                # one dim lopped off the end
+                region = (
+                            a0 +
+                            bb * (
+                                s0 +
+                                bb * ( (3 * a1_a0 - 2*s0 - s1) +
+                                      bb * (s1 + s0 - 2*a1_a0)
+                                      )
+                                )
+                            )
+                
+                # b needs to be collapsed also, to match the collapse of 
+                # region.  We just strip off one of the expanded dims, keeping
+                # the vector axis at the end.
+                b = b[...,0,:]
+        
+            # On exit from the loop, all the hypercube indices have been stripped
+            # off of region, which now just has dimension [<index-broadcast>]
+            return region
+    
+        elif(method[0] in ('s','z','g','h','r')):
+            
+            of = ( (1 - b) - (offset + 1) +
+                  np.mgrid[ tuple( map( lambda i:range(size), range(index.shape[-1]) ))].transpose()
+            )
+            
+
+            for ii in range(index.shape[-1]):
+                bb = of[...,ii]
+                if(method=='s'):     ## sinc
+                    k = np.sinc(bb)
+                elif(method=='z'):   ## lanczos
+                    k = 3 * np.sinc(bb) * np.sinc(bb/3)
+                elif(method=='g'):   ## Gaussian
+                    k = np.exp( - bb * bb / 0.5 / 0.5 )
+                elif(method=='h'):
+                    k = (1 + np.cos( np.pi * bb ))/2
+                elif(method=='r'):
+                    k = (1 + np.cos( np.pi * np.clip( np.abs(bb) * 2-0.5,0,1)))/2
+                else:
+                    raise AssertionError("This can't happen")
+                
+                region = ( k * region ).sum(axis=-1) / k.sum(axis=-1)
+                
+                of = of[...,0,:]
+                
+            return region
+
+        raise AssertionError("This shouldn't ever happen")
+ 
+        
+    else: 
+        
+        raise ValueError(f"interpND: valid methods are 'n','l','c','f','s','z','g', or 'h')")
+
+
+        

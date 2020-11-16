@@ -1,9 +1,12 @@
 * Polar & tests
-* FITS & tests
+* Projective
+* Cubic
+* Lookup
+* Code shortcut for easier hackitude later
 * initial map() & tests
   - Basic functionality
   - FITS wrapping
   - autoscaling
-  - multiple interpolation methods
+  - optimal resampling (interpND now implemented in helpers.py)
   - ultimately: SWIG an optimal-resample
 
