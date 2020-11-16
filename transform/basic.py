@@ -5,7 +5,9 @@ Transform subclasses for basic coordinate transforms
 """
 import numpy as np
 import math as math
-from astropy.wcs import WCS
+import astropy 
+import astropy.wcs
+ap = astropy
 from .core import Transform
 from astropy import units
 
@@ -14,9 +16,13 @@ class Linear(Transform):
     '''
     transform.Linear - linear transforms
     
-    Linear tranforms consist of an offset and a matrix operation.  It 
-    implements the transform:
-        
+    Mathematical linear transformations consist of an offset and a matrix 
+    operation.  Linear implements that class directly with a matrix 
+    multiplication and an offset.  Two separate offsets (pre and post multiply)
+    are tracked, for convenience. Pre offsets work in the input (pre-matrix)
+    coordinate system; post offsets work in the output (post-matrix) system.
+    The formula is:
+    
         data_out = (post) + (matrix x (data + pre))
         
     where post, pre, data, and data_out are all column vectors (or broadcast
@@ -237,7 +243,7 @@ class Scale(Linear):
     In the special case where you specify a single scale variable and 
     you do not specify either of the offsets, the dimensionality defaults
     to 2 -- this is for simple scaling of image data.  To obtain a 1-D
-    simple scale, specify d=1 in the construction parameters.
+    simple scale, specify dim=1 in the construction parameters.
     
     Scale is a subclass of Linear.
     
@@ -327,8 +333,7 @@ class Scale(Linear):
     def __str__(self):
         self.strtmp = "Linear/Scale"
         return super().__str__()
-
-
+    
 class Rotation(Linear):
     '''
     transform.Rotation - linear transform that just rotates vectors
@@ -501,7 +506,7 @@ class Offset(Linear):
     Parameters
     ----------
     
-    offset : np.ndarray (vector)
+    offset - np.ndarray (vector)
         The amount to offset the data vectors
     '''
     def __init__(self, offset):
@@ -533,9 +538,9 @@ class Offset(Linear):
     
 
 
-class FITS(Transform):
+class WCS(Transform):
     '''
-    transform.FITS - World Coordinate System translation
+    transform.WCS - World Coordinate System translation
     
     WCS Transforms implement the World Coordinate System that is used in 
     the FITS image standard that's popular among scientists.  (WCS: Greisen & 
@@ -543,19 +548,26 @@ class FITS(Transform):
     both linear and nonlinear components; at present FITS Transforms only 
     represent the linear component.
     
-    FITS Transforms convert vectors standard (X,Y) image pixel 
+    WCS Transforms convert vectors in standard (X,Y) image pixel 
     coordinates (in which (0,0) is the center of the pixel at lower left of 
     the image, X runs right, and Y runs up), to world coordinates using the
     WCS information embedded in a FITS header. The inverse does the inverse.
     
-    the FITS object uses the astropy WCS library "under the hood" and 
-    therefore implements all the nonlinear transforms described there It
-    also converts all recognized units to their SI-plus-degrees-system 
-    standard internal units.  
+    The Transform.WCS  object uses the astropy WCS library "under the hood" and 
+    therefore implements all the nonlinear transforms described there.
+   
+    NOTE
+    ----
     
-    In addition, FITS headers with CTYPE fields recognized by the Astropy
-    WCS library are converted by that library to standard units for that 
-    CTYPE.  To avoid the conversion, use different CTYPE fields.
+    astropy.wcs converts many angular cunits to "standard units" on initial
+    parse -- for example, SOHO/EIT solar images with CTYPE specifiers of 
+    HPLT-TAN and HPLN-TAN are automagically converted from CUNIT of arcsec
+    to CUNIT of degrees.  We consider this a bug or at best a misfeature.
+    
+    A workaround is to specify CTYPE fields that are not recognized by WCS.
+
+    This behavior is not reliable here -- future updates to Transform will
+    disable or work around it.
     
     Parameters
     ----------
@@ -567,7 +579,7 @@ class FITS(Transform):
     def __init__(self, template):
 
         # Construct a WCS object -- that's what does the real work.
-        wcs_obj = WCS(template)
+        wcs_obj = ap.wcs.WCS(template)
         
         # Test to make sure the object works.
         test_coord = np.zeros([1,wcs_obj.wcs.naxis])
