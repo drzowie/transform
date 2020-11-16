@@ -760,8 +760,9 @@ class Radial(Transform):
             self._strtmp = 'Radial'
         return super().__str__()        
     
+ 
 
-  
+
 
 class Spherical(Transform):
     '''
@@ -845,44 +846,50 @@ class Spherical(Transform):
             'angunit' : angunit 
             }
 
+
     def _forward( self, data ):
 
         out = data.copy()
-        data[..., 0:2] -= self.params['origin'][0:3]
-        
-        d0 = data[..., 0].copy()# * self.params['angunit']
-        d1 = data[..., 1].copy()# * self.params['angunit']
-        d2 = data[..., 2].copy()# * self.params['angunit']
-        
-        out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0]) % (2.0 * np.pi)) / self.params['angunit']
+        origin = self.params['origin'][0:3]
 
-        if self.params['r0']:
-            out[..., 1] = 0.5 * np.log((data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0]) / (self.params['r0'] * self.params['r0']))
-        else:
-            out[..., 1] = np.sqrt(data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0])
+        if not np.all((origin == 0)):
+            data = data - origin
+
+        d0 = data[..., 0].copy()
+        d1 = data[..., 1].copy()
+        d2 = data[..., 2].copy()
+
+        out[..., 0] = (np.arctan2(d1, d0))
+        out[..., 2] = (np.sqrt(d0*d0 + d1*d1 + d2*d2))
+        out[..., 1] = (np.arcsin(d2 / out[..., 2]))
+                       
+        out[..., 0:2] = out[..., 0:2] * self.params['angunit']
+
         return out
-
-
-
-
-        #my($out) =   ($d->is_inplace) ? $data : $data->copy;
-
-        #my $tmp; # work around perl -d "feature"
-        #($tmp = $out->slice("(0)")) .= atan2($d1, $d0);
-        #($tmp = $out->slice("(2)")) .= sqrt($d0*$d0 + $d1*$d1 + $d2*$d2);
-        #($tmp = $out->slice("(1)")) .= asin($d2 / $out->slice("(2)"));
-
-        #($tmp = $out->slice("0:1")) /= $o->{angunit}
-          #if(defined $o->{angunit});
-
-        #$out;
-
-
 
         
     def _reverse( self, data ):
-        pass
+
+        theta = data[..., 0].copy()# * self.params['angunit']
+        phi = data[..., 1].copy()# * self.params['angunit']
+        r = data[..., 2].copy()# * self.params['angunit']
+
+        out = np.ndarray(data.shape)
+
+        ph = self.params['angunit'] * phi;
+        th = self.params['angunit'] * theta;
         
+        out[..., 2] = r * np.sin(ph) #z
+        out[..., 0] = r * np.cos(ph) #x
+        out[..., 1] = out[..., 0] * np.sin(th) #y
+        out[..., 0] = out[..., 0] * np.cos(th) #x
+        
+        origin = self.params['origin'][0:3]
+        if not np.all((origin == 0)):
+            out = out + origin
+        return out
+
+            
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
             self._strtmp = 'Spherical'
