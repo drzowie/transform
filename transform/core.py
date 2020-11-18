@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import copy
+import os.path
 import numpy as np
 import astropy 
 import astropy.wcs
 import astropy.units
 ap = astropy
+
 
 from transform.helpers import interpND
 
@@ -984,6 +986,85 @@ class ArrayIndex(Transform):
     
     
     
+def _wcs_from_any(Gzinta, /, template=None):
+    '''
+    _wcs_from_any -- internal subroutine to extract or construct an astropy 
+    WCS object from a variety of inputs.  
+    
+    You feed in a FITS header, a WCS object, or an object with a 
+    'header' or 'wcs' attribute; and you get back an astropy WCS 
+    object.
+    
+    The following aspects of the target are checked, in decreasing 
+    order of priority:
+        - the target, if it is an astropy WCS or Header object
+        - the target's .wcs attribute, if it has one
+        - the target's .header attribute, if it has one
+        - the target itself, if it has SIMPLE and NAXIS attributes
+        - the 0 element of the target (as another target), if it is listlike
+    
+    Targets are searched in the order (template, object) until a WCS or FITS
+    header object are found.  The target is parsed into a WCS object and returned.
+
+        
+    Parameters
+    ----------
+    object: any old bag o' goo that has a WCS or FITS header in it
+    
+    /template : An alternate target (default None)
+        
+        
+    Raises
+    ------
+    ValueError: if no FITS header nor WCS object is found.
+
+    Returns
+    -------
+    the WCS object
+
+    '''
+   
+    InputsToSearch = [template,Gzinta]
+    
+    for this in InputsToSearch:
+        if this is not None:
+            # Check if this is an array-like object and if so use the first one
+            try:
+                if not isinstance(this,'str'):
+                    this=this[0]
+            except:
+                pass
+            
+            # Look for the obvious attributes
+            if isinstance(this, ap.wcs.WCS):
+                return this
+            if hasattr(this, 'wcs')  and  isinstance(this.wcs,ap.wcs.WCS):
+                return this.wcs
+            if hasattr(this, 'header'):
+                return ap.wcs.WCS(this.header)
+
+            # See if this is a dictionary-like object with a WCS or a header
+            try: 
+                if 'wcs' in this and isinstance(this['wcs'],ap.wcs.WCS):
+                    return this['wcs']
+
+                if 'header' in this and this['header']['SIMPLE']  and  this['header']['NAXIS']:
+                    return ap.wcs.WCS(this['header'])
+                
+                if 'SIMPLE' in this and this['SIMPLE'] and 'NAXIS' in this:
+                    return ap.wcs.WCS(this)
+            except:
+                pass # it wasn't dictionary-like
+
+            # Check if it's a filename, in which case try to build a WCS out of it
+            if os.path.exists(this):
+                return ap.wcs.WCS(this)
+
+    raise ValueError("Couldn't find a WCS object or FITS header to parse")
+            
+        
+    
+    
 class WCS(Transform):
     '''
     transform.WCS - World Coordinate System translation
@@ -991,41 +1072,27 @@ class WCS(Transform):
     WCS Transforms implement the World Coordinate System that is used in 
     the FITS image standard that's popular among scientists.  (WCS: Greisen & 
     Calabretta 2002; "http://arxiv.org/abs/astro-ph/0207407") WCS includes 
-    both linear and nonlinear components; at present FITS Transforms only 
-    represent the linear component.
+    both linear and nonlinear components; both are implemented, via the 
+    astropy.wcs library.
     
     WCS Transforms convert vectors in standard (X,Y) image pixel 
     coordinates (in which (0,0) is the center of the pixel at lower left of 
     the image, X runs right, and Y runs up), to world coordinates using the
     WCS information embedded in a FITS header. The inverse does the inverse.
     
-    The Transform.WCS  object uses the astropy WCS library "under the hood" and 
-    therefore implements all the nonlinear transforms described there.
-   
-    NOTE
-    ----
-    
-    astropy.wcs converts many angular cunits to "standard units" on initial
-    parse -- for example, SOHO/EIT solar images with CTYPE specifiers of 
-    HPLT-TAN and HPLN-TAN are automagically converted from CUNIT of arcsec
-    to CUNIT of degrees.  We consider this a bug or at best a misfeature.
-    
-    A workaround is to specify CTYPE fields that are not recognized by WCS.
-
-    This behavior is not reliable here -- future updates to Transform will
-    disable or work around it.
-    
     Parameters
     ----------
     
-    Header: An astropy.fits.ImageHDU or astropy.fits.Header or file name
+    object: a FITS header or astropy.wcs.WCS object, or an object having a 
+    FITS header or astropy.wcs.WCS object as a "header" or "wcs" attribute, 
+    respectively
     
     /dim: an optional limiting dimension
     '''
-    def __init__(self, template):
+    def __init__(self, dingus):
 
         # Construct a WCS object -- that's what does the real work.
-        wcs_obj = ap.wcs.WCS(template)
+        wcs_obj = _wcs_from_any(dingus)
         
         # Test to make sure the object works.
         test_coord = np.zeros([1,wcs_obj.wcs.naxis])
