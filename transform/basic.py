@@ -405,7 +405,7 @@ class Rotation(Linear):
     def __init__(self,                      
                  rot=None,                  
                  *, post=None, pre=None,    
-                 euler=None, u='rad',       
+                 euler=None,u='rad',       
                  iunit=None,ounit=None,     
                  itype=None,otype=None,     
                  ):
@@ -879,8 +879,162 @@ class Spherical(Transform):
             out = out + origin
         return out
 
-            
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
             self._strtmp = 'Spherical'
         return super().__str__()    
+
+
+
+
+class Quadratic(Transform):
+    '''
+    TO BE MADDE A POLY SUBCLASS
+    transform.Quadratic scaling - cylindrical pincushion (n-d; with inverse)
+    
+    Quadratic scaling emulates pincushion in a cylindrical optical system:
+    separate quadratic scaling is applied to each axis.  You can apply
+    separate distortion along any of the principal axes.  If you want
+    different axes, compose with Linear to rotate them to the correct angle.  
+    The scaling options may be scalars or vectors; if they are scalars then 
+    the expansion is isotropic.
+
+    The formula for the expansion is:
+
+        f(a) = ( <a> + <strength> * a^2/<L_0> ) / (abs(<strength>) + 1)
+
+    where <strength> is a scaling coefficient and <L_0> is a fundamental
+    length scale.   Negative values of <strength> result in a pincushion
+    contraction.
+
+    Note that, because quadratic scaling does not have a strict inverse for
+    coordinate systems that cross the origin, we cheat slightly and use
+    $x * abs($x)  rather than $x**2.  This does the Right thing for pincushion
+    and barrel distortion, but means that t_quadratic does not behave exactly
+    like t_cubic with a null cubic strength coefficient.
+
+    Parameters
+    ----------
+        
+    origin :  numpy.ndarray (optional; default = np.array([0,0]))
+        This is the origin of the pincushion. Pass in a np.array. 
+
+    length : float (optional; default = 1)
+        The fundamental scale of the transformation -- the radius that remains
+        unchanged.  (default=1)
+
+    strength : float (optional; default = 0.1)
+        The relative strength of the pincushion.
+
+    dim : int (optional; default = dimensionality of your input vectors)
+        The number of dimensions to quadratically scale
+
+    '''
+
+    def __init__(self, *,
+                 iunit = None, 
+                 ounit  = None, 
+                 itype = None, 
+                 otype  = None,
+                 idim  = None, 
+                 odim = None,
+                 origin = None,
+                 length = 1,
+                 strength = 0.1
+                 ):
+
+        ### Finally - if no idim and odim, default to 0
+        if( origin is None ):
+            origin = 0
+        if( idim is None ):
+            idim = 0
+        if( odim is None ):
+            odim = 0
+
+        ###Generate the object        
+        self.idim = idim
+        self.odim = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = iunit
+        self.ounit = ounit
+        self.itype = itype
+        self.otype = otype
+        self.params = {
+            'origin'  : origin,
+            'length' : length,
+            'strength': strength
+            }
+
+
+    def _forward( self, data ):
+
+        data = data.copy() #this is dd
+        out = data.copy()
+            
+        #[..., self.params['dim']-1].copy()
+        #---need to consider origin dimensions
+        origin = self.params['origin']
+
+        if not np.all((origin == 0)):
+            origin = np.array(origin)
+            data = data - origin
+            
+        if( np.all( self.idim != 0 ) ):
+            data = data[..., :self.idim].copy()
+            self.odim = self.idim
+            print("In1")
+
+        else :
+            self.odim, self.idim = data.shape
+            data = data
+            print("In2")
+
+        #print("dim")
+        print(data)
+
+        data = data + self.params['strength'] * (data * np.abs(data)) / self.params['length']
+        data = data / ( np.abs(self.params['strength'])+1 )
+
+        if not np.all((origin == 0)):
+            data = data + origin
+
+        out[..., :self.idim] = data[..., :self.idim]
+
+        return out
+
+        
+    def _reverse( self, data ):
+
+        data = data.copy() #this is dd
+        out = data.copy()
+        
+        if( np.all( self.idim != 0 ) ):
+            data = data[..., :self.idim].copy()
+            self.odim = self.idim
+        else :
+            self.odim, self.idim = data.shape
+            data = data
+
+
+        #---need to consider origin dimensions
+        origin = self.params['origin']
+
+        if not np.all((origin == 0)):
+            origin = np.array(origin)
+ 
+        data = ((-1 + np.sqrt(1 + 4 * self.params['strength']/self.params['length'] * np.abs(data - origin) * (1+np.abs(self.params['strength']))))/ 2 / self.params['strength'] * self.params['length']) * (1 - 2*(data < origin));
+
+        if not np.all((origin == 0)):
+            data = data + origin
+
+        out[..., :self.idim] = data[..., :self.idim]
+
+        return out
+
+            
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Quadratic'
+        return super().__str__()    
+
