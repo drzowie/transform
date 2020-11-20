@@ -621,7 +621,7 @@ class WCS(Transform):
         self.strtmp = "WCS"
         return super().__str__()
     
-    def _forward(self, data):
+    def _forward(self, data: np.ndarray):
         sh = data.shape
        
         if(len(sh)>2):
@@ -636,7 +636,7 @@ class WCS(Transform):
         
         return(data)
     
-    def _reverse(self, data):
+    def _reverse(self, data: np.ndarray):
         sh = data.shape
         
         if(len(sh)>2):
@@ -731,7 +731,7 @@ class Radial(Transform):
         }
 
 
-    def _forward( self, data ):
+    def _forward( self, data: np.ndarray ):
 
         out = np.ndarray(data.shape)
 
@@ -747,7 +747,7 @@ class Radial(Transform):
             out[..., 1] = np.sqrt(data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0])
         return out
 
-    def _reverse( self, data ):
+    def _reverse( self, data: np.ndarray ):
         
         d0 = data[..., 0].copy() * self.params['angunit']
         d1 = np.expand_dims(data[..., 1], [1]).copy()
@@ -837,7 +837,7 @@ class Spherical(Transform):
             }
 
 
-    def _forward( self, data ):
+    def _forward( self, data: np.ndarray ):
 
         out = data.copy()
         origin = self.params['origin'][0:3]
@@ -858,7 +858,7 @@ class Spherical(Transform):
         return out
 
         
-    def _reverse( self, data ):
+    def _reverse( self, data: np.ndarray ):
 
         theta = data[..., 0].copy()# * self.params['angunit']
         phi = data[..., 1].copy()# * self.params['angunit']
@@ -967,12 +967,11 @@ class Quadratic(Transform):
             }
 
 
-    def _forward( self, data ):
+    def _forward( self, data: np.ndarray ):
 
         data = data.copy() #this is dd
         out = data.copy()
             
-        #[..., self.params['dim']-1].copy()
         #---need to consider origin dimensions
         origin = self.params['origin']
 
@@ -983,15 +982,10 @@ class Quadratic(Transform):
         if( np.all( self.idim != 0 ) ):
             data = data[..., :self.idim].copy()
             self.odim = self.idim
-            print("In1")
-
-        else :
+        else:
             self.odim, self.idim = data.shape
             data = data
-            print("In2")
 
-        #print("dim")
-        print(data)
 
         data = data + self.params['strength'] * (data * np.abs(data)) / self.params['length']
         data = data / ( np.abs(self.params['strength'])+1 )
@@ -1004,7 +998,7 @@ class Quadratic(Transform):
         return out
 
         
-    def _reverse( self, data ):
+    def _reverse( self, data: np.ndarray ):
 
         data = data.copy() #this is dd
         out = data.copy()
@@ -1032,9 +1026,326 @@ class Quadratic(Transform):
 
         return out
 
-            
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
             self._strtmp = 'Quadratic'
         return super().__str__()    
 
+
+
+class Cubic(Transform):
+    '''
+    TO BE MADDE A POLY SUBCLASS
+    transform.Cubic scaling - cubic pincushion (n-d; with inverse)
+
+    Cubic scaling is a generalization of t_quadratic to a purely
+    cubic expansion.
+
+    The formula for the expansion is:
+
+        f(a) = ( a' + st * a'^3/L_0^2 ) / (1 + abs(st)) + origin
+
+    where a'=(a-origin).  That is a simple pincushion
+    expansion/contraction that is fixed at a distance of L_0 from the
+    origin.
+
+    Because there is no quadratic term the result is always invertible with
+    one real root, and there is no mucking about with complex numbers or
+    multivalued solutions.
+
+
+    Parameters
+    ----------
+        
+    origin :  numpy.ndarray (optional; default = np.array([0,0]))
+        This is the origin of the pincushion. Pass in a np.array. 
+
+    length : float (optional; default = 1)
+        The fundamental scale of the transformation -- the radius that remains
+        unchanged.  (default=1)
+
+    strength : float (optional; default = 0.1)
+        The relative strength of the pincushion.
+
+    dim : int (optional; default = dimensionality of your input vectors)
+        The number of dimensions to quadratically scale
+
+    '''
+
+    def __init__(self, *,
+                 iunit = None, 
+                 ounit  = None, 
+                 itype = None, 
+                 otype  = None,
+                 idim  = None, 
+                 odim = None,
+                 origin = None,
+                 length = 1,
+                 strength = 0.1
+                 ):
+
+        ### Finally - if no idim and odim, default to 0
+        if( origin is None ):
+            origin = 0
+        if( idim is None ):
+            idim = 0
+        if( odim is None ):
+            odim = 0
+
+        ###Generate the object        
+        self.idim = idim
+        self.odim = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = iunit
+        self.ounit = ounit
+        self.itype = itype
+        self.otype = otype
+        self.params = {
+            'origin'  : origin,
+            'length' : length,
+            'strength': strength
+            }
+
+
+    def _forward( self, data: np.ndarray ):
+
+
+        #my($dd) = $data->copy;
+        data = data.copy() #this is dd
+        out = data.copy()
+
+            
+        #$d -= $o->{origin};
+        #---need to consider origin dimensions
+        origin = self.params['origin']
+
+        if not np.all((origin == 0)):
+            origin = np.array(origin)
+            data = data - origin
+
+        #my($d) = (defined $o->{dim}) ? $dd->slice("0:".($o->{dim}-1)) : $dd;
+        if( np.all( self.idim != 0 ) ):
+            data = data[..., :self.idim].copy()
+            self.odim = self.idim
+        else :
+            self.odim, self.idim = data.shape
+            data = data
+
+        #my $dl0 = $d / $o->{l0};
+        #data0 = data / self.params['length']
+
+        #$d += $o->{st} * $d * $dl0 * $dl0;
+        data = data + self.params['strength'] * data * (data / self.params['length']) * (data / self.params['length'])
+        
+        
+        #$d /= ($o->{st}**2 + 1);
+        data = data / ( (self.params['strength']*self.params['strength'])+1 )
+
+        #data = data + self.params['strength'] * (data * np.abs(data)) / self.params['length']
+        #data = data / ( np.abs(self.params['strength'])+1 )
+
+        #$d += $o->{origin};
+        if not np.all((origin == 0)):
+            data = data + origin
+
+        out[..., :self.idim] = data[..., :self.idim]
+
+        return out
+
+        
+    def _reverse( self, data: np.ndarray ):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #my($dd) = $data->copy;
+        data = data.copy() #this is dd
+        out = data.copy()
+        
+        #my($d) = (defined $o->{dim}) ? $dd->slice("0:".($o->{dim}-1)) : $dd;
+        if( np.all( self.idim != 0 ) ):
+            data = data[..., :self.idim].copy()
+            self.odim = self.idim
+        else :
+            self.odim, self.idim = data.shape
+            data = data
+
+
+        #---need to consider origin dimensions
+        origin = self.params['origin']
+
+        #$d -= $o->{origin};
+        if not np.all((origin == 0)):
+            origin = np.array(origin)
+            data = data - origin
+             
+            
+        #$d *= ($o->{st}+1);
+        data = data * (self.params['strength']+1)
+        
+        #my ($A, $C, $D) = ( $o->{st} / $l / $l, 1, - $d );
+        Avar = self.params['strength']/self.params['length']/self.params['length']
+        Cvar = 1
+        Dvar = -data
+
+        #my $alpha =  27 * $A * $A * $D;        
+        Alphavar = 27 * Avar * Avar * Dvar;
+
+        #my $beta =  3 * $A * $C;
+        Betavar = 3 * Avar * Cvar
+        
+        #my $inner_root = sqrt( $alpha * $alpha   +   4 * $beta * $beta * $beta );
+        inner_root = np.sqrt( Alphavar * Alphavar + 4.0 * Betavar * Betavar * Betavar )
+        
+        cuberoot = 0
+        data = (-1 / (3 * Avar)) * cuberoot
+#            (
+#              + &{$o->{cuberoot}}( 0.5 * ( Alphavar + inner_root ) )
+#              + &{$o->{cuberoot}}( 0.5 * ( Alphavar - inner_root ) )
+#            );
+        
+        
+        
+        
+        #data = ((-1 + np.sqrt(1 + 4 * self.params['strength']/self.params['length'] * np.abs(data - origin) * (1+np.abs(self.params['strength']))))/ 2 / self.params['strength'] * self.params['length']) * (1 - 2*(data < origin));
+
+
+
+        #$d += $origin;
+        if not np.all((origin == 0)):
+            data = data + origin
+
+        out[..., :self.idim] = data[..., :self.idim]
+
+        return out
+
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Cubic'
+        return super().__str__()    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class Poly(Transform):
+
+    '''
+    transform.Multi - multi transforms
+    '''
+
+    def __init__(self, *,
+                 iunit = None, 
+                 ounit  = None, 
+                 itype = None, 
+                 otype  = None,
+                 idim  = 0, 
+                 odim = 0,
+                 origin = None,
+                 Multiplication=1
+                 ):
+
+        self.idim       = idim             
+        self.odim       = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit      = iunit
+        self.ounit      = ounit
+        self.itype      = itype
+        self.otype      = otype
+        self.params = {'multiplication':Multiplication}
+            
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Multi'
+        return super().__str__()
+    
+    def _forward( self, data: np.ndarray ):
+        return( data * self.params['multiplication'] )
+
+    def _reverse( self, data: np.ndarray ):           
+       return( data / self.params['multiplication'] )
+        
+
+class Quadratic2(Poly):
+    def __init__(self, *,
+                 iunit = None, 
+                 ounit  = None, 
+                 itype = None, 
+                 otype  = None,
+                 idim  = 0, 
+                 odim = 0,
+                 origin = None,
+                 Multiplication=2
+                 ):
+
+        self.idim       = idim             
+        self.odim       = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit      = iunit
+        self.ounit      = ounit
+        self.itype      = itype
+        self.otype      = otype
+        self.params = {'multiplication':Multiplication}
+        
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Multi2'
+        return super().__str__()
+    
+    
+    
+class Cubic2(Poly):
+    def __init__(self, *,
+                 iunit = None, 
+                 ounit  = None, 
+                 itype = None, 
+                 otype  = None,
+                 idim  = 0, 
+                 odim = 0,
+                 origin = None,
+                 Multiplication=3
+                 ):
+
+        self.idim       = idim             
+        self.odim       = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit      = iunit
+        self.ounit      = ounit
+        self.itype      = itype
+        self.otype      = otype
+        self.params = {'multiplication':Multiplication}
+        
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Multi2'
+        return super().__str__()
