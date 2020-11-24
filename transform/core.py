@@ -119,7 +119,7 @@ class Transform:
                 - Rotation
                 - Offset
                 
-        - FITS: transformation representing the conversion from standard pixel 
+        - WCS: transformation representing the conversion from standard pixel 
             coordinates to world coordinates using the World Coordinate System
             specification by Greisen & Calabretta -- this is typically used in
             FITS-format images to map array pixel coordinates to/from 
@@ -131,6 +131,24 @@ class Transform:
         - Projective: the family of projective transformations in 2-D; these are 
             first-order nonlinear projections with some nice properties, and
             are frequently used in perspective correction or rendering.
+            
+            
+            
+    WCS Handling
+    ------------
+    Transform is built specifically to work well with the World Coordinate 
+    System that is used to convert pixel coordinates to/from scientific world 
+    coordinates in scientific images in FITS format.  The Transform.WCS subclass
+    is a wrapper around the astropy.wcs.WCS object, which implements the full
+    WCS standard. 
+    
+    WCS objects are also used by the remap() method to manage scaling of the
+    pixel grid.  The first step in the WCS transformation chain (Greisen & 
+    Calabretta, 2002 -- their Paper I) is a linear transformation from pixel
+    coordinates to "intermediate world coordinates", and this linear transform
+    is understood natively by the remap() method.  Remap() either generates or
+    modifies the linear portion of the WCS transform as needed, to convey the
+    relationship of the pixel grid to the scientific coordinates.
     '''
     def __init__(self):
        raise AssertionError(\
@@ -667,10 +685,16 @@ class Transform:
         Returns
         -------
         
-        The resampled data
+        The resampled data.  If the input data are an object with (data,header)
+        or (data,wcs) attributes, the returned object is a copy with the data 
+        and header modified.  Likewide, if the input data are a dictionary with
+        those fields, a copy of the dictionary is returned with the new data
+        and header.  If the data are a single NumPy array then a dictionary
+        is returned, containing the resampled data as 'data' and a FITS
+        header mapping pixel coordinates to transform output coordinates
+        from the original data.  In that last case, the implicit pixel coordinate
+        system is used as input to the transform.
         '''
-        
-        raise AssertionError("remap is not yet implemented")
         
         
         
@@ -984,12 +1008,10 @@ class ArrayIndex(Transform):
         return (super().__str__())
     
     
-    
-    
 def _wcs_from_any(Gzinta, /, template=None):
     '''
-    _wcs_from_any -- internal subroutine to extract or construct an astropy 
-    WCS object from a variety of inputs.  
+    _wcs_data from_any -- internal subroutine to extract or construct a numpy
+    array and/or an astropy WCS object from a variety of inputs.  
     
     You feed in a FITS header, a WCS object, or an object with a 
     'header' or 'wcs' attribute; and you get back an astropy WCS 
@@ -1061,9 +1083,134 @@ def _wcs_from_any(Gzinta, /, template=None):
                 return ap.wcs.WCS(this)
 
     raise ValueError("Couldn't find a WCS object or FITS header to parse")
-            
-        
     
+class DataWrapper():
+    '''
+    _DataheaderWrapper - class to manage data with headers
+    
+    This wrapper class encapsulates a variety of objects with 
+    both a data fork and a WCS info fork that could be a FITS header
+    or a WCS transformation.  
+    
+    The constructor accepts an arbitrary object and checks it to see
+    if it:
+            - is an astropy WCS or Header object
+            - has a .wcs, .header, and/or .data attribute
+            - is a dictionary containing wcs, header, and/or data fields
+            - is a dictionary containing a FITS hedader
+            - is a list, the 0 element of which has a .data, .header, and/or .wcs attribute
+    
+    All of these get encapsulated in an object with attributes: .data, .header, 
+    and .wcs where .data is a numpy array or None, .header is an astropy.io.fits header
+    object, and .wcs is an astropy.wcs.WCS object.  The following methods are
+    supplied:
+            - head2wcs - update the WCS object using information in the header
+            - wcs2head - update the FITS header using infromation in the WCS object
+            - export   - export the info as the original object (see below)
+            
+    The 'export' method stuffs the .data, .header, and .wcs attributes (as
+    appropriate) into the original object type passed in, in the event that the
+    original object could support them.  If the original object was a dictionary,
+    a copy of that dictionary gets passed back with the data, header, and wcs
+    fields in it.  If the original object was a numpy array or FITS header,
+    the _DataWrapper object itself it returned (with data, header, and wcs 
+    attributes intact).
+    '''
+    def __init__(self, SourceObject, /, template=None):
+        InputsToSearch = [template, SourceObject]
+        data = None
+        header = None
+        wcs = None
+        
+        for this in InputsToSearch:
+
+            # Make sure the argument exists
+            if this is None:
+                continue
+            
+            try:
+                if not isinstance(this,'str'):
+                    this = this[0]
+            except:
+                pass
+                
+            # Look for the obvious attributes
+            if wcs is None and isinstance(this, ap.wcs.WCS):
+                wcs = this
+                break
+            
+            if wcs is None and hasattr(this,'wcs') and isinstance(this.wcs, ap.wcs.WCS):
+                wcs = this.wcs
+            
+            if header is None and hasattr(this,'header') and this.header['SIMPLE'] and this.header['NAXIS']:
+                header = this.header
+                
+            if data is None and hasattr(this,'data'):
+                data = this.data
+            
+            # look for attributes in a dictionary
+            try:
+                if wcs is None and 'wcs' in this and isinstance(this['wcs'],ap.wcs.WCS):
+                    wcs = this['wcs']
+                if header is None and 'header' in this and this['header']['SIMPLE'] and this['header']['NAXIS']:
+                    header = this['header']
+                if data is None and 'data' in this and isinstance(this['data'],np.array):
+                    data = this['data']
+            except:
+                pass
+        
+        if( wcs is None ):
+            if( header is not None ):
+                wcs = ap.wcs.WCS(header)
+        
+        self.wcs = wcs
+        self.header = header
+        self.data = data
+        self.SourceObject = SourceObject
+        
+        def head2wcs(self):
+            self.wcs = astropy.wcs.wcs(self.header)
+            
+        def wcs2head(self):
+            if(self.header is None):
+                self.header = {}
+            hdr = self.wcs.to_header()
+            for ky in hdr.keys():
+                self.header[ky]=hdr[ky]
+            
+        def export(self):
+            '''
+            DataWrapper.export() -- return data in original form if possible
+            
+            Export returns wrapped-up data in its original form -- if you 
+            built the object from a dictionary, for example, it comes back as
+            a dictionary.  If you built it from an object that has .data and
+            .header or .wcs attributes, you get back a copy of that object with
+            the current data, .header, and/or .wcs attriutes in it.
+            
+            If you started with a numpy array only, a header only, or a WCS
+            object only, you get back the wrapper object itself (and the
+            data and header can be accessed as .data and .header).
+            '''
+            if(self.SourceObject is None):
+                return self
+            if( hasattr(SourceObject,['data','wcs','header'])):
+                Out = copy.copy(SourceObject)
+                if( hasattr(SourceObject, 'data')):
+                    Out.data = self.data
+                if( hasattr(SourceObject, 'wcs')):
+                    Out.wcs = self.wcs
+                if( hasattr(SourceObject, 'header')):
+                    Out.header = self.header
+                return Out
+            try:
+                if( 'data' in SourceObject or 'header' in SourceObject or 'wcs' in SourceObject ):
+                    Out = { 'data':self.data, 'header':self.header, 'wcs':self.wcs }
+                    return Out
+            except:
+                pass
+            return self
+            
     
 class WCS(Transform):
     '''
