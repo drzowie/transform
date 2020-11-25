@@ -282,3 +282,83 @@ def test_009_Quadratic():
     assert(  np.allclose(d14,d15, atol=1e-2))
     d16 = a.invert(d14)
     assert(  np.allclose(d16,d4, atol=1e-2))
+    
+    
+def test_010_Cubic():
+    x = np.arange(9.).reshape(3,3)
+    a = t.Cubic(strength=2)
+    d1 = a.apply(x)
+    d2 = np.array( [[    0,   0.6,   3.6],
+                    [ 11.4,  26.4,    51],
+                    [ 87.6, 138.6, 206.4]])
+    assert(  np.allclose(d1,d2, atol=1e-2))
+    d3 = a.invert(d1) 
+    d4 = np.array( [[         0, 0.79501675,  1.6595098],
+                    [ 2.5116355,  3.3596201,  4.2058325],
+                    [ 5.0511344,  5.8959087,  6.7403507]])
+    assert(  np.allclose(d3,d4, atol=1e-2))
+    a = t.Cubic(length=2.0)
+    d5 = a.apply(x)
+    d6 = x
+    assert(  np.allclose(d5,d6, atol=1e-2))
+    d7 = a.invert(d5)
+    d8 = np.empty((3,3))
+    d8[:] = np.NaN
+    assert(  np.allclose(d7,d8, atol=1e-2, equal_nan=True))
+
+    a = t.Cubic(idim=2)
+    d9 = a.apply(x)
+    d10 = x
+    assert(  np.allclose(d9,d10, atol=1e-2))
+    d11 = a.invert(d9)
+    d12 = x
+    d12[:,:2] = np.NaN
+    
+    assert(  np.allclose(d11,d12, atol=1e-2, equal_nan=True))
+
+
+def test_011_Quartic():
+    x = np.arange(9.).reshape(3,3)
+    a = t.Quartic()
+    d1 = a.apply(x)
+    d2 = np.array( [[         0,          1,  2.1818182],
+                    [ 3.5454545,  5.0909091,  6.8181818],
+                    [ 8.7272727,  10.818182,  13.090909]])
+    assert(  np.allclose(d1,d2, atol=1e-2))
+    d3 = a.invert(d1) 
+    d4 = x
+    assert(  np.allclose(d3,d4, atol=1e-2))
+    a = t.Quartic(length=5.0)
+    d5 = a.apply(x)
+    d6 = np.array( [[         0, 0.92727273,  1.8909091],
+                    [ 2.8909091,  3.9272727,          5],
+                    [ 6.1090909,  7.2545455,  8.4363636]])
+    assert(  np.allclose(d5,d6, atol=1e-2))
+    d7 = a.invert(d6) 
+    assert(  np.allclose(d7,d4, atol=1e-2))
+    a = t.Quartic(origin=5.0)
+    d8 = a.apply(x)
+    d9 = np.array( [[  -1.8181818, -0.090909091,    1.4545455],
+                    [   2.8181818,            4,            5],
+                    [           6,    7.1818182,    8.5454545]])
+    assert(  np.allclose(d8,d9, atol=1e-2))
+    d10 = a.invert(d8) 
+    assert(  np.allclose(d10,d4, atol=1e-2))
+
+    a = t.Quartic(strength=6.0)
+    d11 = a.apply(x)
+    d12 = np.array( [[         0,          1,  3.7142857],
+                    [ 8.1428571,  14.285714,  22.142857],
+                    [ 31.714286,         43,         56]])
+    assert(  np.allclose(d11,d12, atol=1e-2))
+    d13 = a.invert(d12) 
+    assert(  np.allclose(d13,d4, atol=1e-2))
+
+    a = t.Quartic(idim=2)
+    d14 = a.apply(x)
+    d15 = np.array( [[         0,          1,          2],
+                     [ 3.5454545,  5.0909091,          5],
+                     [ 8.7272727,  10.818182,          8]])
+    assert(  np.allclose(d14,d15, atol=1e-2))
+    d16 = a.invert(d14)
+    assert(  np.allclose(d16,d4, atol=1e-2))
