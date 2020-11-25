@@ -4,6 +4,7 @@ import copy
 import os.path
 import numpy as np
 import astropy 
+import astropy.io.fits
 import astropy.wcs
 import astropy.units
 ap = astropy
@@ -1006,84 +1007,7 @@ class ArrayIndex(Transform):
     def __str__(self):
         self._strtmp = "ArrayIndex"
         return (super().__str__())
-    
-    
-def _wcs_from_any(Gzinta, /, template=None):
-    '''
-    _wcs_data from_any -- internal subroutine to extract or construct a numpy
-    array and/or an astropy WCS object from a variety of inputs.  
-    
-    You feed in a FITS header, a WCS object, or an object with a 
-    'header' or 'wcs' attribute; and you get back an astropy WCS 
-    object.
-    
-    The following aspects of the target are checked, in decreasing 
-    order of priority:
-        - the target, if it is an astropy WCS or Header object
-        - the target's .wcs attribute, if it has one
-        - the target's .header attribute, if it has one
-        - the target itself, if it has SIMPLE and NAXIS attributes
-        - the 0 element of the target (as another target), if it is listlike
-    
-    Targets are searched in the order (template, object) until a WCS or FITS
-    header object are found.  The target is parsed into a WCS object and returned.
-
-        
-    Parameters
-    ----------
-    object: any old bag o' goo that has a WCS or FITS header in it
-    
-    /template : An alternate target (default None)
-        
-        
-    Raises
-    ------
-    ValueError: if no FITS header nor WCS object is found.
-
-    Returns
-    -------
-    the WCS object
-
-    '''
    
-    InputsToSearch = [template,Gzinta]
-    
-    for this in InputsToSearch:
-        if this is not None:
-            # Check if this is an array-like object and if so use the first one
-            try:
-                if not isinstance(this,'str'):
-                    this=this[0]
-            except:
-                pass
-            
-            # Look for the obvious attributes
-            if isinstance(this, ap.wcs.WCS):
-                return this
-            if hasattr(this, 'wcs')  and  isinstance(this.wcs,ap.wcs.WCS):
-                return this.wcs
-            if hasattr(this, 'header'):
-                return ap.wcs.WCS(this.header)
-
-            # See if this is a dictionary-like object with a WCS or a header
-            try: 
-                if 'wcs' in this and isinstance(this['wcs'],ap.wcs.WCS):
-                    return this['wcs']
-
-                if 'header' in this and this['header']['SIMPLE']  and  this['header']['NAXIS']:
-                    return ap.wcs.WCS(this['header'])
-                
-                if 'SIMPLE' in this and this['SIMPLE'] and 'NAXIS' in this:
-                    return ap.wcs.WCS(this)
-            except:
-                pass # it wasn't dictionary-like
-
-            # Check if it's a filename, in which case try to build a WCS out of it
-            if os.path.exists(this):
-                return ap.wcs.WCS(this)
-
-    raise ValueError("Couldn't find a WCS object or FITS header to parse")
-    
 class DataWrapper():
     '''
     _DataheaderWrapper - class to manage data with headers
@@ -1128,12 +1052,17 @@ class DataWrapper():
             if this is None:
                 continue
             
+            # If the item is a string, treat it as a filename of a FITS file
+            if isinstance(this,str):
+                this = astropy.io.fits.open(this)
+            
+            # If the item is array-like, take the 0th element
+            # (e.g. first HDU  if it's a freshly opened FITS file)
             try:
-                if not isinstance(this,'str'):
-                    this = this[0]
+                this = this[0]
             except:
                 pass
-                
+            
             # Look for the obvious attributes
             if wcs is None and isinstance(this, ap.wcs.WCS):
                 wcs = this
@@ -1192,6 +1121,12 @@ class DataWrapper():
             object only, you get back the wrapper object itself (and the
             data and header can be accessed as .data and .header).
             '''
+            
+            # Make sure the WCS info is definitive in case the user wants the 
+            # FITS header
+            if(self.wcs is not None):
+                self.wcs2head()
+            
             if(self.SourceObject is None):
                 return self
             if( hasattr(SourceObject,['data','wcs','header'])):
@@ -1239,7 +1174,7 @@ class WCS(Transform):
     def __init__(self, dingus):
 
         # Construct a WCS object -- that's what does the real work.
-        wcs_obj = _wcs_from_any(dingus)
+        wcs_obj = DataWrapper(dingus).wcs
         
         # Test to make sure the object works.
         test_coord = np.zeros([1,wcs_obj.wcs.naxis])
