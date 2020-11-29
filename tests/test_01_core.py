@@ -235,6 +235,15 @@ def test_012_resample():
     checkval = np.zeros([7,5])
     checkval[1:4,1:4] = 1
     assert(np.all(b==checkval))
+
+    # Check that anisotropy works in the correct direction
+    trans = t.Scale([1,2.5],post=[2,2],pre=[-2,-2])
+    b = trans.resample(a,method='nearest')
+    assert(b.shape==(7,5))
+    checkval = np.zeros([7,5])
+    checkval[1:4,2]=1
+    assert(np.all(b==checkval))
+    
     
     
     
