@@ -119,7 +119,15 @@ def test_002_Scale():
                              atol=1e-15
                              )
                   )
-                                      
+           
+    # Check that lists of scales also work for a diagonal matrix                           
+    a = t.Scale([3,2])
+    assert a.idim==2 and a.odim==2
+    assert np.all(np.isclose(a.params['matrix'],
+                             np.array([[3,0],[0,2]]),
+                             atol=1e-15
+                             )
+                  )
 
 def test_003_Rotation():
     # Test implicit 2D rotation

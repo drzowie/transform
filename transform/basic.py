@@ -287,7 +287,10 @@ class Scale(Linear):
             post = post+ np.array(0)
      
         if( not( isinstance( scale, np.ndarray ) ) ) :
-            scale = np.array([scale])
+            if isinstance(scale,(list,tuple)):
+                scale = np.array(scale)
+            else:
+                scale = np.array([scale])
         if(len(scale.shape) > 1):
            raise ValueError('Scale: scale parameter must be scalar or vector')
            
