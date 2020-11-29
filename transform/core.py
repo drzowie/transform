@@ -387,7 +387,7 @@ class Transform:
             shape=None 
             ):
         '''
-        resample - use a transform to resample pixel array
+        resample - use a transform to resample a data array in pixel coordinates
         
         This method implements resampling of gridded data by applying the 
         Transform to the implicit coordinate system of the sampled data,
@@ -506,13 +506,14 @@ class Transform:
         
         The resampled data
         '''
-        ##### Make sure we separate the data fork of we get an ImageHDU
+        ##### Make sure we separate the data fork if we get an ImageHDU
+        
         if( isinstance( data, np.ndarray ) ):
             data0 = data
-        elif( isinstance( data, astropy.ImageHDU) ):
+        elif( hasattr(data, 'data') and isinstance( data.data, np.ndarray ) ):
             data0 = data.data
         else:
-            raise ValueError('Transform.map requires a numpy array or an astropy ImageHDU')
+            raise ValueError('Transform.map requires a numpy array or an object containing one')
             
         methodChar = method[0]
         
@@ -544,6 +545,7 @@ class Transform:
         output = interpND(data0, icoords, method=methodChar, bound=bound)
         
         return(output)
+    
         
     def remap(self, data, /, 
             method='n',
@@ -570,11 +572,13 @@ class Transform:
         remap can therefore accept and manipulate various objects including 
         astropy.io.fits HDUs, dictionaries, and SunPy map objects.  
         
-        
         The return value has the same attributes (data and either header or 
         wcs) that were passed in.  If the data object is a recognized 
-        class (e.g. astropy.io.fits image HDU, or SunPy map), the same type 
-        of object is returned.  Otherwise a simple dictionary is returned.
+        class (e.g. astropy.io.fits image HDU, or SunPy map) and can be 
+        easily exported, then the same type of object is returned.  Otherwise 
+        a DataWrapper object is returned.  DataWrappers contain a .data 
+        attribute with the actual data, a .header attribute with a FITS header,
+        and a .wcs attribute with an AstroPy WCS object.
         
         Output data are scaled or autoscaled according to the keyword 
         arguments as described below.  If input_range, output_range, or a full 
@@ -599,7 +603,6 @@ class Transform:
             If this is present, it is used as metadata instead of any metadata
             contained in the main "data" parameter.
         
-            
         /method : string (default 'sample')
             This string indicates the interpolation method to use.  Only
             the first character is checked.  Possible values are those 
@@ -767,6 +770,8 @@ class Transform:
                 if (len(oshape) != 2  or  
                         (self.odim != 0 and oshape != self.odim)):
                         raise ValueError("remap: output_range must be Nx2 and match Transform dims")
+                        
+                # 
             else:
                 # No output_range is present, so we need to autoscale based on 
                 # either input_range or the input pixel edges.  isamp gets a sample
@@ -807,7 +812,6 @@ class Transform:
             otwcs.wcs.ctype = copy.copy(self.otype)
             otwcs.wcs.cunit = copy.copy(self.ounit)                
             out_template.wcs = otwcs
-            out_template.wcs2head(rectify=rectify)
             
         ## Now we have an out_template -- either via autoscaling or 
         ## via parameter.
@@ -1255,7 +1259,8 @@ class DataWrapper():
             - has a .wcs, .header, and/or .data attribute
             - is a dictionary containing wcs, header, and/or data fields
             - is a dictionary containing a FITS hedader
-            - is a list, the 0 element of which has a .data, .header, and/or .wcs attribute
+            - is a list or tuple, the 0 element of which has a .data, .header, and/or .wcs attribute
+            - is a list or tuple, the 0 element of which is a NumPy array and the 1 element of which contains a FITS header
     
     All of these get encapsulated in an object with attributes: .data, .header, 
     and .wcs where .data is a numpy array or None, .header is an astropy.io.fits header
@@ -1291,13 +1296,10 @@ class DataWrapper():
             # If the item is a string, treat it as a filename of a FITS file
             if isinstance(this,str):
                 this = astropy.io.fits.open(this)
-            
-            # If the item is array-like, take the 0th element
-            # (e.g. first HDU  if it's a freshly opened FITS file)
-            try:
+                
+            # HDULists come from FITS files -- we take the first HDU.
+            if isinstance(this,astropy.io.fits.hdu.hdulist.HDUList):
                 this = this[0]
-            except:
-                pass
             
             # Look for the obvious attributes
             if wcs is None and isinstance(this, ap.wcs.WCS):
@@ -1319,8 +1321,10 @@ class DataWrapper():
                     wcs = this['wcs']
                 if header is None and 'header' in this and this['header']['SIMPLE'] and this['header']['NAXIS']:
                     header = this['header']
-                if data is None and 'data' in this and isinstance(this['data'],np.array):
+                if data is None and 'data' in this and isinstance(this['data'],np.ndarray):
                     data = this['data']
+                if header is None and 'NAXIS' in this and 'SIMPLE' in this:
+                    header = this
             except:
                 pass
         
@@ -1332,68 +1336,69 @@ class DataWrapper():
         self.wcs = wcs
         self.header = header
         self.data = data
-        self.SourceObject = SourceObject
         
-        def head2wcs(self):
-            self.wcs = astropy.wcs.wcs(self.header)
+        # Stash the source object into this object, for reconstitution later.
+        # FITS files yield a list of HDUs; we want the first one only.
+        if(isinstance(SourceObject, astropy.io.fits.hdu.hdulist.HDUList)):
+            SourceObject = SourceObject[0]
+        self.source_object = SourceObject
+    
+    def head2wcs(self):
+        self.wcs = astropy.wcs.wcs(self.header)
             
-        def wcs2head(self,/,rectify=True):
-            if(self.header is None):
-                self.header = {}
-            hdr = self.wcs.to_header()
-            for ky in hdr.keys():
-                self.header[ky]=hdr[ky]
-            if(rectify):
-                if 'CD1_1' in self.header or 'PC1_1' in self.header:
-                    for i in range(1,hdr['NAXIS']+1):
-                        for j in range(1,hdr['NAXIS']+1):
-                            try:
-                                del self.header[f"CD{i}_{j}"]
-                            except:
-                                pass
-                            try:
-                                del self.header[f"PC{i}_{j}"]
-                            except:
-                                pass
-                if 'CROTA2' in self.header:
-                    del self.header['CROTA2']
+    def wcs2head(self):
+        if(self.header is None):
+            self.header = {}
+        hdr = self.wcs.to_header()
+        for ky in hdr.keys():
+            self.header[ky]=hdr[ky]
+        
             
-        def export(self):
-            '''
-            DataWrapper.export() -- return data in original form if possible
-            
-            Export returns wrapped-up data in its original form -- if you 
-            built the object from a dictionary, for example, it comes back as
-            a dictionary.  If you built it from an object that has .data and
-            .header or .wcs attributes, you get back a copy of that object with
-            the current data, .header, and/or .wcs attriutes in it.
-            
-            If you started with a numpy array only, a header only, or a WCS
-            object only, you get back the wrapper object itself (and the
-            data and header can be accessed as .data and .header).
-            '''
-            
-            # Make sure the WCS info is definitive in case the user wants the 
-            # FITS header
-            if(self.wcs is not None):
-                self.wcs2head()
-            
-            if(self.SourceObject is None):
-                return self
-            if( hasattr(SourceObject,['data','wcs','header'])):
-                Out = copy.copy(SourceObject)
-                if( hasattr(SourceObject, 'data')):
-                    Out.data = self.data
-                if( hasattr(SourceObject, 'wcs')):
-                    Out.wcs = self.wcs
-                if( hasattr(SourceObject, 'header')):
-                    Out.header = self.header
-                return Out
+    def export(self):
+        '''
+        DataWrapper.export() -- return data in original form if possible
+        
+        Export returns wrapped-up data in its original form -- if you 
+        built the object from a dictionary, for example, it comes back as
+        a dictionary.  If you built it from an object that has .data and
+        .header or .wcs attributes, you get back a copy of that object with
+        the current data, .header, and/or .wcs attriutes in it.
+        
+        If you started with a numpy array only, a header only, or a WCS
+        object only, you get back the wrapper object itself (and the
+        data and header can be accessed as .data and .header).
+        '''
+        
+        # Make sure the WCS info is definitive in case the user wants the 
+        # FITS header
+        if(self.wcs is not None):
+            self.wcs2head()
+        
+        if(self.source_object is None):
+            return self
+        if(    hasattr(self.source_object,'data') or
+               hasattr(self.source_object,'wcs') or 
+               hasattr(self.source_object,'header')
+           ):
+            # Some objects are mutable, others are not. If the original object
+            # type is not mutable, then we can't stuff it, so just return the
+            # DataWrapper.  (SunPy maps falll in this category)
             try:
-                if( 'data' in SourceObject or 'header' in SourceObject or 'wcs' in SourceObject ):
-                    Out = { 'data':self.data, 'header':self.header, 'wcs':self.wcs }
+                Out = copy.copy(self.source_object)
+                if( hasattr(self.source_object, 'data')):
+                    Out.data = self.data
+                if( hasattr(self.source_object, 'wcs')):
+                    Out.wcs = self.wcs
+                if( hasattr(self.source_object, 'header')):
+                    Out.header = self.header
                     return Out
             except:
-                pass
-            return self
+                return self
+        try:
+            if( 'data' in self.source_object or 'header' in self.source_object or 'wcs' in self.source_object ):
+                Out = { 'data':self.data, 'header':self.header, 'wcs':self.wcs }
+                return Out
+        except:
+            pass
+        return self
  

@@ -6,8 +6,9 @@ pytest test suite for the core module of Transform
 
 import transform as t
 import numpy as np
-
-
+import astropy.io.fits
+#import sunpy
+#import sunpy.map
 
 
 def test_001_transform_constructor():
@@ -135,4 +136,107 @@ def test_010_WCS():
     assert(a.otype==['Solar-X','Solar-Y'])
     assert( np.all( np.isclose ( a.apply([[0,0]],0), np.array([[-386.15825,  -676.1092]]), atol=1e-4 ) ) )
 
+def test_011_DataWrapper():
+    # string should get read as a FITS file
+    a = t.DataWrapper('sample.fits')
+    assert( isinstance(a.data, np.ndarray))
+    assert( isinstance(a.header, astropy.io.fits.header.Header) )
+    assert(a.header['NAXIS']==2)
+    assert(a.header['NAXIS1'] == a.data.shape[1])
+    assert(a.header['NAXIS2'] == a.data.shape[0])
+    assert(a.wcs.wcs.naxis == 2)
+    assert(a.wcs.pixel_shape[0] == a.header['NAXIS1'])
+    assert(a.wcs.pixel_shape[1] == a.header['NAXIS2'])
+    b = a.export()
+    assert(isinstance(b,t.DataWrapper)) # original was a string; result is a DataWrapper
+    
+    # Non-file string should fail
+    try:
+        a = t.DataWrapper('blargle.notafitsfile.fits')
+        assert(False)
+    except:
+        pass
+    
+    # FITS object should work right  
+    fits = astropy.io.fits.open('sample.fits')
+    a = t.DataWrapper(fits[0])
+    assert(isinstance(a.data, np.ndarray))
+    assert(isinstance(a.header, astropy.io.fits.header.Header) )
+    assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
+    assert(a.header['NAXIS']==2)
+    a.header['TEST'] = "Testing testing"
+    b = a.export()
+    assert( isinstance(b, astropy.io.fits.hdu.image.PrimaryHDU))
+    assert( b.header['TEST'] == "Testing testing" )
+    
+    # FITS file object should pull the first HDU
+    a = t.DataWrapper(fits)
+    assert(isinstance(a.data, np.ndarray))
+    assert(isinstance(a.header, astropy.io.fits.header.Header) )
+    assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
+    assert(a.header['NAXIS']==2)
+    b = a.export()
+    assert( isinstance(b, astropy.io.fits.hdu.image.PrimaryHDU))
 
+    # Feeding in a dictionary should work right
+    f0 = {'header':fits[0].header, 'data':fits[0].data}
+    a = t.DataWrapper(f0)
+    assert(isinstance(a.data, np.ndarray))
+    assert(isinstance(a.header, astropy.io.fits.header.Header) )
+    assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
+    assert(a.header['NAXIS']==2)
+    b = a.export()
+    assert( isinstance(b,dict))
+    assert( isinstance(b['data'],np.ndarray))
+    assert( isinstance(b['header'], astropy.io.fits.header.Header))
+    assert( isinstance(b['wcs'], astropy.wcs.wcs.WCS))
+    
+    # Feeding in just a header should work okay
+    hdr = dict(fits[0].header)
+    
+    # Delete COMMENT and HISTORY tag from sample to work around problem with astropy 4.1
+    # (multiline COMMENT and HISTORY fieldscan't be re-imported)
+    del hdr['HISTORY']
+    del hdr['COMMENT']
+    a = t.DataWrapper(hdr)
+    assert(isinstance(a.header,dict))
+    assert(isinstance(a.wcs,astropy.wcs.wcs.WCS))
+    assert( a.data is None )
+    b = a.export()
+    assert( isinstance(b,t.DataWrapper ) )
+    
+    # Sunpy map tests should go here ... eventually.
+    # For now it doesn't make sense since we don't export to maps yet.
+    
+
+def test_012_resample():
+    # Since the main engine is in helpers, this is really just a basic
+    # functionality test.
+    a = np.zeros([7,5])  # 7 tall, 5 wide
+    a[2,2] = 1
+    trans = t.Identity()
+    b = trans.resample(a,method='nearest')
+    assert(b.shape==(7,5))
+    assert(np.all(b==a))
+    
+    b = trans.resample(a,shape=[5,5],method='nearest')
+    assert(b.shape==(5,5))
+    assert(np.all(a[0:5,0:5]==b))
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+    
+           
+    
+           
+    

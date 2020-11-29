@@ -27,7 +27,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         
     size : list or array
         List containing the allowable size of each dimension in the index.  The
-        allowable dimension is on the interval [0,size).
+        allowable dimension is on the interval [0,size-1]).
         
     bound : string or list of strings (default 'f')
         The boundary type to apply. Only the first character is checked.
@@ -702,7 +702,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
         
     else: 
         
-        raise ValueError(f"interpND: valid methods are 'n','l','c','f','s','z','g', or 'h')")
+        raise ValueError("interpND: valid methods are 'n','l','c','f','s','z','g', or 'h')")
 
 
         
