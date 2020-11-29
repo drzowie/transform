@@ -210,8 +210,10 @@ def test_011_DataWrapper():
     
 
 def test_012_resample():
-    # Since the main engine is in helpers, this is really just a basic
-    # functionality test.
+    # Since the main engine is in helpers (resmple is a wrapper), this is 
+    # really just a basic functionality test that the wrapper works right.  
+    # Makes use of Scale, which is in Basic -- but since this is a test, not 
+    # the main code, so there's no circular dependence.
     
     # Simple 7x5 array with a single nonzero spot
     a = np.zeros([7,5])  # 7 tall, 5 wide
