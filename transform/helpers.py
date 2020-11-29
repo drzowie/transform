@@ -120,8 +120,6 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         
     return vec
             
-            
-
 
 
 def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=False):

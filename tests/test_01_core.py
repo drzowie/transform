@@ -212,16 +212,29 @@ def test_011_DataWrapper():
 def test_012_resample():
     # Since the main engine is in helpers, this is really just a basic
     # functionality test.
+    
+    # Simple 7x5 array with a single nonzero spot
     a = np.zeros([7,5])  # 7 tall, 5 wide
     a[2,2] = 1
+    
+    # Check that identity and shape specs work
     trans = t.Identity()
     b = trans.resample(a,method='nearest')
     assert(b.shape==(7,5))
     assert(np.all(b==a))
-    
+
     b = trans.resample(a,shape=[5,5],method='nearest')
     assert(b.shape==(5,5))
     assert(np.all(a[0:5,0:5]==b))
+
+    # Try scaling up by a factor of 2.5 -- this should make a 3x3 square
+    # of ones
+    trans = t.Scale(2.5,post=[2,2],pre=[-2,-2])
+    b = trans.resample(a,method='neares')
+    assert(b.shape==(7,5))
+    checkval = np.zeros([7,5])
+    checkval[1:4,1:4] = 1
+    assert(np.all(b==checkval))
     
     
     
