@@ -433,10 +433,10 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
         
     # Sample: just grab the nearest value using sampleND
     if(method[0] == 'n'):
-        return sampleND(source, 
+        return np.array(sampleND(source, 
                         index=index, 
                         bound=bound, 
-                        fillvalue=fillvalue)
+                        fillvalue=fillvalue))
     
     # Linear: grab the 2x...x2 hypercube containing the indexed point,
     # then assemble weighting coefficients based on closeness of the indexed

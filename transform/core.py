@@ -750,27 +750,48 @@ class Transform:
             input_trans = WCS(data).inverse()
         else:
             input_trans = Identity()
-        
+            
+        if(self.idim==0):
+            idim = len(data.data.shape)
+        else:
+            idim = self.idim
+            
+        if(self.odim==0):
+            odim = idim
+        else:
+            odim = self.odim
         
         # Parse and regularize template
         out_template = DataWrapper(template)
         
-        # Figure if autoscaling is necessary and, if it is, do it.
-        if(out_template.wcs is None):
-            
-            if(shape is None):
-                shape = data.data.shape
+        # Set "shape" to be the desired shape of the output.
+        # This is the passed-in shape, or the implicit shape in the
+        # template, or the shape of the input array.
+        if(shape is None):
+            if(out_template.wcs is None or out_template.wcs.pixel_shape is None):
+                if(out_template.data is None):
+                    shape = data.data.shape
+                else:
+                    shape = out_template.data.shape
+            else:
+                shape = out_template.wcs.pixel_shape
+
+        
+        # Figure if autoscaling is necessary and, if it is, then do it by 
+        # generating a new out_template.
+        if(  (not hasattr(out_template,'wcs'))  or  out_template.wcs is None ):
+          
             
             if(output_range is not None):
-                # out_range is present; just validate it
+                # out_range is present; just validate it.  Must be odim x 2,  
+                # where odim is the Transform dimension and 2 runs over (max,min)
                 try:
-                    oshape = output_range.shape
+                    or_shape = output_range.shape
                 except:
                     raise ValueError('remap: output_range parameter must be an Nx2 NumPy array')
-                if (len(oshape) != 2  or  
-                        (self.odim != 0 and oshape != self.odim)):
-                        raise ValueError("remap: output_range must be Nx2 and match Transform dims")
-                        
+                if (len(or_shape) != 2  or  
+                        (self.odim != 0 and or_shape[0] != self.odim)):
+                        raise ValueError("remap: output_range must be Nx2 and match Transform dims")     
                 # 
             else:
                 # No output_range is present, so we need to autoscale based on 
@@ -779,54 +800,69 @@ class Transform:
                 # to find the corresponding output coordinates, which we use to 
                 # find an output_range.
                 if(input_range is not None):
+                    
                     try:
                         ishape = input_range.shape
                     except:
                         raise ValueError('remap: input_range parameter must be an Nx2 NumPy array')
+                        
                     if (len(ishape) != 2  or  
-                          (self.idim != 0 and oshape != self.idim)
+                          (ishape[0] != idim)
                           ):
                         raise ValueError("remap: input_range must be Nx2 and match Transform dims")
                     n=11
-                    isamp = np.mgrid[ [ range(n) for i in self.idim ] ].T / (n-1.0)
+                    isamp = np.mgrid[ [ range(n) for i in idim ] ].T / (n-1.0)
                     isamp = isamp * (input_range[...,1] - input_range[...,0]) + input_range[...,0]
                 else:
                     # No range was specified.  Transform points from the original pixel
-                    # grid into original science coordinates to maks isamp
+                    # grid into original science coordinates to make isamp
                     n = 11
-                    isamp = np.mgrid[ [ range(n) for i in self.idim ] ] / (n-1.0)
-                    isamp = isamp * (shape+1) - 0.5
+                    isamp = np.mgrid[ [ range(n) for i in range(idim) ] ].T / (n-1.0)
+                    isamp = isamp * shape
+                    isamp = isamp - 0.5
                     isamp = WCS(data).apply(isamp)
 
+                # by now isamp has an array of test vectors in the input scientific space.
+                # so we apply the main (self) Transform to them to get to the output
+                # scientific space.
                 osamp = self.apply(isamp)
-                omax = np.amax(osamp,axis=0)
-                omin = np.amin(osamp,axis=0)
-                output_range = np.stack(omin,omax,-1)
+                
+                #Find min and max of each vector component, across all datapoints
+                data_axes = tuple(range(len(osamp.shape)-1))
+                omin = np.amin(osamp,axis=data_axes)
+                omax = np.amax(osamp,axis=data_axes)
+                output_range = np.stack((omin,omax),1)
 
+            
             # Now we have an output_range, either from a parameter or from autoscaling.
             # Generate a WCS object and stuff it into the out_template.                  
-            otwcs = astropy.wcs.WCS(naxis=self.odim)
-            otwcs.wcs.crpix = [0.5]*self.odim
+            otwcs = astropy.wcs.WCS(naxis=odim)
+            otwcs.wcs.crpix = [0.5]*odim
             otwcs.wcs.crval = output_range[...,0]
-            otwcs.wcs.cdelt = map( lambda i: (output_range[i,1]-output_range[i,0])/(shape[i]) )
-            otwcs.wcs.ctype = copy.copy(self.otype)
-            otwcs.wcs.cunit = copy.copy(self.ounit)                
+            otwcs.wcs.cdelt = list(map( lambda i: (output_range[i,1]-output_range[i,0])/(shape[i]), range(odim) ))
+            if(self.odim > 0):
+                otwcs.wcs.ctype = copy.copy(self.otype)
+                otwcs.wcs.cunit = copy.copy(self.ounit)
+            otwcs.pixel_shape = tuple(shape)
             out_template.wcs = otwcs
+            out_template.wcs2head()            
+
             
         ## Now we have an out_template -- either via autoscaling or 
         ## via parameter.
         
         out_template.data = None
         output_trans = WCS(out_template)
-        
     
         ## Finally ... dispatch the actual resampling
         total_trans = Composition([output_trans, self, input_trans])
+        data_resampled = total_trans.resample(data.data, method=method, bound=bound, phot=phot, shape=shape)
         output = DataWrapper(
-            total_trans.resample(data.data, method=method, bound=bound, phot=phot, shape=out_template.wcs.naxis),
+            data_resampled,
             template = out_template
         )
-        output.SourceObject = data.SourceObject
+        # Copy the original source_object in, so we export to the same style.
+        output.source_object = data.source_object
         return output.export()
     
             
@@ -1166,7 +1202,13 @@ class WCS(Transform):
     def __init__(self, dingus):
 
         # Construct a WCS object -- that's what does the real work.
-        wcs_obj = DataWrapper(dingus).wcs
+        dw = DataWrapper(dingus)
+        wcs_obj = dw.wcs
+        if(wcs_obj is None):
+            dw.head2wcs()
+            wcs_obj = dw.wcs
+            if(wcs_obj is None):
+                raise(ValueError,"Transform::WCS - No WCS object found")
         
         # Test to make sure the object works.
         test_coord = np.zeros([1,wcs_obj.wcs.naxis])
@@ -1212,7 +1254,7 @@ class WCS(Transform):
         sh = data.shape
        
         if(len(sh)>2):
-            data = np.reshape( data, [ np.prod(sh[:-2]),sh[-1] ], order='C' )
+            data = np.reshape( data, [ np.prod(sh[:-1]),sh[-1] ], order='C' )
         elif(len(sh)==1):
             data = np.expand_dims(data,0)
             
@@ -1227,7 +1269,7 @@ class WCS(Transform):
         sh = data.shape
         
         if(len(sh)>2):
-            data = np.reshape( data, [ np.prod(sh[:-2]),sh[-1] ], order='C' )
+            data = np.reshape( data, [ np.prod(sh[:-1]),sh[-1] ], order='C' )
         elif(len(sh)==1):
             data = np.expand_dims(data,0)
         
@@ -1291,7 +1333,14 @@ class DataWrapper():
                 continue
             
             if isinstance(this, DataWrapper):
-                return this
+                if( data is None   and hasattr(this,'data')   ):
+                    data = this.data
+                if( header is None  and  wcs is None ):
+                    if (hasattr(this,'header')):
+                        header = this.header
+                    elif( hasattr(this,'wcs')):
+                        wcs = this.wcs
+                continue
             
             # If the item is a string, treat it as a filename of a FITS file
             if isinstance(this,str):
@@ -1304,34 +1353,74 @@ class DataWrapper():
             # Look for the obvious attributes
             if wcs is None and isinstance(this, ap.wcs.WCS):
                 wcs = this
-                break
+                continue
             
-            if wcs is None and hasattr(this,'wcs') and isinstance(this.wcs, ap.wcs.WCS):
-                wcs = this.wcs
+            if wcs is None and hasattr(this,'wcs'):
+                if isinstance(this.wcs, ap.wcs.WCS):
+                    wcs = this.wcs
+                else:
+                    raise ValueError("DataWrapper: 'wcs' attribute must be an Astropy WCS object")
             
-            if header is None and hasattr(this,'header') and this.header['SIMPLE'] and this.header['NAXIS']:
-                header = this.header
+            if   ( header is None and 
+                  hasattr(this,'header') and 
+                  this.header is not None ):
+                try:
+                    if( this.header['SIMPLE'] and this.header['NAXIS'] ):
+                        header = this.header
+                    else:
+                        raise ValueError("DataWrapper: 'header' attribute must have a FITS header in it")
+                except AttributeError:
+                    raise ValueError("DataWrapper: 'header' attribute must be dict-like")
                 
-            if data is None and hasattr(this,'data'):
-                data = this.data
+            if data is None:
+                if isinstance(this,np.ndarray):
+                    data = this
+                elif hasattr(this,'data'):
+                    if isinstance(this.data, np.ndarray):
+                        data = this.data
+                    elif this.data is not None:
+                        raise ValueError(f"DataWrapper: 'data' attribute must be a Numpy array (got a {this.data.__class__})")
             
-            # look for attributes in a dictionary
-            try:
-                if wcs is None and 'wcs' in this and isinstance(this['wcs'],ap.wcs.WCS):
-                    wcs = this['wcs']
-                if header is None and 'header' in this and this['header']['SIMPLE'] and this['header']['NAXIS']:
-                    header = this['header']
-                if data is None and 'data' in this and isinstance(this['data'],np.ndarray):
-                    data = this['data']
-                if header is None and 'NAXIS' in this and 'SIMPLE' in this:
+            # look for attributes as keys in a dictionary instead
+            if isinstance(this,dict):
+                
+                if (wcs is None) and ('wcs' in this):
+                    if (isinstance(this['wcs'],ap.wcs.WCS)):
+                        wcs = this['wcs']
+                    elif(this['wcs'] is not None):
+                        raise ValueError("DataWrapper: 'wcs' dict entry must be an Astropy WCS object")
+                    
+                if (header is None) and ('header' in this):
+                    try:
+                        if(this['header']['SIMPLE'] and this['header']['NAXIS']):
+                            header = this['header']
+                        elif(this['header'] is not None): 
+                            raise ValueError("DataWrapper: 'header' dict entry must have a FITS header in it.")
+                    except AttributeError:
+                        raise ValueError("DataWrapper: 'header' dict entry must be dict-like.")
+                    
+                if (data is None) and 'data' in this:
+                    if isinstance(this['data'],np.ndarray):
+                        data = this['data']
+                    else:
+                        raise ValueError("DataWrapper: 'data' dict entry must be a NumPy array")
+                        
+                # Maybe this dict it itself a FITS header?  If so, use it.
+                if (header is None) and isinstance(this,dict) and ('NAXIS' in this) and ('SIMPLE' in this):
                     header = this
-            except:
-                pass
         
         
         if( wcs is None ):
             if( header is not None ):
-                wcs = ap.wcs.WCS(header)    
+                # Work around bug in astropy.io.fits with commentary cards:
+                # make a copy of the header, delete possibly-offending cards,
+                # and make a WCS out of *that*.
+                h = copy.copy(header)
+                if( 'HISTORY' in h ):
+                    del h['HISTORY']
+                if( 'COMMENT' in h ):
+                    del h['COMMENT']
+                wcs = ap.wcs.WCS(h)    
         
         self.wcs = wcs
         self.header = header
@@ -1344,7 +1433,7 @@ class DataWrapper():
         self.source_object = SourceObject
     
     def head2wcs(self):
-        self.wcs = astropy.wcs.wcs(self.header)
+        self.wcs = astropy.wcs.WCS(self.header)
             
     def wcs2head(self):
         if(self.header is None):
@@ -1376,29 +1465,21 @@ class DataWrapper():
         
         if(self.source_object is None):
             return self
-        if(    hasattr(self.source_object,'data') or
-               hasattr(self.source_object,'wcs') or 
-               hasattr(self.source_object,'header')
-           ):
-            # Some objects are mutable, others are not. If the original object
-            # type is not mutable, then we can't stuff it, so just return the
-            # DataWrapper.  (SunPy maps falll in this category)
-            try:
-                Out = copy.copy(self.source_object)
-                if( hasattr(self.source_object, 'data')):
-                    Out.data = self.data
-                if( hasattr(self.source_object, 'wcs')):
-                    Out.wcs = self.wcs
-                if( hasattr(self.source_object, 'header')):
-                    Out.header = self.header
-                    return Out
-            except:
-                return self
-        try:
-            if( 'data' in self.source_object or 'header' in self.source_object or 'wcs' in self.source_object ):
-                Out = { 'data':self.data, 'header':self.header, 'wcs':self.wcs }
-                return Out
-        except:
-            pass
+        elif( isinstance(self.source_object,astropy.io.fits.hdu.image.PrimaryHDU) ):
+            Out = copy.copy(self.source_object)
+            Out.data = self.data
+            for key in self.source_object.header.keys():
+                # Work around problematic WCS implementation that preserves but breaks
+                # commentary cardsets
+                if(key=='HISTORY' or key=='COMMENT' or key==''):
+                    continue
+                Out.header[key] = self.source_object.header[key]
+            return Out
+        elif( isinstance(self.source_object,dict) ):
+            Out = { 'data':self.data, 'header':self.header, 'wcs':self.wcs }
+            return Out
+        ## TODO: Recognize other object types here and return them if possible
+        ## (e.g. HDU; SunPy map)
+   
         return self
  

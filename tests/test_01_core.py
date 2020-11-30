@@ -194,16 +194,12 @@ def test_011_DataWrapper():
     # Feeding in just a header should work okay
     hdr = dict(fits[0].header)
     
-    # Delete COMMENT and HISTORY tag from sample to work around problem with astropy 4.1
-    # (multiline COMMENT and HISTORY fieldscan't be re-imported)
-    del hdr['HISTORY']
-    del hdr['COMMENT']
     a = t.DataWrapper(hdr)
     assert(isinstance(a.header,dict))
     assert(isinstance(a.wcs,astropy.wcs.wcs.WCS))
     assert( a.data is None )
     b = a.export()
-    assert( isinstance(b,t.DataWrapper ) )
+    assert( isinstance( b,dict ) )
     
     # Sunpy map tests should go here ... eventually.
     # For now it doesn't make sense since we don't export to maps yet.
@@ -245,6 +241,29 @@ def test_012_resample():
     checkval = np.zeros([7,5])
     checkval[1:4,2]=1
     assert(np.all(b==checkval))
+    
+    
+def test_013_remap():
+    # remap is all about scientific coordinates, so we have to gin up some 
+    # FITS headers.
+    # The test article (a) is a simple asymmetric cross.
+    a = np.zeros([7,7])
+    a[1:5,3] = 1
+    a[3,0:5] = 1
+    
+    ahdr = {
+        'SIMPLE':'T',       'NAXIS':2, 
+        'NAXIS1':7,         'NAXIS2':7,
+        'CRPIX1':4,         'CRPIX2':4,
+        'CRVAL1':0,         'CRVAL2':0,
+        'CDELT1':1,         'CDELT2':1,
+        'CUNIT1':'pixel',   'CUNIT2':'pixel',
+        'CTYPE1':'X',       'CTYPE2':'Y'
+    }
+    
+    trans = t.Identity()
+    b = trans.remap({'data':a,'header':ahdr},method='nearest')
+    assert(np.all(b['data']==a))
     
     
     
