@@ -280,8 +280,38 @@ def test_013_remap():
     assert(b['header']['CDELT1']==1)
     assert(b['header']['CDELT2']==1)
     
+    # This again tests autoscaling - scale(3) should expand everything, 
+    # but autoscaling should put it back.
+    trans = t.Scale(3,dim=2)
+    b = trans.remap({'data':a,'header':ahdr},method='nearest')
+    assert(np.all(a==b['data']))
+    assert(b['header']['CRPIX1']==4)
+    assert(b['header']['CRPIX2']==4)
+    assert(b['header']['CRVAL1']==0)
+    assert(b['header']['CRVAL2']==0)
+    print(f"CDELT1 is {b['header']['CDELT1']}")
+    assert(np.isclose(b['header']['CDELT1'],3,atol=1e-10))
+    assert(np.isclose(b['header']['CDELT2'],3,atol=1e-10))
     
+    # Test manual scaling of the output by setting the output_range
+    # This *should* be a no-op
+    # Note: output range is to/from the *edge* of the outermost pixel,
+    # so the span is the full span of the image
+    trans = t.Identity()
+    b = trans.remap({'data':a,'header':ahdr},
+                    method='nearest',
+                    output_range=[[-3.5,3.5],[-3.5,3.5]]
+                    )
+    assert(np.all(a==b['data']))
+    assert(b['header']['CRPIX1']==4)
+    assert(b['header']['CRPIX2']==4)
+    assert(b['header']['CRVAL1']==0)
+    assert(b['header']['CRVAL2']==0)
+    print(f"CDELT1 is {b['header']['CDELT1']}")
+    assert(np.isclose(b['header']['CDELT1'],1,atol=1e-10))
+    assert(np.isclose(b['header']['CDELT2'],1,atol=1e-10))
     
+                    
     
     
     

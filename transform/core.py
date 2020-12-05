@@ -708,13 +708,20 @@ class Transform:
             If present, this is the range of science coordinates to support
             in the output array.  The ...,0 element is the minimum and the 
             ...,1 element is the maximum for each of N dimensions.  N must
-            match the odim of the Transform being used to remap.
+            match the odim of the Transform being used to remap.  The range
+            runs from edge to edge of the image, so the minimum value is 
+            the minimum at the lowest-value edge or corner of the limiting
+            pixel.  The maximum is at the highest-value edge or corner of the
+            limiting pixel.
             
         /input_range: Nx2 NumPy array, or None (default None)
             If present, this is the range of science coordinates to map
             from input space to the output array.  The output array is 
             autoscaled to contain the range, by forward-transforming a few
-            vectors from the input space to the output space.
+            vectors from the input space to the output space.  The input
+            range runs from edge to edge of the image, just like output_range,
+            subject to the limit that the output range is determined from 
+            only limited sample of test points.
             
         /justify: Boolean or float (default False)
             If present and true, this causes all science coordinates to have
@@ -788,12 +795,11 @@ class Transform:
           
             
             if(output_range is not None):
-                # out_range is present; just validate it.  Must be odim x 2,  
+                # output_range is present; just validate it.  Must be odim x 2,  
                 # where odim is the Transform dimension and 2 runs over (max,min)
-                try:
-                    or_shape = output_range.shape
-                except:
-                    raise ValueError('remap: output_range parameter must be an Nx2 NumPy array')
+                if(not isinstance(output_range,np.ndarray)):
+                    output_range = np.array(output_range)
+                or_shape = output_range.shape
                 if (len(or_shape) != 2  or  
                         (self.odim != 0 and or_shape[0] != self.odim)):
                         raise ValueError("remap: output_range must be Nx2 and match Transform dims")     
@@ -874,7 +880,6 @@ class Transform:
     
         ## Finally ... dispatch the actual resampling
         total_trans = Composition([output_trans, self, input_trans])
-        print(f"total_trans is:{total_trans}")
         data_resampled = total_trans.resample(data.data, method=method, bound=bound, phot=phot, shape=shape)
         output = DataWrapper(
             data_resampled,
