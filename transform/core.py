@@ -274,8 +274,13 @@ class Transform:
                 raise ValueError(f"This {self.__str__()} requires {self.idim} dimensions; data have {data.shape[-1]}")
 
             if ( self.idim > 0  and  data.shape[-1] > self.idim ):
+                print(f"data has shape {data.shape}; self.idim is {self.idim}")
                 data0 = data[...,0:self.idim]
+                print(f"data0 before _forward has shape: {data0.shape}")
                 data0 = self._forward(data0)
+                print(f"data0 back from self._forward has shape: {data0.shape}")
+                sl0 = data[...,self.idim:]
+                print(f"data0 has shape {data0.shape}; remainder has shape {sl0.shape}")
                 data = np.append( data0, data[...,self.idim:], axis=-1 )
             else:
                 data = self._forward(data)
@@ -747,7 +752,7 @@ class Transform:
             raise ValueError("remap: data must be a NumPy array")
         
         if(data.wcs is not None):
-            input_trans = WCS(data).inverse()
+            input_trans = WCS(data)
         else:
             input_trans = Identity()
             
@@ -833,16 +838,29 @@ class Transform:
                 omax = np.amax(osamp,axis=data_axes)
                 output_range = np.stack((omin,omax),1)
 
-            
+            # TODO: Need to insert code here to pad output_range if it's short 
+            # (in the case where we are broadcasting over dimensions beyond 
+            # those present in odim)
+            assert(len(shape) == output_range.shape[0])
+
             # Now we have an output_range, either from a parameter or from autoscaling.
             # Generate a WCS object and stuff it into the out_template.                  
-            otwcs = astropy.wcs.WCS(naxis=odim)
-            otwcs.wcs.crpix = [0.5]*odim
-            otwcs.wcs.crval = output_range[...,0]
-            otwcs.wcs.cdelt = list(map( lambda i: (output_range[i,1]-output_range[i,0])/(shape[i]), range(odim) ))
-            if(self.odim > 0):
-                otwcs.wcs.ctype = copy.copy(self.otype)
-                otwcs.wcs.cunit = copy.copy(self.ounit)
+            otwcs = astropy.wcs.WCS(naxis=len(shape))
+            otwcs.wcs.crpix = [ shape[i]/2 + 0.5 for i in range(len(shape)) ]
+            otwcs.wcs.crval = (output_range[...,0]+output_range[...,1])*0.5
+            otwcs.wcs.cdelt = [ (output_range[i,1]-output_range[i,0])/(shape[i]) for i in range(len(shape)) ]
+
+            # TODO: Need to sort out types and units here   
+            # This commented-out code (3 lines) is not right for broadcasting.
+            # Might need to add some sort of method to individual transforms 
+            # for units - or if that's too hard, just wing it.
+            # Doing nothing (as we do now) is probably wrong but worked for 
+            # 15 years for the legacy PDL::Transform code so it's not all *that*
+            # wrong.
+            #if(self.odim > 0):
+            #    otwcs.wcs.ctype = copy.copy(self.otype)
+            #    otwcs.wcs.cunit = copy.copy(self.ounit)
+                
             otwcs.pixel_shape = tuple(shape)
             out_template.wcs = otwcs
             out_template.wcs2head()            
@@ -852,10 +870,11 @@ class Transform:
         ## via parameter.
         
         out_template.data = None
-        output_trans = WCS(out_template)
+        output_trans = WCS(out_template).inverse()
     
         ## Finally ... dispatch the actual resampling
         total_trans = Composition([output_trans, self, input_trans])
+        print(f"total_trans is:{total_trans}")
         data_resampled = total_trans.resample(data.data, method=method, bound=bound, phot=phot, shape=shape)
         output = DataWrapper(
             data_resampled,
@@ -960,10 +979,14 @@ class PlusOne_(Transform):
         self.params = {}
     
     def _forward(self,data):
-        data[...,0] = data[...,0]+1
+        data0 = data
+        data0[...,0] += 1
+        return data0
     
     def _reverse(self,data):
-        data[...,0] = data[...,0]-1
+        data0 = data
+        data0[...,0] -= 1
+        return data0
         
     def __str__(self):
         self._strtmp="_PlusOne"

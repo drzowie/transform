@@ -265,6 +265,22 @@ def test_013_remap():
     b = trans.remap({'data':a,'header':ahdr},method='nearest')
     assert(np.all(b['data']==a))
     
+    # This tests actual transformation and also broadcast since 
+    # PlusOne_ is 1D and a is 2D
+    # 
+    # The autoscaling out to completely undo the plus-one, so this should
+    # be a no-op except for incrementing CRVAL1.
+    trans = t.PlusOne_()
+    b = trans.remap({'data':a,'header':ahdr},method='nearest')
+    assert(np.all(a == b['data']))
+    assert(b['header']['CRPIX1']==4)
+    assert(b['header']['CRPIX2']==4)
+    assert(b['header']['CRVAL1']==1)
+    assert(b['header']['CRVAL2']==0)
+    assert(b['header']['CDELT1']==1)
+    assert(b['header']['CDELT2']==1)
+    
+    
     
     
     
