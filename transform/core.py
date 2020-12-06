@@ -274,13 +274,9 @@ class Transform:
                 raise ValueError(f"This {self.__str__()} requires {self.idim} dimensions; data have {data.shape[-1]}")
 
             if ( self.idim > 0  and  data.shape[-1] > self.idim ):
-                print(f"data has shape {data.shape}; self.idim is {self.idim}")
                 data0 = data[...,0:self.idim]
-                print(f"data0 before _forward has shape: {data0.shape}")
                 data0 = self._forward(data0)
-                print(f"data0 back from self._forward has shape: {data0.shape}")
                 sl0 = data[...,self.idim:]
-                print(f"data0 has shape {data0.shape}; remainder has shape {sl0.shape}")
                 data = np.append( data0, data[...,self.idim:], axis=-1 )
             else:
                 data = self._forward(data)

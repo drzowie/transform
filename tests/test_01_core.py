@@ -311,8 +311,35 @@ def test_013_remap():
     assert(np.isclose(b['header']['CDELT1'],1,atol=1e-10))
     assert(np.isclose(b['header']['CDELT2'],1,atol=1e-10))
     
-                    
+    b = trans.remap({'data':a,'header':ahdr},
+                    method='nearest',
+                    output_range=[[-3.5/3,3.5/3],[-3.5/3,3.5/3]]
+                    )
+    expando = np.array([
+        [0, 0, 1, 1, 1, 0, 0],
+        [0, 0, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+        [0, 0, 1, 1, 1, 0, 0],
+        [0, 0, 1, 1, 1, 0, 0]
+            ])
+    assert(np.all(np.isclose(expando,b['data'],atol=1e-10)))
+    assert(b['header']['CRPIX1']==4)
+    assert(b['header']['CRPIX2']==4)
+    assert(b['header']['CRVAL1']==0)
+    assert(b['header']['CRVAL2']==0)
+    assert(np.isclose(b['header']['CDELT1'],1/3.0,atol=1e-10))
+    assert(np.isclose(b['header']['CDELT2'],1/3.0,atol=1e-10))
     
+    trans = t.Scale(3,dim=2)
+    b = trans.remap({'data':a,'header':ahdr},
+                    method='nearest',
+                    output_range=[[-3.5,3.5],[-3.5,3.5]]
+                    )
+    assert(np.all(np.isclose(expando,b['data'],atol=1e-10)))
+    assert(np.isclose(b['header']['CDELT1'],1,atol=1e-10))
+    assert(np.isclose(b['header']['CDELT2'],1,atol=1e-10))
     
     
     
