@@ -69,7 +69,16 @@ instruments provided that they have WCS tags attached.
 
 An example usage is::
 
-    TBD
+     a = astropy.io.fits.open('myfile.fits')
+     trans = t.Rotation(45,'deg')
+     b = trans.remap(a,method='lin')
+
+which loads 'myfile.fits' into a, and returns it rotated 45 degrees about
+its scientific origin, in b.
+
+The two methods used for image resampling this way are remap(), which
+includes WCS interpretation and autoscaling; and resample(), which uses
+only the intrinsic pixel coordinate system.
 
 
 History
