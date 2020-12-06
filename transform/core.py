@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import copy
+import os.path
 import numpy as np
-import astropy
+import astropy 
+import astropy.io.fits
+import astropy.wcs
+import astropy.units
+ap = astropy
+
+
 from transform.helpers import interpND
 
 class Transform:
@@ -113,7 +120,7 @@ class Transform:
                 - Rotation
                 - Offset
                 
-        - FITS: transformation representing the conversion from standard pixel 
+        - WCS: transformation representing the conversion from standard pixel 
             coordinates to world coordinates using the World Coordinate System
             specification by Greisen & Calabretta -- this is typically used in
             FITS-format images to map array pixel coordinates to/from 
@@ -125,6 +132,24 @@ class Transform:
         - Projective: the family of projective transformations in 2-D; these are 
             first-order nonlinear projections with some nice properties, and
             are frequently used in perspective correction or rendering.
+            
+            
+            
+    WCS Handling
+    ------------
+    Transform is built specifically to work well with the World Coordinate 
+    System that is used to convert pixel coordinates to/from scientific world 
+    coordinates in scientific images in FITS format.  The Transform.WCS subclass
+    is a wrapper around the astropy.wcs.WCS object, which implements the full
+    WCS standard. 
+    
+    WCS objects are also used by the remap() method to manage scaling of the
+    pixel grid.  The first step in the WCS transformation chain (Greisen & 
+    Calabretta, 2002 -- their Paper I) is a linear transformation from pixel
+    coordinates to "intermediate world coordinates", and this linear transform
+    is understood natively by the remap() method.  Remap() either generates or
+    modifies the linear portion of the WCS transform as needed, to convey the
+    relationship of the pixel grid to the scientific coordinates.
     '''
     def __init__(self):
        raise AssertionError(\
@@ -251,6 +276,7 @@ class Transform:
             if ( self.idim > 0  and  data.shape[-1] > self.idim ):
                 data0 = data[...,0:self.idim]
                 data0 = self._forward(data0)
+                sl0 = data[...,self.idim:]
                 data = np.append( data0, data[...,self.idim:], axis=-1 )
             else:
                 data = self._forward(data)
@@ -362,7 +388,7 @@ class Transform:
             shape=None 
             ):
         '''
-        resample - use a transform to resample pixel array
+        resample - use a transform to resample a data array in pixel coordinates
         
         This method implements resampling of gridded data by applying the 
         Transform to the implicit coordinate system of the sampled data,
@@ -481,13 +507,14 @@ class Transform:
         
         The resampled data
         '''
-        ##### Make sure we separate the data fork of we get an ImageHDU
+        ##### Make sure we separate the data fork if we get an ImageHDU
+        
         if( isinstance( data, np.ndarray ) ):
             data0 = data
-        elif( isinstance( data, astropy.ImageHDU) ):
+        elif( hasattr(data, 'data') and isinstance( data.data, np.ndarray ) ):
             data0 = data.data
         else:
-            raise ValueError('Transform.map requires a numpy array or an astropy ImageHDU')
+            raise ValueError('Transform.map requires a numpy array or an object containing one')
             
         methodChar = method[0]
         
@@ -513,12 +540,13 @@ class Transform:
             )
 
         # Figure the interpolation.
-        if(methodChar in {'H','G','R'}):
-            assert("map: anti-aliased methods are not yet supported")
+        if(methodChar in {'G','H','R','Z'}):
+            assert("Transform.resample: anti-aliased methods are not yet supported")
             
         output = interpND(data0, icoords, method=methodChar, bound=bound)
         
         return(output)
+    
         
     def remap(self, data, /, 
             method='n',
@@ -526,8 +554,8 @@ class Transform:
             phot='radiance',
             shape=None,
             template=None,
-            irange=None,
-            orange=None,
+            input_range=None,
+            output_range=None,
             justify=False,
             rectify=True,
             wcs=None
@@ -545,15 +573,17 @@ class Transform:
         remap can therefore accept and manipulate various objects including 
         astropy.io.fits HDUs, dictionaries, and SunPy map objects.  
         
-        
         The return value has the same attributes (data and either header or 
         wcs) that were passed in.  If the data object is a recognized 
-        class (e.g. astropy.io.fits image HDU, or SunPy map), the same type 
-        of object is returned.  Otherwise a simple dictionary is returned.
+        class (e.g. astropy.io.fits image HDU, or SunPy map) and can be 
+        easily exported, then the same type of object is returned.  Otherwise 
+        a DataWrapper object is returned.  DataWrappers contain a .data 
+        attribute with the actual data, a .header attribute with a FITS header,
+        and a .wcs attribute with an AstroPy WCS object.
         
         Output data are scaled or autoscaled according to the keyword 
-        arguments as described below.  If irange, orange, or a full WCS
-        specification (as a FITS header or WCS object) are supplied, then 
+        arguments as described below.  If input_range, output_range, or a full 
+        WCS specification (as a FITS header or WCS object) are supplied, then 
         the data are scaled accordingly.  If not, they are autoscaled to
         fit the shape of the output pixel array.
         
@@ -562,11 +592,18 @@ class Transform:
         Parameters
         ----------
         
-        data : ndarray
+        data : ndarray or object or dictionary
             This is the gridded data to resample, such as an image.  It must 
             have at least as many dimensions as the idim of the Transform 
-            (self).
+            (self).  It can be an ndarray or any object that contains one in 
+            a "data" attribute or dictionary entry.  If the object or dictionary
+            has a "header" attribute or entry, it is parsed as a FITS header
+            containing WCS metadata.   
             
+        /wcs : FITS header or astropy.wcs.WCS object
+            If this is present, it is used as metadata instead of any metadata
+            contained in the main "data" parameter.
+        
         /method : string (default 'sample')
             This string indicates the interpolation method to use.  Only
             the first character is checked.  Possible values are those 
@@ -650,32 +687,217 @@ class Transform:
             This option is not yet implemented and only intensive treatment
             is supported at present.
             
-        /shape : list or tuple None (default None)
+        /template : WCS object or FITS header or FITS HDU (default None)
+            If present, template sets the WCS conversion from science
+            coordinates to output pixel coordinates.  It also sets the dimension
+            of the output array, and overrides the shape, output_range, and 
+            input_range specifiers.
+            
+        /shape : list or tuple or None (default None)
             If present, this is the shape of the output data grid, in regular
             array index format (directly comparable to the .shape of the 
             output).  The elements of shape, if specified, should be in 
             (...,Y,X) order just like the .shape attribute of a numpy array
             (vs. the (X,Y,...) order of vectors and indices)
-
-        
+            
+        /output_range: Nx2 NumPy array, or None (default None)
+            If present, this is the range of science coordinates to support
+            in the output array.  The ...,0 element is the minimum and the 
+            ...,1 element is the maximum for each of N dimensions.  N must
+            match the odim of the Transform being used to remap.  The range
+            runs from edge to edge of the image, so the minimum value is 
+            the minimum at the lowest-value edge or corner of the limiting
+            pixel.  The maximum is at the highest-value edge or corner of the
+            limiting pixel.
+            
+        /input_range: Nx2 NumPy array, or None (default None)
+            If present, this is the range of science coordinates to map
+            from input space to the output array.  The output array is 
+            autoscaled to contain the range, by forward-transforming a few
+            vectors from the input space to the output space.  The input
+            range runs from edge to edge of the image, just like output_range,
+            subject to the limit that the output range is determined from 
+            only limited sample of test points.
+            
+        /justify: Boolean or float (default False)
+            If present and true, this causes all science coordinates to have
+            the same pixel scale in the output plane during autoscaling;
+            it is overridden by the template, output_range, or input_range.
+            In the special case of 2D, you can input a number and it is the
+            ratio of the two output pixel scales, with larger numbers
+            corresponding to larger scale along the Y axis.
+            
+        /rectify: Boolean (default True)
+            If true, this causes autoscaling to rectify the output coordinates,
+            so that the pixel axes are aligned with the scientific coordinates.
+            If set to false, then any CROTA, CDij, or PCij matrix in the input
+            data WCS header is retained, leaving the output coordinates 
+            distorted in the same way as the input ones.
+            
         Returns
         -------
         
-        The resampled data
+        The resampled data.  If the input data are an object with (data,header)
+        or (data,wcs) attributes, the returned object is a copy with the data 
+        and header modified.  Likewide, if the input data are a dictionary with
+        those fields, a copy of the dictionary is returned with the new data
+        and header.  If the data are a single NumPy array then a dictionary
+        is returned, containing the resampled data as 'data' and a FITS
+        header mapping pixel coordinates to transform output coordinates
+        from the original data.  In that last case, the implicit pixel coordinate
+        system is used as input to the transform.
         '''
         
-        raise AssertionError("remap is not yet implemented")
+        # Regularize the input data
+        data = DataWrapper(data,template=wcs)
         
+        if not isinstance(data.data, np.ndarray):
+            raise ValueError("remap: data must be a NumPy array")
         
+        if(data.wcs is not None):
+            input_trans = WCS(data)
+        else:
+            input_trans = Identity()
             
+        if(self.idim==0):
+            idim = len(data.data.shape)
+        else:
+            idim = self.idim
             
+        if(self.odim==0):
+            odim = idim
+        else:
+            odim = self.odim
+        
+        # Parse and regularize template
+        out_template = DataWrapper(template)
+        
+        # Set "shape" to be the desired shape of the output.
+        # This is the passed-in shape, or the implicit shape in the
+        # template, or the shape of the input array.
+        if(shape is None):
+            if(out_template.wcs is None or out_template.wcs.pixel_shape is None):
+                if(out_template.data is None):
+                    shape = data.data.shape
+                else:
+                    shape = out_template.data.shape
+            else:
+                shape = out_template.wcs.pixel_shape
+
+        
+        # Figure if autoscaling is necessary and, if it is, then do it by 
+        # generating a new out_template.
+        if(  (not hasattr(out_template,'wcs'))  or  out_template.wcs is None ):
+          
             
+            if(output_range is not None):
+                # output_range is present; just validate it.  Must be odim x 2,  
+                # where odim is the Transform dimension and 2 runs over (max,min)
+                if(not isinstance(output_range,np.ndarray)):
+                    output_range = np.array(output_range)
+                or_shape = output_range.shape
+                if (len(or_shape) != 2  or  
+                        (self.odim != 0 and or_shape[0] != self.odim)):
+                        raise ValueError("remap: output_range must be Nx2 and match Transform dims")     
+                # 
+            else:
+                # No output_range is present, so we need to autoscale based on 
+                # either input_range or the input pixel edges.  isamp gets a sample
+                # of input science coordinates; they get transformed forward
+                # to find the corresponding output coordinates, which we use to 
+                # find an output_range.
+                if(input_range is not None):
+                    
+                    try:
+                        ishape = input_range.shape
+                    except:
+                        raise ValueError('remap: input_range parameter must be an Nx2 NumPy array')
+                        
+                    if (len(ishape) != 2  or  
+                          (ishape[0] != idim)
+                          ):
+                        raise ValueError("remap: input_range must be Nx2 and match Transform dims")
+                    n=11
+                    isamp = np.mgrid[ [ range(n) for i in idim ] ].T / (n-1.0)
+                    isamp = isamp * (input_range[...,1] - input_range[...,0]) + input_range[...,0]
+                else:
+                    # No range was specified.  Transform points from the original pixel
+                    # grid into original science coordinates to make isamp
+                    n = 11
+                    isamp = np.mgrid[ [ range(n) for i in range(idim) ] ].T / (n-1.0)
+                    isamp = isamp * shape
+                    isamp = isamp - 0.5
+                    isamp = WCS(data).apply(isamp)
+
+                # by now isamp has an array of test vectors in the input scientific space.
+                # so we apply the main (self) Transform to them to get to the output
+                # scientific space.
+                osamp = self.apply(isamp)
+                
+                #Find min and max of each vector component, across all datapoints
+                data_axes = tuple(range(len(osamp.shape)-1))
+                omin = np.amin(osamp,axis=data_axes)
+                omax = np.amax(osamp,axis=data_axes)
+                output_range = np.stack((omin,omax),1)
+
+            # TODO: Need to insert code here to pad output_range if it's short 
+            # (in the case where we are broadcasting over dimensions beyond 
+            # those present in odim)
+            assert(len(shape) == output_range.shape[0])
+
+            # Now we have an output_range, either from a parameter or from autoscaling.
+            # Generate a WCS object and stuff it into the out_template.                  
+            otwcs = astropy.wcs.WCS(naxis=len(shape))
+            otwcs.wcs.crpix = [ shape[i]/2 + 0.5 for i in range(len(shape)) ]
+            otwcs.wcs.crval = (output_range[...,0]+output_range[...,1])*0.5
+            otwcs.wcs.cdelt = [ (output_range[i,1]-output_range[i,0])/(shape[i]) for i in range(len(shape)) ]
+
+            # TODO: Need to sort out types and units here   
+            # This commented-out code (3 lines) is not right for broadcasting.
+            # Might need to add some sort of method to individual transforms 
+            # for units - or if that's too hard, just wing it.
+            # Doing nothing (as we do now) is probably wrong but worked for 
+            # 15 years for the legacy PDL::Transform code so it's not all *that*
+            # wrong.
+            #if(self.odim > 0):
+            #    otwcs.wcs.ctype = copy.copy(self.otype)
+            #    otwcs.wcs.cunit = copy.copy(self.ounit)
+                
+            otwcs.pixel_shape = tuple(shape)
+            out_template.wcs = otwcs
+            out_template.wcs2head()            
+
+            
+        ## Now we have an out_template -- either via autoscaling or 
+        ## via parameter.
+        
+        out_template.data = None
+        output_trans = WCS(out_template).inverse()
     
+        ## Finally ... dispatch the actual resampling
+        total_trans = Composition([output_trans, self, input_trans])
+        data_resampled = total_trans.resample(data.data, method=method, bound=bound, phot=phot, shape=shape)
+        output = DataWrapper(
+            data_resampled,
+            template = out_template
+        )
+        # Copy the original source_object in, so we export to the same style.
+        output.source_object = data.source_object
+        return output.export()
+    
+            
+#######################################################################   
 #######################################################################
 #######################################################################
 #    
-# Basic subclasses for Identity, Inverse, and Composition
+# Core subclasse:
+#   - Identity     - demo and/or test class
+#   - Inverse      - inverse of an arbitrary Transform
+#   - Composition  - composition of two or more transformst
 #
+#   - Wrap         - shorthand for ( W o T o W^-1 )
+#   - PlusOne_     - test class (non idempotent)
+#   - ArrayIndex   - reverse the order of vectors from (x,y,...) to (...,y,x)
     
 class Identity(Transform):
     '''
@@ -758,10 +980,14 @@ class PlusOne_(Transform):
         self.params = {}
     
     def _forward(self,data):
-        data[...,0] = data[...,0]+1
+        data0 = data
+        data0[...,0] += 1
+        return data0
     
     def _reverse(self,data):
-        data[...,0] = data[...,0]-1
+        data0 = data
+        data0[...,0] -= 1
+        return data0
         
     def __str__(self):
         self._strtmp="_PlusOne"
@@ -970,3 +1196,314 @@ class ArrayIndex(Transform):
     def __str__(self):
         self._strtmp = "ArrayIndex"
         return (super().__str__())
+   
+           
+    
+class WCS(Transform):
+    '''
+    transform.WCS - World Coordinate System translation
+    
+    WCS Transforms implement the World Coordinate System that is used in 
+    the FITS image standard that's popular among scientists.  (WCS: Greisen & 
+    Calabretta 2002; "http://arxiv.org/abs/astro-ph/0207407") WCS includes 
+    both linear and nonlinear components; both are implemented, via the 
+    astropy.wcs library.
+    
+    WCS Transforms convert vectors in standard (X,Y) image pixel 
+    coordinates (in which (0,0) is the center of the pixel at lower left of 
+    the image, X runs right, and Y runs up), to world coordinates using the
+    WCS information embedded in a FITS header. The inverse does the inverse.
+    
+    Parameters
+    ----------
+    
+    object: a FITS header or astropy.wcs.WCS object, or an object having a 
+    FITS header or astropy.wcs.WCS object as a "header" or "wcs" attribute, 
+    respectively
+    
+    /dim: an optional limiting dimension
+    '''
+    def __init__(self, dingus):
+
+        # Construct a WCS object -- that's what does the real work.
+        dw = DataWrapper(dingus)
+        wcs_obj = dw.wcs
+        if(wcs_obj is None):
+            dw.head2wcs()
+            wcs_obj = dw.wcs
+            if(wcs_obj is None):
+                raise(ValueError,"Transform::WCS - No WCS object found")
+        
+        # Test to make sure the object works.
+        test_coord = np.zeros([1,wcs_obj.wcs.naxis])
+        try:
+            wcs_obj.wcs_world2pix(test_coord,0)
+            self.no_forward = 0
+        except: self.no_forward = 1
+        
+        try:
+            wcs_obj.wcs_pix2world(test_coord,0)
+            self.no_reverse = 0
+        except: self.no_reverse = 1
+        
+        # Generate input axis names and units - these are standard
+        # image axis names and "Pixels", since we're mapping from the
+        # pixel grid to the WCS system.  First three axes (0, 1, and 2)
+        # are called "X", "Y", and "Z".  Later axes are called "Coord <foo>"
+        # where <foo> is the index number starting at 3.
+        inames = ['X','Y','Z']
+        itype = inames[ 0 : (  min( len(inames), wcs_obj.wcs.naxis )  ) ]
+        while len(itype) < wcs_obj.wcs.naxis:
+            itype.append(f'Coord {len(itype)}')
+        iunit = ['Pixels'] * wcs_obj.wcs.naxis
+        
+        # Populate the object
+        # The WCS fields come in with exotic object types, so hammer
+        # them into numbers (idim/odim) or lists of strings (ounit/otype).
+        self.idim = wcs_obj.wcs.naxis + 0
+        self.odim = wcs_obj.wcs.naxis + 0
+        self.iunit = iunit
+        self.ounit = list( map( lambda un: f"{un}", wcs_obj.wcs.cunit) )
+        self.itype = itype
+        self.otype = list( map( lambda ty: f"{ty}", wcs_obj.wcs.ctype) )
+        self.params = {
+            'wcs': wcs_obj
+        }
+    
+    def __str__(self):
+        self.strtmp = "WCS"
+        return super().__str__()
+    
+    def _forward(self, data):
+        sh = data.shape
+       
+        if(len(sh)>2):
+            data = np.reshape( data, [ np.prod(sh[:-1]),sh[-1] ], order='C' )
+        elif(len(sh)==1):
+            data = np.expand_dims(data,0)
+            
+        data = self.params['wcs'].all_pix2world( data, 0 )
+        
+        if(len(sh)>2 or len(sh)==1):
+            data = np.reshape( data, sh, order='C' )
+        
+        return(data)
+    
+    def _reverse(self, data):
+        sh = data.shape
+        
+        if(len(sh)>2):
+            data = np.reshape( data, [ np.prod(sh[:-1]),sh[-1] ], order='C' )
+        elif(len(sh)==1):
+            data = np.expand_dims(data,0)
+        
+        data = self.params['wcs'].all_world2pix( data, 0 )
+        
+        if(len(sh)>2 or len(sh)==1):
+            data = np.reshape( data, sh, order='C' )
+        
+        return(data)
+
+
+###################################
+###################################
+###
+### DataWrapper - wrapper to contain array data with a FITS header and/or WCS
+### object.  Used by WCS Transform and by remap()
+
+class DataWrapper():
+    '''
+    _DataheaderWrapper - class to manage data with headers
+    
+    This wrapper class encapsulates a variety of objects with 
+    both a data fork and a WCS info fork that could be a FITS header
+    or a WCS transformation.  
+    
+    The constructor accepts an arbitrary object and checks it to see
+    if it:
+            - is an astropy WCS or Header object
+            - has a .wcs, .header, and/or .data attribute
+            - is a dictionary containing wcs, header, and/or data fields
+            - is a dictionary containing a FITS hedader
+            - is a list or tuple, the 0 element of which has a .data, .header, and/or .wcs attribute
+            - is a list or tuple, the 0 element of which is a NumPy array and the 1 element of which contains a FITS header
+    
+    All of these get encapsulated in an object with attributes: .data, .header, 
+    and .wcs where .data is a numpy array or None, .header is an astropy.io.fits header
+    object, and .wcs is an astropy.wcs.WCS object.  The following methods are
+    supplied:
+            - head2wcs - update the WCS object using information in the header
+            - wcs2head - update the FITS header using infromation in the WCS object
+            - export   - export the info as the original object (see below)
+            
+    The 'export' method stuffs the .data, .header, and .wcs attributes (as
+    appropriate) into the original object type passed in, in the event that the
+    original object could support them.  If the original object was a dictionary,
+    a copy of that dictionary gets passed back with the data, header, and wcs
+    fields in it.  If the original object was a numpy array or FITS header,
+    the _DataWrapper object itself it returned (with data, header, and wcs 
+    attributes intact).
+    '''
+    def __init__(self, SourceObject, /, template=None):
+        InputsToSearch = [template, SourceObject]
+        data = None
+        header = None
+        wcs = None
+        
+        for this in InputsToSearch:
+
+            # Make sure the argument exists
+            if this is None:
+                continue
+            
+            if isinstance(this, DataWrapper):
+                if( data is None   and hasattr(this,'data')   ):
+                    data = this.data
+                if( header is None  and  wcs is None ):
+                    if (hasattr(this,'header')):
+                        header = this.header
+                    elif( hasattr(this,'wcs')):
+                        wcs = this.wcs
+                continue
+            
+            # If the item is a string, treat it as a filename of a FITS file
+            if isinstance(this,str):
+                this = astropy.io.fits.open(this)
+                
+            # HDULists come from FITS files -- we take the first HDU.
+            if isinstance(this,astropy.io.fits.hdu.hdulist.HDUList):
+                this = this[0]
+            
+            # Look for the obvious attributes
+            if wcs is None and isinstance(this, ap.wcs.WCS):
+                wcs = this
+                continue
+            
+            if wcs is None and hasattr(this,'wcs'):
+                if isinstance(this.wcs, ap.wcs.WCS):
+                    wcs = this.wcs
+                else:
+                    raise ValueError("DataWrapper: 'wcs' attribute must be an Astropy WCS object")
+            
+            if   ( header is None and 
+                  hasattr(this,'header') and 
+                  this.header is not None ):
+                try:
+                    if( this.header['SIMPLE'] and this.header['NAXIS'] ):
+                        header = this.header
+                    else:
+                        raise ValueError("DataWrapper: 'header' attribute must have a FITS header in it")
+                except AttributeError:
+                    raise ValueError("DataWrapper: 'header' attribute must be dict-like")
+                
+            if data is None:
+                if isinstance(this,np.ndarray):
+                    data = this
+                elif hasattr(this,'data'):
+                    if isinstance(this.data, np.ndarray):
+                        data = this.data
+                    elif this.data is not None:
+                        raise ValueError(f"DataWrapper: 'data' attribute must be a Numpy array (got a {this.data.__class__})")
+            
+            # look for attributes as keys in a dictionary instead
+            if isinstance(this,dict):
+                
+                if (wcs is None) and ('wcs' in this):
+                    if (isinstance(this['wcs'],ap.wcs.WCS)):
+                        wcs = this['wcs']
+                    elif(this['wcs'] is not None):
+                        raise ValueError("DataWrapper: 'wcs' dict entry must be an Astropy WCS object")
+                    
+                if (header is None) and ('header' in this):
+                    try:
+                        if(this['header']['SIMPLE'] and this['header']['NAXIS']):
+                            header = this['header']
+                        elif(this['header'] is not None): 
+                            raise ValueError("DataWrapper: 'header' dict entry must have a FITS header in it.")
+                    except AttributeError:
+                        raise ValueError("DataWrapper: 'header' dict entry must be dict-like.")
+                    
+                if (data is None) and 'data' in this:
+                    if isinstance(this['data'],np.ndarray):
+                        data = this['data']
+                    else:
+                        raise ValueError("DataWrapper: 'data' dict entry must be a NumPy array")
+                        
+                # Maybe this dict it itself a FITS header?  If so, use it.
+                if (header is None) and isinstance(this,dict) and ('NAXIS' in this) and ('SIMPLE' in this):
+                    header = this
+        
+        
+        if( wcs is None ):
+            if( header is not None ):
+                # Work around bug in astropy.io.fits with commentary cards:
+                # make a copy of the header, delete possibly-offending cards,
+                # and make a WCS out of *that*.
+                h = copy.copy(header)
+                if( 'HISTORY' in h ):
+                    del h['HISTORY']
+                if( 'COMMENT' in h ):
+                    del h['COMMENT']
+                wcs = ap.wcs.WCS(h)    
+        
+        self.wcs = wcs
+        self.header = header
+        self.data = data
+        
+        # Stash the source object into this object, for reconstitution later.
+        # FITS files yield a list of HDUs; we want the first one only.
+        if(isinstance(SourceObject, astropy.io.fits.hdu.hdulist.HDUList)):
+            SourceObject = SourceObject[0]
+        self.source_object = SourceObject
+    
+    def head2wcs(self):
+        self.wcs = astropy.wcs.WCS(self.header)
+            
+    def wcs2head(self):
+        if(self.header is None):
+            self.header = {}
+        hdr = self.wcs.to_header()
+        for ky in hdr.keys():
+            self.header[ky]=hdr[ky]
+        
+            
+    def export(self):
+        '''
+        DataWrapper.export() -- return data in original form if possible
+        
+        Export returns wrapped-up data in its original form -- if you 
+        built the object from a dictionary, for example, it comes back as
+        a dictionary.  If you built it from an object that has .data and
+        .header or .wcs attributes, you get back a copy of that object with
+        the current data, .header, and/or .wcs attriutes in it.
+        
+        If you started with a numpy array only, a header only, or a WCS
+        object only, you get back the wrapper object itself (and the
+        data and header can be accessed as .data and .header).
+        '''
+        
+        # Make sure the WCS info is definitive in case the user wants the 
+        # FITS header
+        if(self.wcs is not None):
+            self.wcs2head()
+        
+        if(self.source_object is None):
+            return self
+        elif( isinstance(self.source_object,astropy.io.fits.hdu.image.PrimaryHDU) ):
+            Out = copy.copy(self.source_object)
+            Out.data = self.data
+            for key in self.source_object.header.keys():
+                # Work around problematic WCS implementation that preserves but breaks
+                # commentary cardsets
+                if(key=='HISTORY' or key=='COMMENT' or key==''):
+                    continue
+                Out.header[key] = self.source_object.header[key]
+            return Out
+        elif( isinstance(self.source_object,dict) ):
+            Out = { 'data':self.data, 'header':self.header, 'wcs':self.wcs }
+            return Out
+        ## TODO: Recognize other object types here and return them if possible
+        ## (e.g. HDU; SunPy map)
+   
+        return self
+ 

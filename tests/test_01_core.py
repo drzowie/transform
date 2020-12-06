@@ -6,8 +6,9 @@ pytest test suite for the core module of Transform
 
 import transform as t
 import numpy as np
-
-
+import astropy.io.fits
+#import sunpy
+#import sunpy.map
 
 
 def test_001_transform_constructor():
@@ -123,4 +124,235 @@ def test_009_ArrayIndex():
     data2 = a.apply(data)
     assert( np.all(data2 == data[::-1]) ) 
     
+      
+def test_010_WCS():
+    a = t.WCS('sample.fits')
+    assert(a.idim == 2)
+    assert(a.odim == 2)
+    assert(len(a.itype)==2 and len(a.otype)==2 and len(a.iunit)==2 and len(a.ounit)==2)
+    assert(a.itype == ['X','Y'])
+    assert(a.iunit==['Pixels','Pixels'])
+    assert(a.ounit==['arcsec','arcsec'])
+    assert(a.otype==['Solar-X','Solar-Y'])
+    assert( np.all( np.isclose ( a.apply([[0,0]],0), np.array([[-386.15825,  -676.1092]]), atol=1e-4 ) ) )
 
+def test_011_DataWrapper():
+    # string should get read as a FITS file
+    a = t.DataWrapper('sample.fits')
+    assert( isinstance(a.data, np.ndarray))
+    assert( isinstance(a.header, astropy.io.fits.header.Header) )
+    assert(a.header['NAXIS']==2)
+    assert(a.header['NAXIS1'] == a.data.shape[1])
+    assert(a.header['NAXIS2'] == a.data.shape[0])
+    assert(a.wcs.wcs.naxis == 2)
+    assert(a.wcs.pixel_shape[0] == a.header['NAXIS1'])
+    assert(a.wcs.pixel_shape[1] == a.header['NAXIS2'])
+    b = a.export()
+    assert(isinstance(b,t.DataWrapper)) # original was a string; result is a DataWrapper
+    
+    # Non-file string should fail
+    try:
+        a = t.DataWrapper('blargle.notafitsfile.fits')
+        assert(False)
+    except:
+        pass
+    
+    # FITS object should work right  
+    fits = astropy.io.fits.open('sample.fits')
+    a = t.DataWrapper(fits[0])
+    assert(isinstance(a.data, np.ndarray))
+    assert(isinstance(a.header, astropy.io.fits.header.Header) )
+    assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
+    assert(a.header['NAXIS']==2)
+    a.header['TEST'] = "Testing testing"
+    b = a.export()
+    assert( isinstance(b, astropy.io.fits.hdu.image.PrimaryHDU))
+    assert( b.header['TEST'] == "Testing testing" )
+    
+    # FITS file object should pull the first HDU
+    a = t.DataWrapper(fits)
+    assert(isinstance(a.data, np.ndarray))
+    assert(isinstance(a.header, astropy.io.fits.header.Header) )
+    assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
+    assert(a.header['NAXIS']==2)
+    b = a.export()
+    assert( isinstance(b, astropy.io.fits.hdu.image.PrimaryHDU))
+
+    # Feeding in a dictionary should work right
+    f0 = {'header':fits[0].header, 'data':fits[0].data}
+    a = t.DataWrapper(f0)
+    assert(isinstance(a.data, np.ndarray))
+    assert(isinstance(a.header, astropy.io.fits.header.Header) )
+    assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
+    assert(a.header['NAXIS']==2)
+    b = a.export()
+    assert( isinstance(b,dict))
+    assert( isinstance(b['data'],np.ndarray))
+    assert( isinstance(b['header'], astropy.io.fits.header.Header))
+    assert( isinstance(b['wcs'], astropy.wcs.wcs.WCS))
+    
+    # Feeding in just a header should work okay
+    hdr = dict(fits[0].header)
+    
+    a = t.DataWrapper(hdr)
+    assert(isinstance(a.header,dict))
+    assert(isinstance(a.wcs,astropy.wcs.wcs.WCS))
+    assert( a.data is None )
+    b = a.export()
+    assert( isinstance( b,dict ) )
+    
+    # Sunpy map tests should go here ... eventually.
+    # For now it doesn't make sense since we don't export to maps yet.
+    
+
+def test_012_resample():
+    # Since the main engine is in helpers (resmple is a wrapper), this is 
+    # really just a basic functionality test that the wrapper works right.  
+    # Makes use of Scale, which is in Basic -- but since this is a test, not 
+    # the main code, so there's no circular dependence.
+    
+    # Simple 7x5 array with a single nonzero spot
+    a = np.zeros([7,5])  # 7 tall, 5 wide
+    a[2,2] = 1
+    
+    # Check that identity and shape specs work
+    trans = t.Identity()
+    b = trans.resample(a,method='nearest')
+    assert(b.shape==(7,5))
+    assert(np.all(b==a))
+
+    b = trans.resample(a,shape=[5,5],method='nearest')
+    assert(b.shape==(5,5))
+    assert(np.all(a[0:5,0:5]==b))
+
+    # Try scaling up by a factor of 2.5 -- this should make a 3x3 square
+    # of ones
+    trans = t.Scale(2.5,post=[2,2],pre=[-2,-2])
+    b = trans.resample(a,method='neares')
+    assert(b.shape==(7,5))
+    checkval = np.zeros([7,5])
+    checkval[1:4,1:4] = 1
+    assert(np.all(b==checkval))
+
+    # Check that anisotropy works in the correct direction
+    trans = t.Scale([1,2.5],post=[2,2],pre=[-2,-2])
+    b = trans.resample(a,method='nearest')
+    assert(b.shape==(7,5))
+    checkval = np.zeros([7,5])
+    checkval[1:4,2]=1
+    assert(np.all(b==checkval))
+    
+    
+def test_013_remap():
+    # remap is all about scientific coordinates, so we have to gin up some 
+    # FITS headers.
+    # The test article (a) is a simple asymmetric cross.
+    a = np.zeros([7,7])
+    a[1:5,3] = 1
+    a[3,0:5] = 1
+    
+    ahdr = {
+        'SIMPLE':'T',       'NAXIS':2, 
+        'NAXIS1':7,         'NAXIS2':7,
+        'CRPIX1':4,         'CRPIX2':4,
+        'CRVAL1':0,         'CRVAL2':0,
+        'CDELT1':1,         'CDELT2':1,
+        'CUNIT1':'pixel',   'CUNIT2':'pixel',
+        'CTYPE1':'X',       'CTYPE2':'Y'
+    }
+    
+    trans = t.Identity()
+    b = trans.remap({'data':a,'header':ahdr},method='nearest')
+    assert(np.all(b['data']==a))
+    
+    # This tests actual transformation and also broadcast since 
+    # PlusOne_ is 1D and a is 2D
+    # 
+    # The autoscaling out to completely undo the plus-one, so this should
+    # be a no-op except for incrementing CRVAL1.
+    trans = t.PlusOne_()
+    b = trans.remap({'data':a,'header':ahdr},method='nearest')
+    assert(np.all(a == b['data']))
+    assert(b['header']['CRPIX1']==4)
+    assert(b['header']['CRPIX2']==4)
+    assert(b['header']['CRVAL1']==1)
+    assert(b['header']['CRVAL2']==0)
+    assert(b['header']['CDELT1']==1)
+    assert(b['header']['CDELT2']==1)
+    
+    # This again tests autoscaling - scale(3) should expand everything, 
+    # but autoscaling should put it back.
+    trans = t.Scale(3,dim=2)
+    b = trans.remap({'data':a,'header':ahdr},method='nearest')
+    assert(np.all(a==b['data']))
+    assert(b['header']['CRPIX1']==4)
+    assert(b['header']['CRPIX2']==4)
+    assert(b['header']['CRVAL1']==0)
+    assert(b['header']['CRVAL2']==0)
+    print(f"CDELT1 is {b['header']['CDELT1']}")
+    assert(np.isclose(b['header']['CDELT1'],3,atol=1e-10))
+    assert(np.isclose(b['header']['CDELT2'],3,atol=1e-10))
+    
+    # Test manual scaling of the output by setting the output_range
+    # This *should* be a no-op
+    # Note: output range is to/from the *edge* of the outermost pixel,
+    # so the span is the full span of the image
+    trans = t.Identity()
+    b = trans.remap({'data':a,'header':ahdr},
+                    method='nearest',
+                    output_range=[[-3.5,3.5],[-3.5,3.5]]
+                    )
+    assert(np.all(a==b['data']))
+    assert(b['header']['CRPIX1']==4)
+    assert(b['header']['CRPIX2']==4)
+    assert(b['header']['CRVAL1']==0)
+    assert(b['header']['CRVAL2']==0)
+    print(f"CDELT1 is {b['header']['CDELT1']}")
+    assert(np.isclose(b['header']['CDELT1'],1,atol=1e-10))
+    assert(np.isclose(b['header']['CDELT2'],1,atol=1e-10))
+    
+    b = trans.remap({'data':a,'header':ahdr},
+                    method='nearest',
+                    output_range=[[-3.5/3,3.5/3],[-3.5/3,3.5/3]]
+                    )
+    expando = np.array([
+        [0, 0, 1, 1, 1, 0, 0],
+        [0, 0, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+        [0, 0, 1, 1, 1, 0, 0],
+        [0, 0, 1, 1, 1, 0, 0]
+            ])
+    assert(np.all(np.isclose(expando,b['data'],atol=1e-10)))
+    assert(b['header']['CRPIX1']==4)
+    assert(b['header']['CRPIX2']==4)
+    assert(b['header']['CRVAL1']==0)
+    assert(b['header']['CRVAL2']==0)
+    assert(np.isclose(b['header']['CDELT1'],1/3.0,atol=1e-10))
+    assert(np.isclose(b['header']['CDELT2'],1/3.0,atol=1e-10))
+    
+    trans = t.Scale(3,dim=2)
+    b = trans.remap({'data':a,'header':ahdr},
+                    method='nearest',
+                    output_range=[[-3.5,3.5],[-3.5,3.5]]
+                    )
+    assert(np.all(np.isclose(expando,b['data'],atol=1e-10)))
+    assert(np.isclose(b['header']['CDELT1'],1,atol=1e-10))
+    assert(np.isclose(b['header']['CDELT2'],1,atol=1e-10))
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+    
+           
+    
+           
+    

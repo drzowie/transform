@@ -27,7 +27,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         
     size : list or array
         List containing the allowable size of each dimension in the index.  The
-        allowable dimension is on the interval [0,size).
+        allowable dimension is on the interval [0,size-1]).
         
     bound : string or list of strings (default 'f')
         The boundary type to apply. Only the first character is checked.
@@ -120,8 +120,6 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         
     return vec
             
-            
-
 
 
 def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=False):
@@ -286,7 +284,9 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
     ## All values should be in-range after apply_boundary, so anything negative
     ## is a truncation value.
     ## Note that dexlist has the vector index at the *start* (for the indexing
-    ## operation), so the any operation happens along axis 0.
+    ## operation), so the any operation happens along axis 0.  The range in
+    ## dexlist starts at 1 instead of 0, to skip over the ellipsis object that
+    ## got inserted just above.
     if any( map ( lambda s:s[0]=='t', bound ) ):
         retval = np.where( np.any(dexlist[1:len(dexlist)]<np.array(0), axis=0), fillvalue, retval)
     
@@ -300,8 +300,9 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
     You supply source data in reversed dimension order (...,Y,X) and index
     data as a collection of vectors pointing into the source.  The index is
     collapsed one dimension by interpolation into source: the contents along
-    the final dimension axis are a vector indexing as [X,Y,..] a location in 
-    the source;  other prior axes in the index are broadcast.
+    the final dimension axis are a vector that points (as [X,Y,..]) to a 
+    location in the source;  other prior axes in the index are broadcast and 
+    allow indexing a collection of locations simultaneously.
     
     If source has more axes than the length of the index vectors, then those
     axes are broadcast: the return value of the interpolation is a collection
@@ -317,9 +318,9 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
     axis to have the same size as the number of source dimensions, so that
     the interpolation result is a single value for each index vector.
 
-    Note that interpND indexes axes in reverse order: in the 2-D case of 
-    image interpolation, the source array *axes* are treated as being in 
-    (image-plane, Y, X) order and the 2-vector *values* in index are
+    Note that interpND indexes axes in reverse order: for example, in the 2-D 
+    case of image interpolation, the source array *axes* are treated as being 
+    in (image-plane, Y, X) order and the 2-vector *values* in index are
     considered to be in (X,Y) order.   
 
     Parameters
@@ -370,38 +371,48 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
             
             'l' - linearly interpolate from the hypercube surrounding each point.
             
-            's' - Use sinc-function weighting in the input plane; the sinc 
-                function has zeroes at integer pixel offsets and is enumerated 
-                for 8 pixels in all directions.
+            'c' - cubic-spline interpolate from the 4-pixel hypercube around 
+                each point.  Cubic splines reproduce the value and the first 
+                and second derivatives of the data at original pixel centers. 
             
-            'z' - Use Lanczos-function weighting in the input plane; the sinc 
-                function has zeroes at integer pixel offsets, and the a parameter
-                is 3.
+            's' - Use sinc-function filtering in the input plane; the sinc 
+                function has zeroes at integer pixel offsets, so it reproduces
+                the source data when evaluated at pixel centers.  The sidelobes
+                fall off slowly, so the sinc is enumerated for 8 pixels in all 
+                directions.  The sinc-function weighting is equivalent to a 
+                hard cutoff filter in the frequency domain.
+            
+            'z' - Use Lanczos-function weighting in the input plane; this is
+                a modified sinc that rolls off smoothly over 3 pixels.  It is 
+                equivalent to an approximate trapezoid filter in the frequency
+                domain. Like the sinc function, the Lanczos filter has zeroes
+                at integer pixel offsets, so it reproduces the source data when
+                evaluated at pixel centers.
                 
-            'h' - Use Hanning window (overlapping sin^2) interpolation; the kernel
-                is enumerated for 1 full pixel in all directions.
+            'h' - Use Hanning window (overlapping sin^2) interpolation; the 
+                kernel is enumerated for 1 full pixel in all directions.  The
+                Hanning function produces smooth transitions between pixels, but
+                introduces ripple for smoothly varying curves.
                 
             'r' - Use rounded corners (quasi-Hanning) interpolation; this imposes
                 a Hanning rolloff over 1/2 a pixel width around pixel boundaries.
                 The result is smoother than sampling, but preserves vestiges of
-                pixel edges.
+                pixel edges.  It can be useful for rendering pixelated data and
+                leaving pixel edges both visible and unobtrusive.
             
             'g' - Use Gaussian weighted smoothing with 1 pixel FW; the kernel
                 is enumerated for 3 pixels in all directions. Note that this
                 method does not guarantee the value of integer-indexed samples
                 will match the value in the array itself.
             
-            'c' - cubic-spline interpolate.  
-            
-            'f' - fourier interpolate using discrete FFT coefficients; note,
+            'f' - fourier interpolate using discrete FFT coefficients; this
+                is useful for periodic data such as wave patterns.  Note,
                 this involves taking the FFT of the entire input dataset, which
                 is then discarded -- therefore this method benefits strongly
                 from vectorization.  Because of the way Fourier interpolation is
                 implemented (via explicit evaluation of a complex exponential)
-                you can do Laplace "interpolation" also, by feeding in 
-                complex coordinates.
-      
-  
+                you can do Laplacian analytically continued "interpolation" also, 
+                by feeding in complex-valued coordinates.
         
     strict : Boolean (default True)
         The 'strict' parameter forces strict matching of index vector dimension
@@ -422,10 +433,10 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
         
     # Sample: just grab the nearest value using sampleND
     if(method[0] == 'n'):
-        return sampleND(source, 
+        return np.array(sampleND(source, 
                         index=index, 
                         bound=bound, 
-                        fillvalue=fillvalue)
+                        fillvalue=fillvalue))
     
     # Linear: grab the 2x...x2 hypercube containing the indexed point,
     # then assemble weighting coefficients based on closeness of the indexed
@@ -500,7 +511,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                                 )
         
         # Make a vector of frequency along each axis.  Index mgrid with a 
-        # collection of ranges running over each source.  Shape is:
+        # collection of ranges running over each source axis.  Shape is:
         #   [ <useful-index-dims>, <index-N> ]
         freq = np.mgrid[ tuple(
                                map( lambda i:range(0,source.shape[i]), 
@@ -514,19 +525,25 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
             
         # Now freq has shape [<useful-source-dims>,index-N], and contains the
         # angular rate (in radians/pixel-value) for each location in the 
-        # sourcefft.  W have to get it to broadcast with index, which
-        # has shape [<index-bc-dims>,index-N]. We pad index into "bcdex" to:
+        # sourcefft.  We have to get it to broadcast with index, which
+        # has shape [<index-bc-dims>,index-N]. To do this, pad index into bcdex 
+        # with shape:
         #   [<index-bc-dims>,<1s-for-useful-source-dims>,<index-N>]
         bcdex = np.expand_dims( index, tuple( range( -2,-2-index.shape[-1],-1 )))
         
         # Now generate the overall phase and the Fourier basis values,
-        # with size [<index-bc-dims>,<useful-source-dims>].
+        # with size [<index-bc-dims>,<useful-source-dims>].  
+        # The overall Fourier phase is just the sum of the phases introduced
+        # along each axis of the source -- so we do the sum explicitly.  The 
+        # Fourier basis elements are just complex exponentials of the phase.
         phase = (bcdex * freq).sum(axis=-1)
         basis = np.exp( 1j * phase )
         
         # Now it's all over but the shouting.  We want to sum coefficients
         # in the sourcefft, but it may have additional axes "along for the
-        # ride" -- so we have to pad with ones.  bcsourcefft gets size:
+        # ride" -- so we have to pad the source with additional axes between
+        # those full-broadcast axes and the index broadcast dims.  bcsourcefft
+        # gets the shape:
         #  [ <source-bc>, <1s-for-index-bc-dims>, <useful-source-dims> ]
         bcsourcefft = np.expand_dims( sourcefft, 
                         tuple( range(-1-index.shape[-1],
@@ -536,9 +553,12 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                              )
                         )
         
-        # Now collapse the useful-source-dims out of result by summing.
-        # This carries out the Fourier sum at eac location, and also gives
-        # us the shape: 
+        # Now collapse the useful-source-dims out of result by summing over
+        # all Fourier coefficients multiplied times the calculated value
+        # of the corresponding basis element.  This carries out the Fourier 
+        # sum at each location.  We collapse by mean and not by sum, because
+        # this an *inverse* Fourier transform to get back to the spatial 
+        # domain.  The final shape of result is just:
         #   [ <source-bc>, <index-bc-dims> ]
         # which is what we want to return.
         result = (bcsourcefft * basis).mean( 
@@ -639,23 +659,33 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
     
         elif(method[0] in ('s','z','g','h','r')):
             
+            # of gets the offset of each pixel in the sampled subregion, 
+            # relative to the requested location.  This requires indexing 
+            # mgrid with an asssembled tuple of ranges.  
             of = ( (1 - b) - (offset + 1) +
                   np.mgrid[ tuple( map( lambda i:range(size), range(index.shape[-1]) ))].transpose()
             )
             
 
+            # Now loop over axes, collapsing them in turn until we get to the 
+            # size we need
             for ii in range(index.shape[-1]):
                 bb = of[...,ii]
+
                 if(method=='s'):     ## sinc
                     k = np.sinc(bb)
+
                 elif(method=='z'):   ## lanczos
                     k = 3 * np.sinc(bb) * np.sinc(bb/3)
+
                 elif(method=='g'):   ## Gaussian
                     k = np.exp( - bb * bb / 0.5 / 0.5 )
-                elif(method=='h'):
-                    k = (1 + np.cos( np.pi * bb ))/2
-                elif(method=='r'):
-                    k = (1 + np.cos( np.pi * np.clip( np.abs(bb) * 2-0.5,0,1)))/2
+
+                elif(method=='h'):   ## Hanning (no need to divide by 2 since we normalize by k)
+                    k = (1 + np.cos( np.pi * bb ))
+                    
+                elif(method=='r'):   ## Rounded-corners (hanning over 1/2 pixel)
+                    k = (1 + np.cos( np.pi * np.clip( np.abs(bb) * 2-0.5,0,1)))
                 else:
                     raise AssertionError("This can't happen")
                 
@@ -670,7 +700,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
         
     else: 
         
-        raise ValueError(f"interpND: valid methods are 'n','l','c','f','s','z','g', or 'h')")
+        raise ValueError("interpND: valid methods are 'n','l','c','f','s','z','g', or 'h')")
 
 
         

@@ -5,9 +5,6 @@ Transform subclasses for basic coordinate transforms
 """
 import numpy as np
 import math as math
-import astropy 
-import astropy.wcs
-ap = astropy
 from .core import Transform
 from astropy import units
 
@@ -290,7 +287,10 @@ class Scale(Linear):
             post = post+ np.array(0)
      
         if( not( isinstance( scale, np.ndarray ) ) ) :
-            scale = np.array([scale])
+            if isinstance(scale,(list,tuple)):
+                scale = np.array(scale)
+            else:
+                scale = np.array([scale])
         if(len(scale.shape) > 1):
            raise ValueError('Scale: scale parameter must be scalar or vector')
            
@@ -535,123 +535,7 @@ class Offset(Linear):
     def __str__ (self):
         self._strtmp = "Linear/Offset"
         return super().__str__()
-    
 
-
-class WCS(Transform):
-    '''
-    transform.WCS - World Coordinate System translation
-    
-    WCS Transforms implement the World Coordinate System that is used in 
-    the FITS image standard that's popular among scientists.  (WCS: Greisen & 
-    Calabretta 2002; "http://arxiv.org/abs/astro-ph/0207407") WCS includes 
-    both linear and nonlinear components; at present FITS Transforms only 
-    represent the linear component.
-    
-    WCS Transforms convert vectors in standard (X,Y) image pixel 
-    coordinates (in which (0,0) is the center of the pixel at lower left of 
-    the image, X runs right, and Y runs up), to world coordinates using the
-    WCS information embedded in a FITS header. The inverse does the inverse.
-    
-    The Transform.WCS  object uses the astropy WCS library "under the hood" and 
-    therefore implements all the nonlinear transforms described there.
-   
-    NOTE
-    ----
-    
-    astropy.wcs converts many angular cunits to "standard units" on initial
-    parse -- for example, SOHO/EIT solar images with CTYPE specifiers of 
-    HPLT-TAN and HPLN-TAN are automagically converted from CUNIT of arcsec
-    to CUNIT of degrees.  We consider this a bug or at best a misfeature.
-    
-    A workaround is to specify CTYPE fields that are not recognized by WCS.
-
-    This behavior is not reliable here -- future updates to Transform will
-    disable or work around it.
-    
-    Parameters
-    ----------
-    
-    Header: An astropy.fits.ImageHDU or astropy.fits.Header or file name
-    
-    /dim: an optional limiting dimension
-    '''
-    def __init__(self, template):
-
-        # Construct a WCS object -- that's what does the real work.
-        wcs_obj = ap.wcs.WCS(template)
-        
-        # Test to make sure the object works.
-        test_coord = np.zeros([1,wcs_obj.wcs.naxis])
-        try:
-            wcs_obj.wcs_world2pix(test_coord,0)
-            self.no_forward = 0
-        except: self.no_forward = 1
-        
-        try:
-            wcs_obj.wcs_pix2world(test_coord,0)
-            self.no_reverse = 0
-        except: self.no_reverse = 1
-        
-        # Generate input axis names and units - these are standard
-        # image axis names and "Pixels", since we're mapping from the
-        # pixel grid to the WCS system.  First three axes (0, 1, and 2)
-        # are called "X", "Y", and "Z".  Later axes are called "Coord <foo>"
-        # where <foo> is the index number starting at 3.
-        inames = ['X','Y','Z']
-        itype = inames[ 0 : (  min( len(inames), wcs_obj.wcs.naxis )  ) ]
-        while len(itype) < wcs_obj.wcs.naxis:
-            itype.append(f'Coord {len(itype)}')
-        iunit = ['Pixels'] * wcs_obj.wcs.naxis
-        
-        # Populate the object
-        # The WCS fields come in with exotic object types, so hammer
-        # them into numbers (idim/odim) or lists of strings (ounit/otype).
-        self.idim = wcs_obj.wcs.naxis + 0
-        self.odim = wcs_obj.wcs.naxis + 0
-        self.iunit = iunit
-        self.ounit = list( map( lambda un: f"{un}", wcs_obj.wcs.cunit) )
-        self.itype = itype
-        self.otype = list( map( lambda ty: f"{ty}", wcs_obj.wcs.ctype) )
-        self.params = {
-            'wcs': wcs_obj
-        }
-    
-    def __str__(self):
-        self.strtmp = "WCS"
-        return super().__str__()
-    
-    def _forward(self, data: np.ndarray):
-        sh = data.shape
-       
-        if(len(sh)>2):
-            data = np.reshape( data, [ np.prod(sh[:-2]),sh[-1] ], order='C' )
-        elif(len(sh)==1):
-            data = np.expand_dims(data,0)
-            
-        data = self.params['wcs'].all_pix2world( data, 0 )
-        
-        if(len(sh)>2 or len(sh)==1):
-            data = np.reshape( data, sh, order='C' )
-        
-        return(data)
-    
-    def _reverse(self, data: np.ndarray):
-        sh = data.shape
-        
-        if(len(sh)>2):
-            data = np.reshape( data, [ np.prod(sh[:-2]),sh[-1] ], order='C' )
-        elif(len(sh)==1):
-            data = np.expand_dims(data,0)
-        
-        data = self.params['wcs'].all_world2pix( data, 0 )
-        
-        if(len(sh)>2 or len(sh)==1):
-            data = np.reshape( data, sh, order='C' )
-        
-        return(data)
-    
-        
 class Radial(Transform):
     '''
     transform.Radial - Convert Cartesian to radial/cylindrical coordinates.

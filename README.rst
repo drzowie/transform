@@ -20,9 +20,9 @@ The package includes the "transform" module, which defines the
 main Transform class and some useful general-purpose families of
 transformations including support for the World Coordinate System
 transformations that have been adopted into the FITS scientific
-data standard; and also the "transform.cartography" and
-"transform.color" modules which define more specific groups
-of transformations for specific applications.
+data standard; and also, once they are released, the 
+"transform.cartography" and "transform.color" modules which define 
+more specific groups of transformations for specific applications
 
 Typical usage
 =============
@@ -62,7 +62,7 @@ intrinsic pixel coordinate system and/or resample the image to a new
 coordinate system.  To aid scientific usage, Transform can also interpret and 
 manipulate the World Coordinate System (WCS) tags present in many scientific
 image FITS headers.  This interpretation is managed through the 
-Transform.FITS object that is included with the package.  This is useful,
+Transform.WCS object that is included with the package.  This is useful,
 e.g., for aligning images of the same subject collected with different 
 instruments provided that they have WCS tags attached.
 
