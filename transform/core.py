@@ -1469,9 +1469,9 @@ class WCS(Transform):
         self.idim = wcs_obj.wcs.naxis + 0
         self.odim = wcs_obj.wcs.naxis + 0
         self.iunit = iunit
-        self.ounit = list( map( lambda un: f"{un}", wcs_obj.wcs.cunit) )
+        self.ounit = [ f"{a}" for a in wcs_obj.wcs.cunit ]
         self.itype = itype
-        self.otype = list( map( lambda ty: f"{ty}", wcs_obj.wcs.ctype) )
+        self.otype = [ f"{a}" for a in wcs_obj.wcs.ctype ]
         self.params = {
             'wcs': wcs_obj
         }
