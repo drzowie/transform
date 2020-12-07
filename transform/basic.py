@@ -802,202 +802,45 @@ class Spherical(Transform):
         return super().__str__()    
 
 
-class Cubic(Transform):
-    '''
-    transform.Cubic scaling - cubic pincushion (n-d; with inverse)
-
-    Cubic scaling is a generalization of t_quadratic to a purely
-    cubic expansion.
-
-    The formula for the expansion is:
-
-        f(a) = ( a' + st * a'^3/L_0^2 ) / (1 + abs(st)) + origin
-
-    where a'=(a-origin).  That is a simple pincushion
-    expansion/contraction that is fixed at a distance of L_0 from the
-    origin.
-
-    Because there is no quadratic term the result is always invertible with
-    one real root, and there is no mucking about with complex numbers or
-    multivalued solutions.
-
-
-    Parameters
-    ----------
-        
-    origin :  numpy.ndarray (optional; default = np.array([0,0]))
-        This is the origin of the pincushion. Pass in a np.array. 
-
-    length : float (optional; default = 1)
-        The fundamental scale of the transformation -- the radius that remains
-        unchanged.  (default=1)
-
-    strength : float (optional; default = 0.0)
-        The relative strength of the pincushion.
-
-    dim : int (optional; default = dimensionality of your input vectors)
-        The number of dimensions to quadratically scale
-
-    '''
-
-    def __init__(self, *,
-                 iunit = None, 
-                 ounit  = None, 
-                 itype = None, 
-                 otype  = None,
-                 idim  = None, 
-                 odim = None,
-                 origin = None,
-                 length = 1,
-                 strength = 0.0
-                 ):
-
-        ### Finally - if no idim and odim, default to 0
-        if( origin is None ):
-            origin = 0
-        if( idim is None ):
-            idim = 0
-        if( odim is None ):
-            odim = 0
-
-        ###Generate the object        
-        self.idim = idim
-        self.odim = odim
-        self.no_forward = False
-        self.no_reverse = False
-        self.iunit = iunit
-        self.ounit = ounit
-        self.itype = itype
-        self.otype = otype
-        self.params = {
-            'origin'  : origin,
-            'length' : length,
-            'strength': strength
-            }
-
-
-    def _forward( self, data: np.ndarray ):
-
-        data = data.copy()
-        out = data.copy()
-
-        origin = self.params['origin']
-
-        if not np.all((origin == 0)):
-            origin = np.array(origin)
-            data = data - origin
-
-        if( np.all( self.idim != 0 ) ):
-            data = data[..., :self.idim].copy()
-            self.odim = self.idim
-        else :
-            self.odim, self.idim = data.shape
-            data = data
-
-        dl0 = data / self.params['length'] 
-        data = data + self.params['strength'] * data * dl0 * dl0
-        data = data / ( (self.params['strength']*self.params['strength'])+1 )
-
-        if not np.all((origin == 0)):
-            data = data + origin
-
-        out[..., :self.idim] = data[..., :self.idim]
-
-        return out
-        
-    def _reverse( self, data: np.ndarray ):
-
-        data = data.copy()
-        out = data.copy()
-        
-        if( np.all( self.idim != 0 ) ):
-            data = data[..., :self.idim].copy()
-            self.odim = self.idim
-        else :
-            self.odim, self.idim = data.shape
-            data = data
-
-        origin = self.params['origin']
-
-        if not np.all((origin == 0)):
-            origin = np.array(origin)
-            data = data - origin
-             
-        data = data * (self.params['strength']+1)
-        
-        Avar = self.params['strength']/self.params['length']/self.params['length']
-        Cvar = 1
-        Dvar = -data
-
-        Alphavar = 27 * Avar * Avar * Dvar;
-
-        Betavar = 3 * Avar * Cvar
-        
-        inner_root = np.sqrt( Alphavar * Alphavar + 4.0 * Betavar * Betavar * Betavar )
-
-
-        try:
-            aVar2 = 0.5 * ( Alphavar - inner_root )
-            cuberootNegative = 1 - 2 * (aVar2<0);
-            cuberootNegative = cuberootNegative * (  abs(aVar2) ** (1/3) )
-            cuberoot = cuberootPositive
-        except: 
-            aVar2 = 0.5 * ( Alphavar + inner_root )
-            cuberootPositive = 1 - 2 * (aVar2<0);
-            cuberootPositive = cuberootPositive * (  abs(aVar2) ** (1/3) )
-            cuberoot = cuberootPositive
-
-        cuberoot = cuberootPositive + cuberootNegative
-
-        try:
-            data = (-1 / (3 * Avar)) * cuberoot
-        except ZeroDivisionError:
-            data = (-1 / (3 * np.nan)) * cuberoot
-
-        if not np.all((origin == 0)):
-            data = data + origin
-
-        out[..., :self.idim] = data[..., :self.idim]
-
-        return out
-
-    def __str__(self):
-        if(not hasattr(self,'_strtmp')):
-            self._strtmp = 'Cubic'
-        return super().__str__()    
 
 
 
 class Poly(Transform):
 
     '''
-    Transform.Poly - Polynomial transform scalings emulate pincushion in a 
-    cylindrical optical system: separate scalings are applied to each axis.  
-    You can apply separate distortion along any of the principal axes.  
-    If you want different axes, compose with Linear to rotate them to the 
-    correct angle.  The scaling options may be scalars or vectors; if they are 
-    scalars then the expansion is isotropic.
+    transform.Poly - Pincusion and Barrel scalings.
+
+    Transforms of varying degrees are used to emulate pincushion and 
+    barrel distortions in optical systems, compose with Linear to rotate them to 
+    the correct angle.  The scaling options may be scalars or vectors; if they 
+    are scalars then the expansion is isotropic.
     
-    The parameters are origin, length, strength and idim; they are all optional.
-    The input and output dimensionality of the transform are calculated at 
-    construction time from whichever parameters you supply.
-    
-    The inverse transform is valid if and only if the matrix is invertible. 
-    
-    As with other Transforms, additional dimensions in the input data vectors 
-    are ignored -- so applying a 2-D Linear transform to data comprising 
-    3-vectors results in the first two components being transformed, and the 
-    third component being passed through unchanged.
-    
+    The parameters are origin, length, strength and degree; they are all 
+    optional. The input and output dimensionality of the transform are 
+    calculated at construction time from the input vector.
+
+    The Quadratic pincushion expansion is:
+
+        f(data) = ( <data> + <strength> * <data>^2/<length> ) / (abs(<strength>) + 1)
+
+    The Cubic formula for the expansion is:
+
+        f(a) = ( <a'> + <strength> * <a'>^3/<length>^2 ) / (1 + abs(<strength>) + origin
+
+    where <a'>=(<a>-origin) is the  <strength> is a scaling coefficient and 
+    <length> is a fundamental length scale. Negative values of <strength> result 
+    in a contraction, such as a pincushion contraction in the cubic.
+
+    Unless specified, the dimensionality defaults to the input data dimensions 
+
     Notes
     -----
     
-    As several scalings do not have a strict inverses for coordinate systems 
-    that cross the origin, a modification is applied, where x * np.abs(x) is
-    applied rather than x**2.  This does the Right thing for pincushion
-    and barrel distortions, but means that Transform.Quadratic and 
-    Transform.Quartic do not behave exactly Transform.Cubic with a null cubic 
-    strength coefficient.
+    Note that, because quadratic scaling does not have a strict inverse for
+    coordinate systems that cross the origin, we cheat slightly and use
+    data * np.abs(data)  rather than data**2.  This does the Right thing for 
+    pincushion and barrel distortion, but means that t_quadratic does not behave 
+    exactly like t_cubic with a null cubic strength coefficient.
     
     Parameters
     ----------
@@ -1009,24 +852,33 @@ class Poly(Transform):
         unchanged.  (default=1)
 
     strength : float (optional; default = 0.1)
-        The relative strength of the pincushion.
+        The relative strength of the pincushion. This cannot be 0.
 
-    idim : int (optional; default = dimensionality of your input vectors)
-        The number of dimensions to quadratically scale
+    degree : int (optional; default = 2)
+        The degree of the polynomial, at the moment this only accepts 2 
+        (quadratic) or 3 (cubic). The default of 2 is used for a quadratic 
+        expansion.
+
+    dim : int (optional; positional or keyword)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
     '''
 
     def __init__(self, *,
-                 iunit = None, 
-                 ounit  = None, 
-                 itype = None, 
-                 otype  = None,
-                 idim  = 0, 
-                 odim = 0,
-                 origin = None,
+                 iunit = None, ounit  = None, 
+                 itype = None, otype  = None,
+                 idim  = 0, odim = 0,
+                 origin = 0,
                  length = 1,
-                 strength = 0.1
+                 strength = 0.1,
+                 degree = 2,
+                 dim = None
                  ):
 
+        ### Finally - if dim, this becomes idim and odim
+        if ( dim != None ):
+            idim = dim
+            odim = dim
 
         self.idim       = idim
         self.odim       = odim
@@ -1038,8 +890,10 @@ class Poly(Transform):
         self.otype      = otype
         self.params = {
             'origin'  : origin,
-            'length' : length,
-            'strength': strength
+            'length'  : length,
+            'strength': strength,
+            'degree'  : degree,
+            'dim'     : dim
             }
             
     def __str__(self):
@@ -1051,62 +905,119 @@ class Poly(Transform):
 
         data = data.copy()
         out = data.copy()
-            
+
+
+        if((self.idim == 0) and (self.odim ==0)):
+            self.idim, self.odim = data.shape
+
         origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+        degree = self.params['degree']
+
+        if not((degree == 2) or (degree == 3)): 
+            raise ValueError("Poly : polynomials, of degree 2 or 3 are accepted")
+
+        if (degree % 2) == 0:  
+            out = out ** (degree/2.0)
 
         if not np.all((origin == 0)):
-            origin = np.array(origin)
-            data = data - origin
-            
-        if( np.all( self.idim != 0 ) ):
-            data = data[..., :self.idim].copy()
-            self.odim = self.idim
-        else:
-            self.odim, self.idim = data.shape
-            data = data
+            try:
+                origin = np.array([origin])
+                out = out - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
 
+        if (degree % 2) == 0:  
+            out = out + strength * (out * np.abs(out)) / length
+            out = out / ( np.abs(strength)+1 )
 
-        data = data + self.params['strength'] * (data * np.abs(data)) / self.params['length']
-        data = data / ( np.abs(self.params['strength'])+1 )
+        elif (degree == 3 ):
+            dl0 = out / length
+            out = out + strength * out * dl0 * dl0
+            out = out / ( (strength*strength)+1 )
 
         if not np.all((origin == 0)):
-            data = data + origin
-
-        out[..., :self.idim] = data[..., :self.idim]
+            out = out + origin
+        
 
         return out
+
 
     def _reverse( self, data: np.ndarray ):
 
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+        degree = self.params['degree']
+
+        if not((degree == 2) or (degree == 3)): 
+            raise ValueError("Poly : polynomials, of degree 2 or 3 are accepted")
+
         data = data.copy()
         out = data.copy()
-        
-        if( np.all( self.idim != 0 ) ):
-            data = data[..., :self.idim].copy()
-            self.odim = self.idim
-        else :
-            self.odim, self.idim = data.shape
-            data = data
-
-        origin = self.params['origin']
+        Origindata = data.copy()
 
         if not np.all((origin == 0)):
-            origin = np.array(origin)
- 
-        data = ((-1 + np.sqrt(1 + 4 * self.params['strength']/self.params['length'] * np.abs(data - origin) * (1+np.abs(self.params['strength']))))/ 2 / self.params['strength'] * self.params['length']) * (1 - 2*(data < origin));
+            try:
+                origin = np.array([origin])
+                Origindata = data - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
 
+        if (degree % 2) == 0:  
+
+            out = -1 + np.sqrt( 1 + 4 * strength / length * np.abs(Origindata) * (1 + np.abs(strength)))
+            out = out * length / ( 2 * strength ) 
+            out = out * (1 - 2 * (data < origin) );
+
+        elif (degree == 3 ):
+
+            out = out * (strength+1)
+            Avar = strength/length/length
+            Cvar = 1
+            Dvar = -out
+            Alphavar = 27 * Avar * Avar * Dvar;
+            Betavar = 3 * Avar * Cvar        
+            inner_root = np.sqrt( Alphavar * Alphavar + 4.0 * Betavar * Betavar * Betavar )
+            
+            try:
+                aVar2 = 0.5 * ( Alphavar - inner_root )
+                cuberootNegative = 1 - 2 * (aVar2<0);
+                cuberootNegative = cuberootNegative * (  abs(aVar2) ** (1/3) )
+                cuberoot = cuberootPositive
+            except: 
+                aVar2 = 0.5 * ( Alphavar + inner_root )
+                cuberootPositive = 1 - 2 * (aVar2<0);
+                cuberootPositive = cuberootPositive * (  abs(aVar2) ** (1/3) )
+                cuberoot = cuberootPositive
+    
+            cuberoot = cuberootPositive + cuberootNegative
+            
+            try:
+                out = (-1 / (3 * Avar)) * cuberoot
+            except ZeroDivisionError:
+                out = (-1 / (3 * np.nan)) * cuberoot
+            
         if not np.all((origin == 0)):
-            data = data + origin
+            try:
+                out = out + origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
 
-        out[..., :self.idim] = data[..., :self.idim]
+        if (degree % 2) == 0:  
+            out = out ** (1.0/(degree/2.0))
 
         return out
-        
 
-class Quadratic(Poly):
+
+class QuadPin(Poly):
     '''
     transform.Quadratic scaling - cylindrical pincushion (n-d; with inverse)
     
+    transform.Quadratic is a subclass of the Poly(nomial) class with polynomial
+    of degree 2 preselected.
+
     Quadratic scaling emulates pincushion in a cylindrical optical system:
     separate quadratic scaling is applied to each axis.  You can apply
     separate distortion along any of the principal axes.  If you want
@@ -1116,11 +1027,11 @@ class Quadratic(Poly):
 
     The formula for the expansion is:
 
-        f(a) = ( <a> + <strength> * a^2/<L_0> ) / (abs(<strength>) + 1)
+        f(a) = ( <a'> + <strength> * <a'>^2/<L_0> ) / (abs(<strength>) + 1)
 
-    where <strength> is a scaling coefficient and <L_0> is a fundamental
-    length scale.   Negative values of <strength> result in a pincushion
-    contraction.
+    where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
+    a fundamental length scale. Negative values of <strength> result in a 
+    pincushion type contraction.
 
     Note that, because quadratic scaling does not have a strict inverse for
     coordinate systems that cross the origin, we cheat slightly and use
@@ -1141,29 +1052,26 @@ class Quadratic(Poly):
     strength : float (optional; default = 0.1)
         The relative strength of the pincushion.
 
-    idim : int (optional; default = dimensionality of your input vectors)
-        The number of dimensions to quadratically scale
-
+    dim : int (optional; positional or keyword)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
     '''
+
     def __init__(self, *,
-                 iunit = None, 
-                 ounit  = None, 
-                 itype = None, 
-                 otype  = None,
-                 idim  = 0, 
-                 odim = 0,
-                 origin = None,
+                 iunit = None, ounit  = None, 
+                 itype = None, otype  = None,
+                 idim  = 0, odim = 0,
+                 origin = 0,
                  length = 1,
-                 strength = 0.1
+                 strength = 0.1,
+                 degree = 2,
+                 dim = None
                  ):
 
-        if( origin is None ):
-            origin = 0
-        if( idim is None ):
-            idim = 0
-        if( odim is None ):
-            odim = 0
-
+        ### Finally - if dim, this becomes idim and odim
+        if ( dim != None ):
+            idim = dim
+            odim = dim
 
         self.idim       = idim
         self.odim       = odim
@@ -1176,23 +1084,124 @@ class Quadratic(Poly):
         self.params = {
             'origin'  : origin,
             'length' : length,
-            'strength': strength
+            'strength': strength,
+            'degree' : degree,
+            'dim'     : dim
             }
         
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
-            self._strtmp = 'Quadratic'
+            self._strtmp = 'Poly/Quadratic Pincushion'
         return super().__str__()  
-    
 
-class Quartic(Poly):
+class CubicPin(Poly):
     '''
-    transform.Quartic scaling - cylindrical pincushion (n-d; with inverse)
+    transform.Cubic scaling - cubic pincushion (n-d; with inverse)
 
-    Quartic scaling is a generalization of t_quadratic to a quartic
-    expansion.  Only even powers of the input coordinates are retained,
-    and (as with t_quadratic) sign is preserved, making it an odd function
-    although a true quartic transformation would be an even function.
+    transform.Cubic is a subclass of the Poly(nomial) class with polynomial
+    of degree 3 preselected.
+
+    Cubic scaling is a generalization of t_quadratic to a purely cubic 
+    expansion.
+
+    The formula for the expansion is:
+
+        f(a) = ( <a'> + <strength> * <a>^3/<length>^2 ) / (1 + abs(<strength>) + origin
+
+    where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
+    a fundamental length scale. Negative values of <strength> result in a 
+    pincushion type contraction.
+
+    That is a simple pincushion expansion/contraction that is fixed at a 
+    distance of length from the origin.
+
+    Because there is no quadratic term the result is always invertible with
+    one real root, and there is no mucking about with complex numbers or
+    multivalued solutions.
+
+
+    Parameters
+    ----------
+        
+    origin :  numpy.ndarray (optional; default = np.array([0,0]))
+        This is the origin of the pincushion. Pass in a np.array. 
+
+    length : float (optional; default = 1)
+        The fundamental scale of the transformation -- the radius that remains
+        unchanged.  (default=1)
+
+    strength : float (optional; default = 0.0)
+        The relative strength of the pincushion.
+
+    dim : int (optional; positional or keyword)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
+
+    '''
+
+    def __init__(self, *,
+                 iunit = None, ounit  = None, 
+                 itype = None, otype  = None,
+                 idim  = 0, odim = 0,
+                 origin = 0,
+                 length = 1,
+                 strength = 0.0,
+                 degree = 3,
+                 dim = None
+                 ):
+
+        ### Finally - if dim, this becomes idim and odim
+        if ( dim != None ):
+            idim = dim
+            odim = dim
+
+        ###Generate the object        
+        self.idim = idim
+        self.odim = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = iunit
+        self.ounit = ounit
+        self.itype = itype
+        self.otype = otype
+        self.params = {
+            'origin'   : origin,
+            'length'   : length,
+            'strength' : strength,
+            'degree'   : degree,
+            'dim'      : dim
+            }
+
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Poly/Cubic Pincushion'
+        return super().__str__()    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class Poly2(Transform):
+
+    '''
+    transform.Poly2 scaling - Generic forward polynomial scaling using 
+    a pincusion formalism (n-d; with no inverse).
+
+    Poly2 Polynomial scaling is a generalization using both even and odd powers, 
+    and therefore inverse transforms are not possible. A generic Quadratic 
+    pincusion transform, with inverse, can be generated with the 
+    transform.QuadPin tranformation. A generic Cubic pincusion transform, with 
+    inverse, can be generated with the transform.CubicPin tranformation.
 
     You can apply separate distortion along any of the principal axes.  If
     you want different axes, use Transform.Linear to rotate them to the 
@@ -1201,17 +1210,17 @@ class Quartic(Poly):
 
     The formula for the expansion is:
 
-    f(a) = ( <a> + <strength> * a^2/<L_0> ) / (abs(<strength>) + 1)
+    f(a) = ( <a'> 
+             + <a'>^2 * <strength>/<length> 
+             + <a'>^3 * <strength>/<length>^2 
+                     .... 
+             + <a'>^<degree> * <strength>/<length>^(<degree>-1) ) 
+             / (1 + <strength>^(<degree>-1)
+             + origin
 
-    where <strength> is a scaling coefficient and <L_0> is a fundamental
-    length scale.   Negative values of <strength> result in a pincushion
-    contraction.
-
-    Note that, because quadratic scaling does not have a strict inverse for
-    coordinate systems that cross the origin, we cheat slightly and use
-    $x * abs($x)  rather than $x**2.  This does the Right thing for pincushion
-    and barrel distortion, but means that Transform.Quadratic does not behave 
-    exactly like Transform.Cubic with a null cubic strength coefficient.
+    where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
+    a fundamental length scale. Negative values of <strength> result in a 
+    pincushion type contraction.
 
 
     Parameters
@@ -1227,46 +1236,355 @@ class Quartic(Poly):
     strength : float (optional; default = 0.1)
         The relative strength of the pincushion.
 
-    dim : int (optional; default = dimensionality of your input vectors)
-        The number of dimensions to quadratically scale
+    dim : int (optional; positional or keyword)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
+    degree : the degree of the polynomial
 
     '''
-    def __init__(self, *,
-                 iunit = None, 
-                 ounit  = None, 
-                 itype = None, 
-                 otype  = None,
-                 idim  = 0, 
-                 odim = 0,
-                 origin = None,
-                 length = 1,
-                 strength = 0.1
 
+    def __init__(self, *,
+                 iunit = None, ounit  = None, 
+                 itype = None, otype  = None,
+                 idim  = 0, odim = 0,
+                 origin = 0,
+                 length = 1,
+                 strength = 0.0,
+                 degree = 2,
+                 dim = None
                  ):
 
-        if( origin is None ):
-            origin = 0
-        if( idim is None ):
-            idim = 0
-        if( odim is None ):
-            odim = 0
-
+        ### Finally - if dim, this becomes idim and odim
+        if ( dim != None ):
+            idim = dim
+            odim = dim
 
         self.idim       = idim
         self.odim       = odim
         self.no_forward = False
-        self.no_reverse = False
+        self.no_reverse = True
         self.iunit      = iunit
         self.ounit      = ounit
         self.itype      = itype
         self.otype      = otype
         self.params = {
             'origin'  : origin,
-            'length' : length,
-            'strength': strength
+            'length'  : length,
+            'strength': strength,
+            'degree'  : degree,
+            'dim'     : dim
+            }
+            
+    
+    def _forward( self, data: np.ndarray ):
+
+        out = data.copy()
+
+        if((self.idim == 0) and (self.odim ==0)):
+            self.idim, self.odim = out.shape
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+        degree = self.params['degree']
+        
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                out = out - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
+
+        aConst = out 
+        StrengthConst = (1.0 / (np.abs(strength)**(degree-1) +1 ))
+
+        for degreeStep in range(2, degree+1):
+            aConst = aConst + strength * (out ** degreeStep) / (length**(degreeStep-1))
+
+        #invoke below with degree = 3 to produce a forward cubic transform
+        #aConst = aConst - strength * (out**(degree-1)) / (length**(degree-2))
+
+        out = StrengthConst * aConst
+
+
+
+        if not np.all((origin == 0)):
+            out = out + origin
+        return out
+
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Poly2'
+        return super().__str__()
+
+
+class Poly3(Transform):
+
+    '''
+    transform.Poly3 scaling - Generic forward polynomial scaling using 
+    a pincusion formalism (n-d; with no inverse).
+
+    Poly3 Polynomial scaling is a generalization using both even and odd powers, 
+    and therefore inverse transforms are not possible. A generic Quadratic 
+    pincusion transform, with inverse, can be generated with the 
+    transform.QuadPin tranformation. A generic Cubic pincusion transform, with 
+    inverse, can be generated with the transform.CubicPin tranformation. Poly3
+    is similar to Poly2 with the exception that the denominator is 
+    (1+<strength>) and not (1+<strength>^(<degree>-1))
+
+    You can apply separate distortion along any of the principal axes.  If
+    you want different axes, use Transform.Linear to rotate them to the 
+    correct angle.  The scaling options may be scalars or vectors; if they 
+    are scalars then the expansion is isotropic.
+
+    The formula for the expansion is:
+
+    f(a) = ( <a'> 
+             + <a'>^2 * <strength>/<length> 
+             + <a'>^3 * <strength>/<length>^2 
+                     .... 
+             + <a'>^<degree> * <strength>/<length>^(<degree>-1) ) 
+             / (1 + <strength>)
+             + origin
+
+    where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
+    a fundamental length scale. Negative values of <strength> result in a 
+    pincushion type contraction.
+
+
+    Parameters
+    ----------
+        
+    origin :  numpy.ndarray (optional; default = np.array([0,0]))
+        This is the origin of the pincushion. Pass in a np.array. 
+
+    length : float (optional; default = 1)
+        The fundamental scale of the transformation -- the radius that remains
+        unchanged.  (default=1)
+
+    strength : float (optional; default = 0.1)
+        The relative strength of the pincushion.
+
+    dim : int (optional; positional or keyword)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
+    degree : the degree of the polynomial
+
+    '''
+
+    def __init__(self, *,
+                 iunit = None, ounit  = None, 
+                 itype = None, otype  = None,
+                 idim  = 0, odim = 0,
+                 origin = 0,
+                 length = 1,
+                 strength = 0.0,
+                 degree = 2,
+                 dim = None
+                 ):
+
+        ### Finally - if dim, this becomes idim and odim
+        if ( dim != None ):
+            idim = dim
+            odim = dim
+
+        self.idim       = idim
+        self.odim       = odim
+        self.no_forward = False
+        self.no_reverse = True
+        self.iunit      = iunit
+        self.ounit      = ounit
+        self.itype      = itype
+        self.otype      = otype
+        self.params = {
+            'origin'  : origin,
+            'length'  : length,
+            'strength': strength,
+            'degree'  : degree,
+            'dim'     : dim
+            }
+            
+    
+    def _forward( self, data: np.ndarray ):
+
+        data = data.copy()
+        out = data.copy()
+
+
+        if((self.idim == 0) and (self.odim ==0)):
+            self.idim, self.odim = data.shape
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+        degree = self.params['degree']
+        
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                out = out - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
+
+        aConst = out 
+        StrengthConst = (1.0 / (np.abs(strength) +1 ))
+
+        for degreeStep in range(2, degree+1):
+            aConst = aConst + strength * (out ** degreeStep) / (length**(degreeStep-1))
+
+        out = StrengthConst * aConst
+
+        if not np.all((origin == 0)):
+            out = out + origin
+        return out
+
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Poly3'
+        return super().__str__()
+
+
+
+
+class QuarticPin(Poly2):
+    '''
+    Transform.Quartic scaling - pincushion (n-d; with inverse)
+
+    Transform.Quartic is a subclass of the Poly2(nomial) class with polynomial
+    of degree 4 preselected.
+
+    You can apply separate distortion along any of the principal axes.  If
+    you want different axes, use Transform.Linear to rotate them to the 
+    correct angle.  The scaling options may be scalars or vectors; if they 
+    are scalars then the expansion is isotropic.
+
+    The formula for the expansion is:
+
+    f(a) = ( <a'> 
+             + <a'>^2 * <strength>/<length> 
+             + <a'>^3 * <strength>/<length>^2 
+             + <a'>^4 * <strength>/<length>^3 ) 
+             / (1 + <strength>^(<degree>-1)
+             + origin
+
+    where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
+    a fundamental length scale. Negative values of <strength> result in a 
+    pincushion type contraction.
+
+
+    Parameters
+    ----------
+        
+    origin :  numpy.ndarray (optional; default = np.array([0,0]))
+        This is the origin of the pincushion. Pass in a np.array. 
+
+    length : float (optional; default = 1)
+        The fundamental scale of the transformation -- the radius that remains
+        unchanged.  (default=1)
+
+    strength : float (optional; default = 0.1)
+        The relative strength of the pincushion.
+
+    dim : int (optional; positional or keyword)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
+    '''
+    def __init__(self, *,
+                 iunit = None, ounit  = None, 
+                 itype = None, otype  = None,
+                 idim  = 0, odim = 0,
+                 origin = 0,
+                 length = 1,
+                 strength = 0.1,
+                 degree = 4,
+                 dim = None
+                 ):
+
+        ### Finally - if dim, this becomes idim and odim
+        if ( dim != None ):
+            idim = dim
+            odim = dim
+
+        self.idim       = idim
+        self.odim       = odim
+        self.no_forward = False
+        self.no_reverse = True
+        self.iunit      = iunit
+        self.ounit      = ounit
+        self.itype      = itype
+        self.otype      = otype
+        self.params = {
+            'origin'   : origin,
+            'length'   : length,
+            'strength' : strength,
+            'degree'   : degree,
+            'dim'      : dim
             }
         
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
-            self._strtmp = 'Quartic'
+            self._strtmp = 'Poly2/Quartic'
         return super().__str__()
+
+
+class Projective(Transform):
+
+    '''
+    Projective transformation
+
+    Projective transforms are simple quadratic, quasi-linear
+    transformations.  They are the simplest transformation that
+    can continuously warp an image plane so that four arbitrarily chosen
+    points exactly map to four other arbitrarily chosen points.  They
+    have the property that straight lines remain straight after transformation.
+
+    You can specify your projective transformation directly in homogeneous
+    coordinates, or (in 2 dimensions only) as a set of four unique points that
+    are mapped one to the other by the transformation.
+
+    Projective transforms are quasi-linear because they are most easily
+    described as a linear transformation in homogeneous coordinates
+    (e.g. (x',y',w) where w is a normalization factor: x = x'/w, etc.).
+    In those coordinates, an N-D projective transformation is represented
+    as simple multiplication of an N+1-vector by an N+1 x N+1 matrix,
+    whose lower-right corner value is 1.
+
+    If the bottom row of the matrix consists of all zeroes, then the
+    transformation reduces to a linear affine transformation (as in
+    L<transform.Linear.apply|/transform.Linear.invert>).
+
+    If the bottom row of the matrix contains nonzero elements, then the
+    transformed x,y,z,etc. coordinates are related to the original coordinates
+    by a quadratic polynomial, because the normalization factor 'w' allows
+    a second factor of x,y, and/or z to enter the equations.
+
+    Notes
+    -----
+    
+
+    Parameters
+    ----------
+
+    matrix : numpy.ndarray (optional; default = identity)
+        Optional; if specified must be a 2-D array and the homogeneous-
+        coordinate matrix to use. As always in numpy, the
+        matrix is addressed in (row,column) format -- so if you use 
+        nested-brackets notation for np.array(), then the innermost vectors
+        are rows of the matrix. If specified, this is the homogeneous-coordinate 
+        matrix to use.  It must be N+1 x N+1, for an N-dimensional transformation.
+
+    points : numpy.ndarray (optional)
+    If specified, this is the set of four points that should be mapped 
+        one to the other. The homogeneous-coordinate matrix is calculated from 
+        them.  You should feed in a 2x2x4 numpy.ndarray, where the 0 dimension 
+        runs over coordinate, the 1 dimension runs between input and output, and
+        the 2 dimension runs over point.  For example, specifying:
+
+        input = numpy.ndarray([ [[0,1],[0,1]], [[5,9],[5,8]], 
+                                [[9,4],[9,3]], [[0,0],[0,0]] ])
+
+        maps the origin and the point (0,1) to themselves, 
+                            the point (5,9) to (5,8), and
+                            the point (9,4) to (9,3).
+
+    '''
