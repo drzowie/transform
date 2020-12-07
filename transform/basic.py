@@ -723,21 +723,33 @@ class Spherical(Transform):
     '''
 
     def __init__(self, *,
-                 iunit = 'rad', 
-                 ounit  = 'rad', 
+                 iunit = None, 
+                 ounit  = None, 
                  itype = None, 
                  otype  = None,
                  idim  = 3, 
                  odim = 3,
-                 origin = np.zeros(3)
+                 origin = np.zeros(3),
+                 unit = 'radian',
+                 ccw = False,
+                 pos_only = True                
                 ):
 
         if( not( isinstance( origin, np.ndarray ) ) ) :
             origin = np.array([origin])
 
-        angunit = 1.0*getattr(units, iunit)
+        otype = ["Polar Angle", "Azimuth", "Radius"]
+
+        angunit = 1.0*getattr(units, unit)
         angunit = angunit.to(units.radian)  
-        ounit = angunit.unit
+        #ounit = angunit.unit
+
+        if ounit is None:
+            ounit = [angunit.unit, angunit.unit, None]
+        elif ounit[0] is None:
+            ounit[0] = angunit.unit
+        elif ounit[1] is None:
+            ounit[1] = angunit.unit
 
         ###Generate the object        
         self.idim = idim
@@ -803,215 +815,7 @@ class Spherical(Transform):
 
 
 
-
-
-class Poly(Transform):
-
-    '''
-    transform.Poly - Pincusion and Barrel scalings.
-
-    Transforms of varying degrees are used to emulate pincushion and 
-    barrel distortions in optical systems, compose with Linear to rotate them to 
-    the correct angle.  The scaling options may be scalars or vectors; if they 
-    are scalars then the expansion is isotropic.
-    
-    The parameters are origin, length, strength and degree; they are all 
-    optional. The input and output dimensionality of the transform are 
-    calculated at construction time from the input vector.
-
-    The Quadratic pincushion expansion is:
-
-        f(data) = ( <data> + <strength> * <data>^2/<length> ) / (abs(<strength>) + 1)
-
-    The Cubic formula for the expansion is:
-
-        f(a) = ( <a'> + <strength> * <a'>^3/<length>^2 ) / (1 + abs(<strength>) + origin
-
-    where <a'>=(<a>-origin) is the  <strength> is a scaling coefficient and 
-    <length> is a fundamental length scale. Negative values of <strength> result 
-    in a contraction, such as a pincushion contraction in the cubic.
-
-    Unless specified, the dimensionality defaults to the input data dimensions 
-
-    Notes
-    -----
-    
-    Note that, because quadratic scaling does not have a strict inverse for
-    coordinate systems that cross the origin, we cheat slightly and use
-    data * np.abs(data)  rather than data**2.  This does the Right thing for 
-    pincushion and barrel distortion, but means that t_quadratic does not behave 
-    exactly like t_cubic with a null cubic strength coefficient.
-    
-    Parameters
-    ----------
-    origin :  numpy.ndarray (optional; default = np.array([0,0]))
-        This is the origin of the pincushion. Pass in a np.array. 
-
-    length : float (optional; default = 1)
-        The fundamental scale of the transformation -- the radius that remains
-        unchanged.  (default=1)
-
-    strength : float (optional; default = 0.1)
-        The relative strength of the pincushion. This cannot be 0.
-
-    degree : int (optional; default = 2)
-        The degree of the polynomial, at the moment this only accepts 2 
-        (quadratic) or 3 (cubic). The default of 2 is used for a quadratic 
-        expansion.
-
-    dim : int (optional; positional or keyword)
-        This is an optional dimension specifier in case you pass in a scalar
-        and no other dimensionality hints.
-    '''
-
-    def __init__(self, *,
-                 iunit = None, ounit  = None, 
-                 itype = None, otype  = None,
-                 idim  = 0, odim = 0,
-                 origin = 0,
-                 length = 1,
-                 strength = 0.1,
-                 degree = 2,
-                 dim = None
-                 ):
-
-        ### Finally - if dim, this becomes idim and odim
-        if ( dim != None ):
-            idim = dim
-            odim = dim
-
-        self.idim       = idim
-        self.odim       = odim
-        self.no_forward = False
-        self.no_reverse = False
-        self.iunit      = iunit
-        self.ounit      = ounit
-        self.itype      = itype
-        self.otype      = otype
-        self.params = {
-            'origin'  : origin,
-            'length'  : length,
-            'strength': strength,
-            'degree'  : degree,
-            'dim'     : dim
-            }
-            
-    def __str__(self):
-        if(not hasattr(self,'_strtmp')):
-            self._strtmp = 'Poly'
-        return super().__str__()
-    
-    def _forward( self, data: np.ndarray ):
-
-        data = data.copy()
-        out = data.copy()
-
-
-        if((self.idim == 0) and (self.odim ==0)):
-            self.idim, self.odim = data.shape
-
-        origin = self.params['origin']
-        strength = self.params['strength']
-        length = self.params['length']
-        degree = self.params['degree']
-
-        if not((degree == 2) or (degree == 3)): 
-            raise ValueError("Poly : polynomials, of degree 2 or 3 are accepted")
-
-        if (degree % 2) == 0:  
-            out = out ** (degree/2.0)
-
-        if not np.all((origin == 0)):
-            try:
-                origin = np.array([origin])
-                out = out - origin
-            except:
-                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
-
-        if (degree % 2) == 0:  
-            out = out + strength * (out * np.abs(out)) / length
-            out = out / ( np.abs(strength)+1 )
-
-        elif (degree == 3 ):
-            dl0 = out / length
-            out = out + strength * out * dl0 * dl0
-            out = out / ( (strength*strength)+1 )
-
-        if not np.all((origin == 0)):
-            out = out + origin
-        
-
-        return out
-
-
-    def _reverse( self, data: np.ndarray ):
-
-        origin = self.params['origin']
-        strength = self.params['strength']
-        length = self.params['length']
-        degree = self.params['degree']
-
-        if not((degree == 2) or (degree == 3)): 
-            raise ValueError("Poly : polynomials, of degree 2 or 3 are accepted")
-
-        data = data.copy()
-        out = data.copy()
-        Origindata = data.copy()
-
-        if not np.all((origin == 0)):
-            try:
-                origin = np.array([origin])
-                Origindata = data - origin
-            except:
-                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
-
-        if (degree % 2) == 0:  
-
-            out = -1 + np.sqrt( 1 + 4 * strength / length * np.abs(Origindata) * (1 + np.abs(strength)))
-            out = out * length / ( 2 * strength ) 
-            out = out * (1 - 2 * (data < origin) );
-
-        elif (degree == 3 ):
-
-            out = out * (strength+1)
-            Avar = strength/length/length
-            Cvar = 1
-            Dvar = -out
-            Alphavar = 27 * Avar * Avar * Dvar;
-            Betavar = 3 * Avar * Cvar        
-            inner_root = np.sqrt( Alphavar * Alphavar + 4.0 * Betavar * Betavar * Betavar )
-            
-            try:
-                aVar2 = 0.5 * ( Alphavar - inner_root )
-                cuberootNegative = 1 - 2 * (aVar2<0);
-                cuberootNegative = cuberootNegative * (  abs(aVar2) ** (1/3) )
-                cuberoot = cuberootPositive
-            except: 
-                aVar2 = 0.5 * ( Alphavar + inner_root )
-                cuberootPositive = 1 - 2 * (aVar2<0);
-                cuberootPositive = cuberootPositive * (  abs(aVar2) ** (1/3) )
-                cuberoot = cuberootPositive
-    
-            cuberoot = cuberootPositive + cuberootNegative
-            
-            try:
-                out = (-1 / (3 * Avar)) * cuberoot
-            except ZeroDivisionError:
-                out = (-1 / (3 * np.nan)) * cuberoot
-            
-        if not np.all((origin == 0)):
-            try:
-                out = out + origin
-            except:
-                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
-
-        if (degree % 2) == 0:  
-            out = out ** (1.0/(degree/2.0))
-
-        return out
-
-
-class QuadPin(Poly):
+class QuadPin(Transform):
     '''
     transform.Quadratic scaling - cylindrical pincushion (n-d; with inverse)
     
@@ -1064,7 +868,6 @@ class QuadPin(Poly):
                  origin = 0,
                  length = 1,
                  strength = 0.1,
-                 degree = 2,
                  dim = None
                  ):
 
@@ -1085,16 +888,73 @@ class QuadPin(Poly):
             'origin'  : origin,
             'length' : length,
             'strength': strength,
-            'degree' : degree,
             'dim'     : dim
             }
+
+
+    def _forward( self, data: np.ndarray ):
+
+        data = data.copy()
+        out = data.copy()
+
+        if((self.idim == 0) and (self.odim ==0)):
+            self.idim, self.odim = data.shape
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                out = out - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
+
+        out = out + strength * (out * np.abs(out)) / length
+        out = out / ( np.abs(strength)+1 )
+
+        if not np.all((origin == 0)):
+            out = out + origin
         
+        return out
+
+
+    def _reverse( self, data: np.ndarray ):
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+
+        data = data.copy()
+        out = data.copy()
+        Origindata = data.copy()
+
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                Origindata = data - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
+
+        out = -1 + np.sqrt( 1 + 4 * strength / length * np.abs(Origindata) * (1 + np.abs(strength)))
+        out = out * length / ( 2 * strength ) 
+        out = out * (1 - 2 * (data < origin) );
+            
+        if not np.all((origin == 0)):
+            try:
+                out = out + origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
+
+        return out
+
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
             self._strtmp = 'Poly/Quadratic Pincushion'
         return super().__str__()  
 
-class CubicPin(Poly):
+class CubicPin(Transform):
     '''
     transform.Cubic scaling - cubic pincushion (n-d; with inverse)
 
@@ -1146,7 +1006,6 @@ class CubicPin(Poly):
                  origin = 0,
                  length = 1,
                  strength = 0.0,
-                 degree = 3,
                  dim = None
                  ):
 
@@ -1168,9 +1027,91 @@ class CubicPin(Poly):
             'origin'   : origin,
             'length'   : length,
             'strength' : strength,
-            'degree'   : degree,
             'dim'      : dim
             }
+
+
+
+    def _forward( self, data: np.ndarray ):
+
+        data = data.copy()
+        out = data.copy()
+
+        if((self.idim == 0) and (self.odim ==0)):
+            self.idim, self.odim = data.shape
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+
+
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                out = out - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
+
+        dl0 = out / length
+        out = out + strength * out * dl0 * dl0
+        out = out / ( (strength*strength)+1 )
+
+        if not np.all((origin == 0)):
+            out = out + origin
+
+        return out
+
+
+    def _reverse( self, data: np.ndarray ):
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+
+        data = data.copy()
+        out = data.copy()
+        Origindata = data.copy()
+
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                Origindata = data - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
+
+        out = out * (strength+1)
+        Avar = strength/length/length
+        Cvar = 1
+        Dvar = -out
+        Alphavar = 27 * Avar * Avar * Dvar;
+        Betavar = 3 * Avar * Cvar        
+        inner_root = np.sqrt( Alphavar * Alphavar + 4.0 * Betavar * Betavar * Betavar )
+            
+        try:
+            aVar2 = 0.5 * ( Alphavar - inner_root )
+            cuberootNegative = 1 - 2 * (aVar2<0);
+            cuberootNegative = cuberootNegative * (  abs(aVar2) ** (1/3) )
+            cuberoot = cuberootPositive
+        except: 
+            aVar2 = 0.5 * ( Alphavar + inner_root )
+            cuberootPositive = 1 - 2 * (aVar2<0);
+            cuberootPositive = cuberootPositive * (  abs(aVar2) ** (1/3) )
+            cuberoot = cuberootPositive
+    
+        cuberoot = cuberootPositive + cuberootNegative
+            
+        try:
+            out = (-1 / (3 * Avar)) * cuberoot
+        except ZeroDivisionError:
+            out = (-1 / (3 * np.nan)) * cuberoot
+            
+        if not np.all((origin == 0)):
+            try:
+                out = out + origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
+
+        return out
 
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
