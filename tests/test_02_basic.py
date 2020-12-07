@@ -198,14 +198,22 @@ def test_005_TestForNdims():
     assert all( d1 == np.array([10, 40, 90]) )
 
 def test_007_Radial():
+    
+    # Start with a transform with origin at (130,130), and
+    # test inversion.  First vector is (0,1):  radius 1, angle 0.
+    # It should direct to (131,130).  Second vector is (2,3): 
+    # radius 3, angle 2 radians (i.e. 114.6 degrees).  
+    # Given that Radial works in the *clockwise* direction by default
+    # (opposite of mathematical standard) this should result in
+    # an offset left and down.
     x = np.arange(4.).reshape(2,2)
     b = t.Radial(origin=[130,130])
     d1 = np.array([[131.0 , 130.0], [ 128.75,  127.27]])
     d2 = b.invert(x)  
-    assert np.all( np.isclose(d1 , d2, atol=1e-1))
+    assert np.all( np.isclose(d1 , d2, atol=1e-2))
     d3 = np.array([ [2.3600555, 183.14202], [2.360116, 180.31362]])
     d4 = b.apply(x) 
-    assert np.all( np.isclose(d3 , d4, atol=1e-1))
+    assert np.all( np.isclose(d3 , d4, atol=1e-2))
     cd = t.Radial(origin=[130,130], r0=5)
     bd1 = np.array([[2.3600555, 3.600824], [2.360116, 3.5852597]])
     bd2 = cd.apply(x)
@@ -213,7 +221,73 @@ def test_007_Radial():
     bd4 = cd.invert(x)
     assert(  np.allclose(bd1,bd2, atol=1e-2))
     assert(  np.allclose(bd3,bd4, atol=1e-2))
-
+    
+    # Test handling of multi-dim broadcasting
+    # make a 7x7 grid, 0 centered, and test the corners (good enough for
+    # basics and polarities)
+    # For the angular test of the corners, remember that array indices
+    # are in Python (Y,X) order -- so b[0,-1] corresponds to the 
+    # lower, rightmost corner of the square -- which has coordinates (-3,3)
+    # and should be PI/4 radians around the (clockwise) circle.
+    a = np.mgrid[0:7,0:7].T - 3
+    trans = t.Radial()
+    b = trans.apply(a)
+    assert( all([np.isclose(b[0,0,1],  3*np.sqrt(2), atol=1e-5),
+                 np.isclose(b[-1,-1,1],3*np.sqrt(2), atol=1e-5),
+                 np.isclose(b[0,-1,1], 3*np.sqrt(2), atol=1e-5),
+                 np.isclose(b[-1,0,1], 3*np.sqrt(2), atol=1e-5)
+                 ]
+                )
+           )
+    assert( all([np.isclose(b[0,-1,0], (0.25)*np.pi, atol=1e-5),
+                 np.isclose(b[0,0,0],  (0.75)*np.pi, atol=1e-5),
+                 np.isclose(b[-1,0,0], (1.25)*np.pi, atol=1e-5),
+                 np.isclose(b[-1,-1,0],(1.75)*np.pi, atol=1e-5)
+                 ]
+                )
+           )
+    assert(b.shape==a.shape)
+    c = trans.invert(b)
+    assert(np.all(np.isclose(a,c,atol=1e-10)))
+    
+    # Test CCW (conventional) transform with the multi-dim case
+    # Uses the same a as above.
+    trans2 = t.Radial(ccw=True)
+    bb = trans2.apply(a)
+    # all radii should be the same
+    assert( np.all( np.isclose(bb[...,1], b[...,1],atol=1e-5)))
+    # angles should be reversed
+    print(f"b angs is \n{b[...,0]}")
+    print(f"bb angs is \n{bb[...,0]}")
+    print(f"rev diff is\n{b[...,0]-bb[...,range(6,-1,-1),0]}")
+    assert( np.all( np.isclose( (5*np.pi + bb[...,0]) % (2*np.pi), (5*np.pi + b[range(6,-1,-1), ...,0]) % (2*np.pi) )))
+    cc = trans2.invert(bb)
+    assert(np.all(np.isclose(a,cc,atol=1e-10)))
+    
+    # Test allowing negative-going angles
+    trans = t.Radial(pos_only=False)
+    b = trans.apply(a)
+    assert( all([np.isclose(b[0,0,1],  3*np.sqrt(2), atol=1e-5),
+                 np.isclose(b[-1,-1,1],3*np.sqrt(2), atol=1e-5),
+                 np.isclose(b[0,-1,1], 3*np.sqrt(2), atol=1e-5),
+                 np.isclose(b[-1,0,1], 3*np.sqrt(2), atol=1e-5)
+                 ]
+                )
+           )
+    assert( all([np.isclose(b[0,-1,0], (  0.25)*np.pi, atol=1e-5),
+                 np.isclose(b[0,0,0],  (  0.75)*np.pi, atol=1e-5),
+                 np.isclose(b[-1,0,0], ( -0.75)*np.pi, atol=1e-5),
+                 np.isclose(b[-1,-1,0],( -0.25)*np.pi, atol=1e-5)
+                 ]
+                )
+           )
+    c = trans.invert(b)
+    assert(np.all(np.isclose(a,c,atol=1e-10)))
+   
+    
+    
+    
+    
 
 def test_008_Spherical():
     x = np.arange(27.).reshape(3,3,3)

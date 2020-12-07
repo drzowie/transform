@@ -555,7 +555,13 @@ class Radial(Transform):
     yielding a conversion from Cartesian to cylindrical coordinates.  If you 
     use higher dimensionality than 2, you must manually specify the origin or 
     you will get dimension mismatch errors when you apply the transform.
-
+    
+    This Transform works (by default) *opposite* to standard polar/radial
+    coordinates: angle counts *clockwise* rather than *widdershins*. This 
+    preserves the chirality of image features when images are resampled to 
+    polar/radial coordinates.  To get the standard, set the "ccw=True" 
+    flag.
+    
     
     Parameters
     ----------
@@ -573,32 +579,48 @@ class Radial(Transform):
     unit: Unit [default 'rad'] This is the angular unit to be used for the 
     azimuth.
     
+    ccw: (default False) if set, this flag makes angle increase widdershins, 
+    reversing planar chirality of small features but also conforming to the 
+    usual mathematical standard. 
+    
+    pos_only: (default True) if set, this flag ensures angles are always in 
+    the interval [0,2pi); if false, they are in (-pi,pi].
+                                            
     '''
 
     def __init__(self, *,                      
                  r0 = None,
-                 iunit = 'rad', 
-                 ounit  = 'rad', 
+                 iunit = None, 
+                 ounit  = None,
                  itype = None, 
-                 otype  = None,
+                 otype = None,
                  idim  = 2, 
                  odim = 2,
-                 origin = np.zeros(2)
+                 origin = np.zeros(2),
+                 unit = 'radian',
+                 ccw = False,
+                 pos_only = True
                 ):
         
     
         if( not( isinstance( origin, np.ndarray ) ) ) :
             origin = np.array([origin])
 
-        if r0 in locals():
+        if r0 is not None:
             otype = ["Azimuth", "Ln radius"]
+            r0_sq = r0 * r0
         else:
             otype = ["Azimuth", "Radius"]
+            r0_sq = None
 
-        angunit = 1.0*getattr(units, iunit)
+        angunit = 1.0*getattr(units, unit)
         angunit = angunit.to(units.radian)  
-        ounit = angunit.unit
-
+        
+        if ounit is None:
+            ounit = [angunit.unit, None]
+        elif ounit[0] is None:
+            ounit[0] = angunit.unit
+            
         ###Generate the object        
         self.idim = idim
         self.odim = odim
@@ -611,7 +633,10 @@ class Radial(Transform):
         self.params = {
             'origin'  : origin,
             'r0'      : r0,
-            'angunit' : angunit 
+            'r0_sq'   : r0_sq,
+            'angunit' : angunit,
+            'ccw'     : ccw,
+            'pos'     : pos_only,
         }
 
 
@@ -623,27 +648,35 @@ class Radial(Transform):
         if not np.all((origin == 0)):
             data = data - origin
         
-        out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0]) % (2.0 * np.pi)) / self.params['angunit']
+        if( self.params['ccw'] ):
+            out[..., 0] = (np.arctan2( data[..., 1], data[..., 0])) / self.params['angunit']            
+        else:
+            out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0])) / self.params['angunit']
+        
+        if(self.params['pos']):
+            out[...,0] %= 2*np.pi
 
         if self.params['r0']:
-            out[..., 1] = 0.5 * np.log((data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0]) / (self.params['r0'] * self.params['r0']))
+            out[..., 1] = 0.5 * np.log( np.sum(data*data, axis=-1) / self.params['r0_sq'] )
         else:
-            out[..., 1] = np.sqrt(data[..., 1] * data[..., 1] + data[..., 0] * data[..., 0])
+            out[..., 1] = np.sqrt( np.sum(data*data, axis=-1) )
         return out
 
     def _reverse( self, data: np.ndarray ):
         
-        d0 = data[..., 0].copy() * self.params['angunit']
-        d1 = np.expand_dims(data[..., 1], [1]).copy()
+        d0 = data[..., 0] * self.params['angunit']
+        
         out = np.ndarray(data.shape)
-        
-        angVec = (np.expand_dims( np.cos(d0), [1]), np.expand_dims( -np.sin(d0), [1]))
-        out = np.stack(angVec, axis=-1).squeeze()
-        
-        if self.params['r0'] is not None:
-            out *= self.params['r0'] * np.exp(d1)
+        out[...,0] = np.cos(d0)
+        if( self.params['ccw'] ):
+            out[...,1] = np.sin(d0)
         else:
-            out *= d1
+            out[...,1] = -np.sin(d0)            
+
+        if self.params['r0'] is not None:
+            out *= self.params['r0'] * np.exp(data[...,1,np.newaxis])
+        else:
+            out *= data[...,1,np.newaxis]
         
         origin = self.params['origin'][0:2]
         if not np.all((origin == 0)):
