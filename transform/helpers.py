@@ -64,18 +64,20 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
     # I'm sure there's a better way to do this - explicitly broadcast
     # size if it's a scalar or a 1-element list
     if( not isinstance(size,(tuple,list,np.ndarray) )):
-        size = list( map( lambda i:size, range(shape[-1])))
+        size = [ size for i in range(shape[-1])]
     elif(len(size)==1):
-        size = list( map ( lambda i:size[0], range(shape[-1]))) 
+        size = [ size[0] for i in range(shape[-1])]
+
     # Check that size matches the vec
     if(len(size) != shape[-1]):
         raise ValueError("apply_boundary: size vector must match vec dims")
     
     # Now do the same thing with the boundary string(s)
     if( not isinstance(bound, list) ):
-        bound = list( map( lambda i:bound, range(shape[-1])))
+        bound = [ bound for i in range(shape[-1])]
     elif(len(bound)==1):
-        bound = list( map( lambda i:bound[0], range(shape[-1])))
+        bound = [ bound[0] for i in range(shape[-1])]
+        
     # Check that boundary size matches the vec
     if(len(bound) != shape[-1]):
         raise ValueError("apply_boundary: boundary list must match vec dims")
@@ -271,11 +273,7 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
     ## Perform direct indexing.  Range() call reverses dim order, for
     ## Python standard (...,Y,X) indexing.  We have to add an ellipsis object
     ## to the start of the list after assembling it from the map.  Ick.
-    dexlist = list( 
-                map ( lambda ii: index[...,ii], 
-                     range(index.shape[-1]-1,-1,-1) 
-                     ) 
-                )
+    dexlist = [ index[...,i] for i in range(index.shape[-1]-1,-1,-1) ]
     dexlist.insert(0,...)
     dextuple = tuple(dexlist)
     retval = source[dextuple]
