@@ -1094,7 +1094,7 @@ class DataWrapper():
 #######################################################################
 #######################################################################
 #    
-# Core subclasse of Transform
+# Core subclasses of Transform
 #   - Identity     - demo and/or test class
 #   - Inverse      - inverse of an arbitrary Transform
 #   - Composition  - composition of two or more transformst

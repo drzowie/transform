@@ -74,7 +74,11 @@ An example usage is::
      b = trans.remap(a,method='lin')
 
 which loads 'myfile.fits' into a, and returns it rotated 45 degrees about
-its scientific origin, in b.
+its scientific origin, in b.  The remap() method includes autoscaling and 
+autoplacement to fit the remapped data onto a specified pixel grid (which
+defaults to the same size as the original image), so the example above 
+yields a rotated image even if the scientific origin is outside the original
+pixel grid.
 
 The two methods used for image resampling this way are remap(), which
 includes WCS interpretation and autoscaling; and resample(), which uses
