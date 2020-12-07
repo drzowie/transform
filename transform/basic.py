@@ -613,13 +613,26 @@ class Radial(Transform):
             otype = ["Azimuth", "Radius"]
             r0_sq = None
 
-        angunit = 1.0*getattr(units, unit)
-        angunit = angunit.to(units.radian)  
+        if(isinstance(unit,units.quantity.Quantity)):
+            ang_quantity = unit
+        elif(isinstance(unit,units.core.Unit)):
+                ang_quantity= 1.0 * unit
+        else:
+            try:
+                unit = getattr(units,unit)
+            except:
+                raise ValueError(f"Radial: couldn't convert '{unit}' to an astropy unit object")
+            ang_quantity = 1.0 * unit
+            
+        try:
+            ang_quantity = ang_quantity.to(units.radian)
+        except:
+            raise ValueError(f"Radial: '{unit}' doesn't appear to be an angular unit or quantity")
         
         if ounit is None:
-            ounit = [angunit.unit, None]
+            ounit = [f"{ang_quantity.unit}", None]
         elif ounit[0] is None:
-            ounit[0] = angunit.unit
+            ounit[0] = f"{ang_quantity.unit}"
             
         ###Generate the object        
         self.idim = idim
@@ -631,12 +644,12 @@ class Radial(Transform):
         self.itype = itype
         self.otype = otype
         self.params = {
-            'origin'  : origin,
-            'r0'      : r0,
-            'r0_sq'   : r0_sq,
-            'angunit' : angunit,
-            'ccw'     : ccw,
-            'pos'     : pos_only,
+            'origin'   : origin,
+            'r0'       : r0,
+            'r0_sq'    : r0_sq,
+            'ang_coeff': ang_quantity.value,
+            'ccw'      : ccw,
+            'pos'      : pos_only,
         }
 
 
@@ -649,9 +662,9 @@ class Radial(Transform):
             data = data - origin
         
         if( self.params['ccw'] ):
-            out[..., 0] = (np.arctan2( data[..., 1], data[..., 0])) / self.params['angunit']            
+            out[..., 0] = (np.arctan2( data[..., 1], data[..., 0])) / self.params['ang_coeff']            
         else:
-            out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0])) / self.params['angunit']
+            out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0])) / self.params['ang_coeff']
         
         if(self.params['pos']):
             out[...,0] %= 2*np.pi
@@ -664,7 +677,7 @@ class Radial(Transform):
 
     def _reverse( self, data: np.ndarray ):
         
-        d0 = data[..., 0] * self.params['angunit']
+        d0 = data[..., 0] * self.params['ang_coeff']
         
         out = np.ndarray(data.shape)
         out[...,0] = np.cos(d0)
