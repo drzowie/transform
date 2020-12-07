@@ -257,9 +257,7 @@ def test_007_Radial():
     # all radii should be the same
     assert( np.all( np.isclose(bb[...,1], b[...,1],atol=1e-5)))
     # angles should be reversed
-    print(f"b angs is \n{b[...,0]}")
-    print(f"bb angs is \n{bb[...,0]}")
-    print(f"rev diff is\n{b[...,0]-bb[...,range(6,-1,-1),0]}")
+
     assert( np.all( np.isclose( (5*np.pi + bb[...,0]) % (2*np.pi), (5*np.pi + b[range(6,-1,-1), ...,0]) % (2*np.pi) )))
     cc = trans2.invert(bb)
     assert(np.all(np.isclose(a,cc,atol=1e-10)))
