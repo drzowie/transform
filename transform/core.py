@@ -304,9 +304,11 @@ class Transform:
         '''
         return self.apply(data,invert=not(invert))    
     
+    
     def inverse(self):
         '''
         inverse - generate the functional inverse of a Transform
+        
         For most Transform objects, <obj>.inverse() is functionally 
         equivalent to transform.Inverse(<obj>).  But the method is
         overloaded in the Inverse subclass, to produce a cleaner
@@ -737,15 +739,12 @@ class Transform:
         Returns
         -------
         
-        The resampled data.  If the input data are an object with (data,header)
-        or (data,wcs) attributes, the returned object is a copy with the data 
-        and header modified.  Likewide, if the input data are a dictionary with
-        those fields, a copy of the dictionary is returned with the new data
-        and header.  If the data are a single NumPy array then a dictionary
-        is returned, containing the resampled data as 'data' and a FITS
-        header mapping pixel coordinates to transform output coordinates
-        from the original data.  In that last case, the implicit pixel coordinate
-        system is used as input to the transform.
+        The resampled data.  During the operation, the data are wrapped in at
+        Transform DataWrapper object; and on export they are exported.  In 
+        common use cases, this returns the data and header in a compatible form
+        to the input.  The return value is a combination of a NumPy array
+        (the data) and a FITS header (the header).  These can come back as an
+        object, a tuple, or a dictionary depending on the form of the input data.
         '''
         
         # Regularize the input data

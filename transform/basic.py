@@ -613,6 +613,7 @@ class Radial(Transform):
             otype = ["Azimuth", "Radius"]
             r0_sq = None
 
+        # Generate the angular coefficient using the astropy Quantity infrastructure
         if(isinstance(unit,units.quantity.Quantity)):
             ang_quantity = unit
         elif(isinstance(unit,units.core.Unit)):
@@ -622,8 +623,7 @@ class Radial(Transform):
                 unit = getattr(units,unit)
             except:
                 raise ValueError(f"Radial: couldn't convert '{unit}' to an astropy unit object")
-            ang_quantity = 1.0 * unit
-            
+            ang_quantity = 1.0 * unit   
         try:
             ang_quantity = ang_quantity.to(units.radian)
         except:
