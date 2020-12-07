@@ -88,8 +88,8 @@ only the intrinsic pixel coordinate system.
 History
 =======
 
-This package was ported and adapted from a Perl Data Language module (PDL::Transform)
-first written in 2001.
+This package was ported and adapted from a Perl Data Language module 
+(PDL::Transform) first written in 2001. 
 
 Contributors
 ============
