@@ -477,7 +477,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                                 )
         beta = 1 - alpha
         
-        # Now let the ncube corner coordinates (0 or 1) select alpha or or 
+        # Now let the ncube corner coordinates (0 or 1) select alpha or 
         # beta coefficients. weight gets a total weighting value for each 
         # corner of the ncube (which matches the chunk size in the output).
         # Take the product along the vector axis to get weight, which 

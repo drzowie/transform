@@ -327,11 +327,12 @@ class Scale(Linear):
             'pre': pre,    
             'post': post,  
             'matrix' : m,  
-            'matinv' : m1, 
+            'matinv' : m1,
+            'scale': scale
             }
     
     def __str__(self):
-        self.strtmp = "Linear/Scale"
+        self._strtmp = f"Linear/Scale ({self.params['scale']})"
         return super().__str__()
     
 class Rotation(Linear):
@@ -405,7 +406,7 @@ class Rotation(Linear):
     def __init__(self,                      
                  rot=None,                  
                  *, post=None, pre=None,    
-                 euler=None,u='rad',       
+                 euler=None,unit='rad',       
                  iunit=None,ounit=None,     
                  itype=None,otype=None,     
                  ):
@@ -440,10 +441,23 @@ class Rotation(Linear):
         if any(fr_axes==to_axes):
             raise ValueError('Rotation: invalid axis-to-self rotation is not allowed')
         
-        if( u[0] == 'r' ):
-            pass
-        elif( u[0] == 'd' ):
-            angs = angs * math.pi/180
+        # Generate the angular coefficient using the astropy Quantity infrastructure
+        if(isinstance(unit,units.quantity.Quantity)):
+            ang_quantity = unit
+        elif(isinstance(unit,units.core.Unit)):
+            ang_quantity= 1.0 * unit
+        else:
+            try:
+                unit = getattr(units,unit)
+            except:
+                raise ValueError(f"Radial: couldn't convert '{unit}' to an astropy unit object")
+            ang_quantity = 1.0 * unit   
+        try:
+            ang_quantity = ang_quantity.to(units.radian)
+        except:
+            raise ValueError(f"Radial: '{unit}' doesn't appear to be an angular unit or quantity")
+        
+        angs = angs * ang_quantity.value
                     
         d_fr = np.maximum( np.amax(fr_axes), np.amax(to_axes) ) + 1
         if(d_offs is None):
@@ -454,7 +468,7 @@ class Rotation(Linear):
             d = d_offs
         
         # Assemble identity matrix
-        d = d.astype(int)
+        d = int(d)
         identity = np.zeros( [d,d] )
         for i in range(d):
             identity[i,i] = 1
@@ -613,13 +627,26 @@ class Radial(Transform):
             otype = ["Azimuth", "Radius"]
             r0_sq = None
 
-        angunit = 1.0*getattr(units, unit)
-        angunit = angunit.to(units.radian)  
+        # Generate the angular coefficient using the astropy Quantity infrastructure
+        if(isinstance(unit,units.quantity.Quantity)):
+            ang_quantity = unit
+        elif(isinstance(unit,units.core.Unit)):
+            ang_quantity= 1.0 * unit
+        else:
+            try:
+                unit = getattr(units,unit)
+            except:
+                raise ValueError(f"Radial: couldn't convert '{unit}' to an astropy unit object")
+            ang_quantity = 1.0 * unit   
+        try:
+            ang_quantity = ang_quantity.to(units.radian)
+        except:
+            raise ValueError(f"Radial: '{unit}' doesn't appear to be an angular unit or quantity")
         
         if ounit is None:
-            ounit = [angunit.unit, None]
+            ounit = [f"{ang_quantity.unit}", None]
         elif ounit[0] is None:
-            ounit[0] = angunit.unit
+            ounit[0] = f"{ang_quantity.unit}"
             
         ###Generate the object        
         self.idim = idim
@@ -631,12 +658,12 @@ class Radial(Transform):
         self.itype = itype
         self.otype = otype
         self.params = {
-            'origin'  : origin,
-            'r0'      : r0,
-            'r0_sq'   : r0_sq,
-            'angunit' : angunit,
-            'ccw'     : ccw,
-            'pos'     : pos_only,
+            'origin'   : origin,
+            'r0'       : r0,
+            'r0_sq'    : r0_sq,
+            'ang_coeff': ang_quantity.value,
+            'ccw'      : ccw,
+            'pos'      : pos_only,
         }
 
 
@@ -649,9 +676,9 @@ class Radial(Transform):
             data = data - origin
         
         if( self.params['ccw'] ):
-            out[..., 0] = (np.arctan2( data[..., 1], data[..., 0])) / self.params['angunit']            
+            out[..., 0] = (np.arctan2( data[..., 1], data[..., 0])) / self.params['ang_coeff']            
         else:
-            out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0])) / self.params['angunit']
+            out[..., 0] = (np.arctan2(-data[..., 1], data[..., 0])) / self.params['ang_coeff']
         
         if(self.params['pos']):
             out[...,0] %= 2*np.pi
@@ -664,7 +691,7 @@ class Radial(Transform):
 
     def _reverse( self, data: np.ndarray ):
         
-        d0 = data[..., 0] * self.params['angunit']
+        d0 = data[..., 0] * self.params['ang_coeff']
         
         out = np.ndarray(data.shape)
         out[...,0] = np.cos(d0)

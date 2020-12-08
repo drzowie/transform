@@ -105,7 +105,17 @@ def test_007_composition():
     c = t.Composition([b,a])
     assert(c.idim==1 and c.odim==1)
     
+def test_007b_composition_method():
+    a = t.PlusOne_()
+    b = a.inverse()
+    c = a.composition(b)
+    assert(f"{c}" == "Transform( ( (_PlusOne) o (Inverse _PlusOne) ) )")
+
+    d = a.composition([b])
+    assert(f"{d}" == "Transform( ( (_PlusOne) o (Inverse _PlusOne) ) )")
     
+    e = a.composition([b,b])
+    assert(f"{e}" == "Transform( ( (_PlusOne) o (Inverse _PlusOne) o (Inverse _PlusOne) ) )")
     
 
 def test_008_wrap():

@@ -136,7 +136,7 @@ def test_003_Rotation():
     assert np.all(a.params['matrix']== np.array([[1,0],[0,1]]))
     
     # Test direction of implicit 2D rotation: matrix
-    a = t.Rotation( 90, u='deg' )
+    a = t.Rotation( 90, unit='deg' )
     assert np.all( np.isclose( a.params['matrix'],          
                                np.array( [[0,-1], [1,0]] ), 
                                atol=1e-15,
@@ -161,14 +161,14 @@ def test_003_Rotation():
                                   ) )
     
     # Test rotation *from* Y *to* X (reverse sense from standard)  
-    a = t.Rotation([1,0,90],u='deg')
+    a = t.Rotation([1,0,90],unit='deg')
     assert np.all( np.isclose( a.params['matrix'],           
                                np.array( [[0,1],[-1,0]] ),   
                                atol=1e-15,
                                    ) )
     
     # Test rotation order
-    a = t.Rotation([[1,2,90],[0,1,90]],u='deg')
+    a = t.Rotation([[1,2,90],[0,1,90]],unit='deg')
     assert a.idim==3
     d0 = np.array( [[1,0,0],[0,1,0],[0,0,1]] )
     d1 = a.apply(d0)
@@ -176,8 +176,8 @@ def test_003_Rotation():
     assert np.all( np.isclose( d1, d1a, atol=1e-15 ) )
     
     # Test Euler angles
-    a = t.Rotation([[0,1,90],[1,2,90]],u='deg')
-    b = t.Rotation(euler= np.array( [90,0,90] ), u='deg')
+    a = t.Rotation([[0,1,90],[1,2,90]],unit='deg')
+    b = t.Rotation(euler= np.array( [90,0,90] ), unit='deg')
     d1a = a.apply(d0)
     d1b = b.apply(d0)
     d1c = np.array([[0,1,0],[0,0,1],[1,0,0]])

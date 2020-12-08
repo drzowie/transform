@@ -1,20 +1,3 @@
 v0.0.1, 29-Oct-2020 -- initial setup
- 31-Oct-2020 -- implement Linear; implement tests
-  1-Nov-2020 -- implement Scale; migrate pre/post parsing to a sub-function
-  2-Nov-2020 --
-  	     - implement Wrap;
-	     - fix docs;
-	     - make Identity idempotent
-	     - add PlusOne_ (non-idempotent test transform)
-	     - add ArrayIndex (idempotent Transform)
-	     - fix Composition to accept a list of Transforms
-	     - fix Composition to serialize compositions of compositions
-	     - tests for everyone!!
- 12-Nov-2020 (CED) --
- 	     - Add helpers.py and tests
-	       - apply_boundary: implements boundary conditions
-	       - sampleND: implements PDL range() using python "advanced indexing"
-	       - interpND: implements general-purpose ND interpolation
-	       	 - Currently implemented:  sample, linear, cubic
-		   - TODO: Fourier
-		   
+ (Initial development captured in git log)
+ 

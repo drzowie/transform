@@ -302,11 +302,39 @@ class Transform:
         ndarray
             The transformed vector data are returned as a NumPy ndarray.
         '''
-        return self.apply(data,invert=not(invert))    
+        return self.apply(data,invert=not(invert))   
+    
+    
+    def composition(self, target=None):
+        '''
+        composition - generate the composition of this Transform with another
+        
+        The compose method is syntactic sugar for Composition, which is a 
+        subclass of Transform. It is functionally equivalent to the 
+        constructor Composition([this, that, ...])
+        
+        Parameters
+        ----------
+        target : Transform or list of Transforms
+
+        Returns
+        -------
+        None.
+
+        '''
+        
+        if( isinstance(target, list) or isinstance(target, tuple)):
+            lst = list(target)
+            lst.insert(0,self)
+            return Composition(lst)
+        else:
+            return Composition([self,target])
+        
     
     def inverse(self):
         '''
         inverse - generate the functional inverse of a Transform
+        
         For most Transform objects, <obj>.inverse() is functionally 
         equivalent to transform.Inverse(<obj>).  But the method is
         overloaded in the Inverse subclass, to produce a cleaner
@@ -737,15 +765,12 @@ class Transform:
         Returns
         -------
         
-        The resampled data.  If the input data are an object with (data,header)
-        or (data,wcs) attributes, the returned object is a copy with the data 
-        and header modified.  Likewide, if the input data are a dictionary with
-        those fields, a copy of the dictionary is returned with the new data
-        and header.  If the data are a single NumPy array then a dictionary
-        is returned, containing the resampled data as 'data' and a FITS
-        header mapping pixel coordinates to transform output coordinates
-        from the original data.  In that last case, the implicit pixel coordinate
-        system is used as input to the transform.
+        The resampled data.  During the operation, the data are wrapped in at
+        Transform DataWrapper object; and on export they are exported.  In 
+        common use cases, this returns the data and header in a compatible form
+        to the input.  The return value is a combination of a NumPy array
+        (the data) and a FITS header (the header).  These can come back as an
+        object, a tuple, or a dictionary depending on the form of the input data.
         '''
         
         # Regularize the input data
@@ -1094,7 +1119,7 @@ class DataWrapper():
 #######################################################################
 #######################################################################
 #    
-# Core subclasse of Transform
+# Core subclasses of Transform
 #   - Identity     - demo and/or test class
 #   - Inverse      - inverse of an arbitrary Transform
 #   - Composition  - composition of two or more transformst
@@ -1469,9 +1494,9 @@ class WCS(Transform):
         self.idim = wcs_obj.wcs.naxis + 0
         self.odim = wcs_obj.wcs.naxis + 0
         self.iunit = iunit
-        self.ounit = list( map( lambda un: f"{un}", wcs_obj.wcs.cunit) )
+        self.ounit = [ f"{a}" for a in wcs_obj.wcs.cunit ]
         self.itype = itype
-        self.otype = list( map( lambda ty: f"{ty}", wcs_obj.wcs.ctype) )
+        self.otype = [ f"{a}" for a in wcs_obj.wcs.ctype ]
         self.params = {
             'wcs': wcs_obj
         }
