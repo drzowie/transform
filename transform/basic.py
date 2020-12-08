@@ -327,11 +327,12 @@ class Scale(Linear):
             'pre': pre,    
             'post': post,  
             'matrix' : m,  
-            'matinv' : m1, 
+            'matinv' : m1,
+            'scale': scale
             }
     
     def __str__(self):
-        self.strtmp = "Linear/Scale"
+        self._strtmp = f"Linear/Scale ({self.params['scale']})"
         return super().__str__()
     
 class Rotation(Linear):
@@ -405,7 +406,7 @@ class Rotation(Linear):
     def __init__(self,                      
                  rot=None,                  
                  *, post=None, pre=None,    
-                 euler=None,u='rad',       
+                 euler=None,unit='rad',       
                  iunit=None,ounit=None,     
                  itype=None,otype=None,     
                  ):
@@ -440,10 +441,23 @@ class Rotation(Linear):
         if any(fr_axes==to_axes):
             raise ValueError('Rotation: invalid axis-to-self rotation is not allowed')
         
-        if( u[0] == 'r' ):
-            pass
-        elif( u[0] == 'd' ):
-            angs = angs * math.pi/180
+        # Generate the angular coefficient using the astropy Quantity infrastructure
+        if(isinstance(unit,units.quantity.Quantity)):
+            ang_quantity = unit
+        elif(isinstance(unit,units.core.Unit)):
+            ang_quantity= 1.0 * unit
+        else:
+            try:
+                unit = getattr(units,unit)
+            except:
+                raise ValueError(f"Radial: couldn't convert '{unit}' to an astropy unit object")
+            ang_quantity = 1.0 * unit   
+        try:
+            ang_quantity = ang_quantity.to(units.radian)
+        except:
+            raise ValueError(f"Radial: '{unit}' doesn't appear to be an angular unit or quantity")
+        
+        angs = angs * ang_quantity.value
                     
         d_fr = np.maximum( np.amax(fr_axes), np.amax(to_axes) ) + 1
         if(d_offs is None):
