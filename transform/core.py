@@ -807,7 +807,8 @@ class Transform:
                 else:
                     shape = out_template.data.shape
             else:
-                shape = out_template.wcs.pixel_shape
+                # shape is (...,Y,X); wcs pixel_shape is (X,Y,...).
+                shape = list(reversed(out_template.wcs.pixel_shape))
 
         
         # Figure if autoscaling is necessary and, if it is, then do it by 
