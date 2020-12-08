@@ -302,8 +302,34 @@ class Transform:
         ndarray
             The transformed vector data are returned as a NumPy ndarray.
         '''
-        return self.apply(data,invert=not(invert))    
+        return self.apply(data,invert=not(invert))   
     
+    
+    def composition(self, target=None):
+        '''
+        composition - generate the composition of this Transform with another
+        
+        The compose method is syntactic sugar for Composition, which is a 
+        subclass of Transform. It is functionally equivalent to the 
+        constructor Composition([this, that, ...])
+        
+        Parameters
+        ----------
+        target : Transform or list of Transforms
+
+        Returns
+        -------
+        None.
+
+        '''
+        
+        if( isinstance(target, list) or isinstance(target, tuple)):
+            lst = list(target)
+            lst.insert(0,self)
+            return Composition(lst)
+        else:
+            return Composition([self,target])
+        
     
     def inverse(self):
         '''
