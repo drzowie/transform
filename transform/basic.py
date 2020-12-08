@@ -468,7 +468,7 @@ class Rotation(Linear):
             d = d_offs
         
         # Assemble identity matrix
-        d = d.astype(int)
+        d = int(d)
         identity = np.zeros( [d,d] )
         for i in range(d):
             identity[i,i] = 1
