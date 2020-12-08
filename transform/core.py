@@ -850,7 +850,7 @@ class Transform:
                     # grid into original science coordinates to make isamp
                     n = 11
                     isamp = np.mgrid[ [ range(n) for i in range(idim) ] ].T / (n-1.0)
-                    isamp = isamp * shape
+                    isamp = isamp * data.data.shape
                     isamp = isamp - 0.5
                     isamp = WCS(data).apply(isamp)
 
@@ -870,6 +870,7 @@ class Transform:
             # those present in odim)
             assert(len(shape) == output_range.shape[0])
 
+            print(f"output range is {output_range}")
             # Now we have an output_range, either from a parameter or from autoscaling.
             # Generate a WCS object and stuff it into the out_template.                  
             otwcs = astropy.wcs.WCS(naxis=len(shape))
@@ -996,7 +997,7 @@ class DataWrapper():
                   hasattr(this,'header') and 
                   this.header is not None ):
                 try:
-                    if( this.header['SIMPLE'] and this.header['NAXIS'] ):
+                    if( ('SIMPLE' in this.header and 'NAXIS' in this.header) or ('WCSAXES' in this.header) ):
                         header = this.header
                     else:
                         raise ValueError("DataWrapper: 'header' attribute must have a FITS header in it")
@@ -1023,7 +1024,7 @@ class DataWrapper():
                     
                 if (header is None) and ('header' in this):
                     try:
-                        if(this['header']['SIMPLE'] and this['header']['NAXIS']):
+                        if(  ('SIMPLE' in this['header'] and 'NAXIS' in this['header']) or ('WCSAXES' in this['header']) ):
                             header = this['header']
                         elif(this['header'] is not None): 
                             raise ValueError("DataWrapper: 'header' dict entry must have a FITS header in it.")
