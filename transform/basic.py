@@ -719,7 +719,7 @@ class Radial(Transform):
 
 class Spherical(Transform):
     '''
-    transform.Spherical - Convert Cartesian to spherical coordinates.  
+    transform.Spherical - Convert Cartesian to spherical coordinates / radians.  
     (3-D; with inverse)
 
     Convert 3-D Cartesian to spherical (theta, phi, r) coordinates.  Theta
@@ -777,7 +777,7 @@ class Spherical(Transform):
             raise ValueError(f"Spherical: '{unit}' doesn't appear to be an angular unit or quantity")
 
         if ounit is None:
-            ounit = [f"{ang_quantity.unit}", None]
+            ounit = [f"{ang_quantity.unit}",f"{ang_quantity.unit}", None]
         elif ounit[0] is None:
             ounit[0] = f"{ang_quantity.unit}"
         elif ounit[1] is None:

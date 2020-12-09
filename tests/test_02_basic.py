@@ -320,6 +320,12 @@ def test_008_Spherical():
     tpr1 = ats1.apply(xyz1_i)  
     #rotate theta by pi
     tpr1 = tpr1 + np.array([np.pi,0.0,0.0])
-    #invert transform, 
+    #invert transform
     xyz1_o = ats1.invert(tpr1)  
+    outunit = ['rad', 'rad', None]
     assert(  np.allclose(xyz1_o,np.array([0.0, -2.0, 4.]), atol=1e-2))
+    assert all([a == b for a, b in zip(ats1.ounit, outunit)])
+
+    ats2 = t.Spherical(unit='degree')
+    tpr2 = ats2.apply(xyz1_i)
+    assert all([a == b for a, b in zip(ats2.ounit, outunit)])
