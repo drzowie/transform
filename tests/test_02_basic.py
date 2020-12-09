@@ -287,13 +287,6 @@ def test_008_Spherical():
     # Start with a transform with origin at (130,130,130), and
     # test inversion.  
 
-    #First vector is (0,1):  radius 1, angle 0.
-    # It should direct to (131,130).  Second vector is (2,3): 
-    # radius 3, angle 2 radians (i.e. 114.6 degrees).  
-    # Given that Radial works in the *clockwise* direction by default
-    # (opposite of mathematical standard) this should result in
-    # an offset left and down.
-
     x = np.arange(27.).reshape(3,3,3)
     a = t.Spherical(origin=[130,130,130])
     d1 = a.apply(x)  
