@@ -719,7 +719,7 @@ class Radial(Transform):
 
 class Spherical(Transform):
     '''
-    transform.Spherical - Convert Cartesian to spherical coordinates.  
+    transform.Spherical - Convert Cartesian to spherical coordinates / radians.  
     (3-D; with inverse)
 
     Convert 3-D Cartesian to spherical (theta, phi, r) coordinates.  Theta
@@ -777,7 +777,7 @@ class Spherical(Transform):
             raise ValueError(f"Spherical: '{unit}' doesn't appear to be an angular unit or quantity")
 
         if ounit is None:
-            ounit = [f"{ang_quantity.unit}", None]
+            ounit = [f"{ang_quantity.unit}",f"{ang_quantity.unit}", None]
         elif ounit[0] is None:
             ounit[0] = f"{ang_quantity.unit}"
         elif ounit[1] is None:
@@ -842,3 +842,178 @@ class Spherical(Transform):
             self._strtmp = 'Spherical'
         return super().__str__()    
 
+
+class Quadpin(Transform):
+    '''
+    transform.Quadpin - Quadratic pincushion scaling (n-d; with inverse)
+    
+    Quadratic scaling emulates pincushion in a cylindrical optical system:
+    A separate quadratic scaling is applied to each axis.  You can apply
+    separate distortion along any of the principal axes.  If you want
+    different axes, compose with Linear to rotate them to the correct angle.  
+    The scaling options may be scalars or vectors; if they are scalars then 
+    the expansion is isotropic.
+
+    The formula for the expansion is:
+
+        f(a) = ( <a'> + <strength> * <a'>^2/<L_0> ) / (abs(<strength>) + 1)
+
+    where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
+    a fundamental length scale. Negative values of <strength> result in a 
+    pincushion type contraction.
+
+    Note that, because quadratic scaling does not have a strict inverse for
+    coordinate systems that cross the origin, x * np.abs(x) is used rather than 
+    x**2, which adequately produces pincushion and barrel distortion.
+
+     but means 
+    that t_quadratic does not behave exactly like t_cubic with a null cubic strength coefficient.
+
+    Parameters
+    ----------
+        
+    origin :  numpy.ndarray (optional; default = np.array([0,0]))
+        This is the origin of the pincushion. Pass in a np.array. 
+
+    length : float (optional; default = 1)
+        The fundamental scale of the transformation -- the radius that remains
+        unchanged.
+
+    strength : float (optional; default = 0.1)
+        The relative strength of the pincushion.
+
+    dim : int (optional; positional or keyword)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
+
+
+    Notes
+    -----
+
+    due to the use of x * np.abs(x) instead of x**2, t_quadratic does not behave 
+    exactly like t_cubic with a null cubic strength coefficient.
+
+    '''
+
+    def __init__(self, *,
+                 iunit = None, 
+                 ounit  = None, 
+                 itype = None, 
+                 otype  = None,
+                 idim  = 0, 
+                 odim = 0,
+                 origin = 0,
+                 length = 1,
+                 strength = 0.1,
+                 dim = None
+                 ):
+
+        ### Finally - if dim, this becomes idim and odim
+        if ( dim != None ):
+            idim = dim
+            odim = dim
+
+        self.idim       = idim
+        self.odim       = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit      = iunit
+        self.ounit      = ounit
+        self.itype      = itype
+        self.otype      = otype
+        self.params = {
+            'origin'  : origin,
+            'length' : length,
+            'strength': strength,
+            'dim'     : dim
+            }
+
+
+    def _forward( self, data: np.ndarray ):
+
+        data = data.copy()
+
+        if((self.idim==0) and (self.odim==0)):
+            self.idim, self.odim = data.shape
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+        dim = self.params['dim']
+
+        if( dim != None ):
+            out = data[..., :dim].copy()
+        else:
+            out = data.copy()
+
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                out = out - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
+
+        if( dim != None ):
+            out = data[..., :dim].copy()
+
+        out = out + strength * (out * np.abs(out)) / length
+        out = out / ( np.abs(strength)+1 )
+
+        if not np.all((origin == 0)):
+            out = out + origin
+        
+        if( dim != None ):
+            data[..., :dim] = out
+        else:
+            data = out
+
+        return data
+
+
+    def _reverse( self, data: np.ndarray ):
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+        dim = self.params['dim']
+
+        data = data.copy()
+
+        if((self.idim==0) and (self.odim==0)):
+            self.idim, self.odim = data.shape
+
+        if( dim != None ):
+            out = data[..., :dim].copy()
+        else:
+            out = data.copy()
+
+        Origindata = out.copy()
+
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                Origindata = out - origin
+            except:
+                raise ValueError("Quadpin : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
+
+        out = -1.0 + np.sqrt( 1.0 + 4.0 * strength / length * np.abs(Origindata) * (1.0 + np.abs(strength)))
+        out = out * length / ( 2.0 * strength ) 
+        out = out * (1.0 - 2.0 * (data < origin) );
+            
+        if not np.all((origin == 0)):
+            try:
+                out = out + origin
+            except:
+                raise ValueError("Quadpin : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
+
+        if( dim != None ):
+            data[..., :dim] = out
+        else:
+            data = out
+
+        return data
+
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Quadratic Pincushion'
+        return super().__str__()
