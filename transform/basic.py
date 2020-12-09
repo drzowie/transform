@@ -792,7 +792,6 @@ class Spherical(Transform):
             'angunit' : angunit 
             }
 
-
     def _forward( self, data: np.ndarray ):
 
         out = data.copy()
@@ -816,9 +815,9 @@ class Spherical(Transform):
         
     def _reverse( self, data: np.ndarray ):
 
-        theta = data[..., 0].copy()# * self.params['angunit']
-        phi = data[..., 1].copy()# * self.params['angunit']
-        r = data[..., 2].copy()# * self.params['angunit']
+        theta = data[..., 0].copy() # * self.params['angunit']
+        phi = data[..., 1].copy()   # * self.params['angunit']
+        r = data[..., 2].copy()     # * self.params['angunit']
 
         out = np.ndarray(data.shape)
 
@@ -981,6 +980,7 @@ class QuadPin(Transform):
             self._strtmp = 'Poly/Quadratic Pincushion'
         return super().__str__()  
 
+
 class CubicPin(Transform):
     '''
     transform.Cubic scaling - cubic pincushion (n-d; with inverse)
@@ -1056,7 +1056,6 @@ class CubicPin(Transform):
             'strength' : strength,
             'dim'      : dim
             }
-
 
 
     def _forward( self, data: np.ndarray ):
@@ -1147,19 +1146,7 @@ class CubicPin(Transform):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-class Poly2(Transform):
+class Poly(Transform):
 
     '''
     transform.Poly2 scaling - Generic forward polynomial scaling using 
@@ -1286,7 +1273,7 @@ class Poly2(Transform):
         return super().__str__()
 
 
-class Poly3(Transform):
+class Poly2(Transform):
 
     '''
     transform.Poly3 scaling - Generic forward polynomial scaling using 
@@ -1414,11 +1401,11 @@ class Poly3(Transform):
 
 
 
-class QuarticPin(Poly2):
+class QuarticPin(Poly):
     '''
     Transform.Quartic scaling - pincushion (n-d; with inverse)
 
-    Transform.Quartic is a subclass of the Poly2(nomial) class with polynomial
+    Transform.Quartic is a subclass of the Poly(nomial) class with polynomial
     of degree 4 preselected.
 
     You can apply separate distortion along any of the principal axes.  If
@@ -1491,7 +1478,7 @@ class QuarticPin(Poly2):
         
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
-            self._strtmp = 'Poly2/Quartic'
+            self._strtmp = 'Poly/Quartic'
         return super().__str__()
 
 
