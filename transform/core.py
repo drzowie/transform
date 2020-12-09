@@ -1101,12 +1101,15 @@ class DataWrapper():
         elif( isinstance(self.source_object,astropy.io.fits.hdu.image.PrimaryHDU) ):
             Out = copy.copy(self.source_object)
             Out.data = self.data
-            for key in self.source_object.header.keys():
+            for key in self.header.keys():
                 # Work around problematic WCS implementation that preserves but breaks
-                # commentary cardsets
-                if(key=='HISTORY' or key=='COMMENT' or key==''):
+                # commentary cardsets; and skip copying CD or PC matrices (or CDELT
+                # fields)
+                if(key=='HISTORY' or key=='COMMENT' or key=='' or
+                   key[0:1]=='CD' or key[0:1]=='PC'
+                   ):
                     continue
-                Out.header[key] = self.source_object.header[key]
+                Out.header.set(key, self.header[key])
             return Out
         elif( isinstance(self.source_object,dict) ):
             Out = { 'data':self.data, 'header':self.header, 'wcs':self.wcs }
