@@ -871,7 +871,6 @@ class Transform:
             # those present in odim)
             assert(len(shape) == output_range.shape[0])
 
-            print(f"output range is {output_range}")
             # Now we have an output_range, either from a parameter or from autoscaling.
             # Generate a WCS object and stuff it into the out_template.                  
             otwcs = astropy.wcs.WCS(naxis=len(shape))
