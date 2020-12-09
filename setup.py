@@ -22,13 +22,16 @@ VERSION = '0.0.1'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'pytest',
-    'numpy',
-    'astropy',
+    'pytest',     # testing
+    'numpy',      # basic numerics
+    'astropy',    # FITS handling; WCS object
 ]
 
 # What packages are optional?
 EXTRAS = {
+        'sunpy':    'sunpy',      # Required to be able to export SunPy objects
+        'plotting': 'matplotlib',
+        'docs':     'jupyter',    # to read the ipynb doc file
 }
 
 # The rest you shouldn't have to touch too much :)

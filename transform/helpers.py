@@ -15,9 +15,9 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
     '''
     apply_boundary - apply boundary conditions to a vector or collection
     
-    apply_boundary accepts input vector(s) and applied boundary conditions
-    on a suitably-dimensioned rectangular volume.  It can process generic
-    floating-point vectors but by default it converts its input to int,
+    apply_boundary accepts input vector(s) and boundary conditions to apply
+    on a suitably-dimensioned N-rectangular volume.  It can process generic
+    floating-point vectors but by default it rounds its input to int,
     for use in indexing arrays.
 
     Parameters
@@ -27,7 +27,10 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         
     size : list or array
         List containing the allowable size of each dimension in the index.  The
-        allowable dimension is on the interval [0,size-1]).
+        allowable dimension is on the interval [0,size) (i.e. not including
+        the corresponding value in size).  Note that size is in the same 
+        (X,Y,...) order as the vector elements.  In this respect it is not the
+        same as an array shape, which would be in the opposite order.
         
     bound : string or list of strings (default 'f')
         The boundary type to apply. Only the first character is checked.
@@ -35,18 +38,18 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
                         
             'f' - forbid boundary violations
             
-            't' - truncate the array at the boundary.  Values outside are
-                replaced with -1.
+            't' - truncate at the boundary.  Index values outside the range 
+                are replaced with -1.
                 
-            'e' - extend the array at the boundary.  Values outside are 
-                replaced with the nearest value in the source array.
+            'e' - extend the array at the boundary.  Index values outside the
+                range are replaced with the nearest in-range value.
                 
-            'p' - periodic boundary conditions apply. Indices are modded with
-                the size of the corresponding axis in the source array.
+            'p' - periodic boundary conditions. Indices are modded with the 
+                corresponding size.
                 
             'm' - mirror boundary conditions apply.  Indices reflect off each
-                boundary of the data, counting backward to the opposite 
-                boundary (where they reflect again).
+                boundary, counting backward to the opposite boundary (where 
+                they reflect again).
                 
     rint : Boolean (default True)
         Causes the vectors to be rounded and reduced to ints, for use in 
@@ -56,13 +59,16 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
     -------
     The index, with boundary conditions applied 
     '''
-    try:
-        shape = vec.shape
-    except:
+    if( (not isinstance(vec, np.ndarray)) ):
         raise ValueError("apply_boundary requires a np.ndarray")
         
-    # I'm sure there's a better way to do this - explicitly broadcast
-    # size if it's a scalar or a 1-element list
+    # Scalars are interpreted as a single 1-vector
+    if( len(vec.shape) == 0 ):
+        vec = np.expand_dims(vec,0)
+        
+    shape = vec.shape
+    
+    # Explicitly broadcast size if it's a scalar or a 1-element list
     if( not isinstance(size,(tuple,list,np.ndarray) )):
         size = [ size for i in range(shape[-1])]
     elif(len(size)==1):
@@ -73,7 +79,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         raise ValueError("apply_boundary: size vector must match vec dims")
     
     # Now do the same thing with the boundary string(s)
-    if( not isinstance(bound, list) ):
+    if( not isinstance(bound, (tuple,list) ) ):
         bound = [ bound for i in range(shape[-1])]
     elif(len(bound)==1):
         bound = [ bound[0] for i in range(shape[-1])]
@@ -94,67 +100,74 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         b = bound[ii][0]
         s = size[ii]
     
-        ## forbid
+        ## forbid conditions - throw an error on violation
         if    b=='f':
             if not  (np.all((vec[...,ii] >= 0) * (vec[...,ii] < s))):
-                raise ValueError("apply_boundary: boundary violation with 'forbid' condition")
-        ## truncate      
+                raise ValueError(
+                  "apply_boundary: boundary violation with 'forbid' condition")
+        ## truncate - set violating values to -1    
         elif  b=='t': 
             # Replace values outside the boundary with -1
             np.place(vec[...,ii], (vec[...,ii]<0)+(vec[...,ii]>=s), -1)
-        ## extend 
+        ## extend - clip the vectors
         elif  b=='e':
             # Replace values outside the boundary with the nearest boundary
+            # Use explicit place() because clip() doesn't do the right thing
+            # at the upper boundary.
             np.place(vec[...,ii], (vec[...,ii]<0), 0)
             np.place(vec[...,ii], (vec[...,ii]>= s), s-1)
-        ## periodic
+        ## periodic - modulo works fine
         elif  b=='p':
             # modulo
             vec[...,ii] = vec[...,ii] % s
-        ## mirror
+        ## mirror - modulo with reversal in every other instance
         elif  b=='m': 
             # modulo at twice the size
             vec[...,ii] = vec[...,ii] % (2*s)
             # enlarged modulo runs backwards
             np.putmask(vec[...,ii], vec[...,ii]>=s, (2*s-1)-vec[...,ii])
         else:
-            raise ValueError("apply_boundary: boundaries are 'f', 't', 'e', 'p', or 'm'.")
+            raise ValueError(
+                "apply_boundary: boundaries are 'f', 't', 'e', 'p', or 'm'.")
         
     return vec
             
 
 
-def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=False):
+def sampleND(source, /, 
+             index=None, 
+             chunk=None, 
+             bound='f', 
+             fillvalue=0, 
+             strict=False):
     '''
     sampleND - better N-dimensional lookup, with switchable boundaries.
     
     sampleND looks up single values or neighborhoods in a source array.  You
-    supply source data in reversed dimension order (...,Y,X) and index data
-    as a collection of vectors pointing into the source.  The index is 
-    collapsed one dimension by interpolation into source:  the contents along
-    the final dimension axis are a vector indexing as [X,Y,...] a location
+    supply source data in the usual reversed dimension order (...,Y,X) and 
+    index data as a collection of vectors pointing into the source, with the
+    vector components ordered as (X,Y,...).  The index is collapsed one 
+    dimension by interpolation into source:  the contents along the final 
+    dimension axis are a vector, indexing as [X,Y,...] a location
     in the source;  other prior axes in the index are broadcast.
     
-    Each vector in index is replaced with data from source, using the nearest-
-    neighbor method (integer rounding of the vector).  In the default case,
-    a single value is returned.  Optionally you can use the "chunk" keyword
-    to return a chunk of values from the source array, at each index location.
-    If present, "chunk" must be either a scalar or an array matching the 
-    size of the index parameter.  Each element gives the size of a subarray
+    In the returned output array, each vector in the index is replaced with 
+    data from the source array, using the nearest-neighbor method (integer 
+    rounding of the vector).  In the default case, a single value is returned
+    at each location (zero-dimensional).  
+    
+    Optionally you can use the "chunk" 
+    keyword to return a chunk of values from the source array, at each index 
+    location. If present, "chunk" must be either a scalar or an array matching
+    the size of the index parameter.  Each element gives the size of a subarray
     of values to be extracted from each indexed location in source.  Zero 
     values cause the corresponding dimension to be omitted.
     
     The current implementation uses NumPy's explicit array indexing scheme.  
     It assembles a direct, boundary-conditioned index into the source array
     for every point to be output (including chunks if called for), then 
-    carries out the indexing operation and subsequently makes another pass to
-    fix up truncation boundary conditions if necessary.  It is undoubtedly 
-    quite slow compared to a Cython approach, but allows sampling and ranging 
-    just like its Perl/PDL predecessor, range().
-    
-    As with most general-purpose code, it seems to spend most of its lines 
-    parsing and conditioning the input.  The actual meat of the algorithm 
-    is quite simple and short.
+    carries out the indexing operation  -- and subsequently makes another pass 
+    to fix up truncation boundary conditions if necessary.  
     
     Parameters
     ----------
@@ -167,7 +180,9 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
         axis runs across dimensionality of the index vector into source. If
         the 'strict' flag is set (the default case) then the size of the
         final axis must match the number of dimensions in source.  If index
-        has additional dimensions they are broadcast.
+        has additional dimensions before the vector axis, the operation
+        is broadcast across the earlier axes.  The result is that index
+        is collapsed one dimension via lookup into the source.
         
     chunk : list, array, or None
         Chunk specifies the size of additional axes to be appended to the end 
@@ -176,7 +191,11 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
         neighborhood in the vicinity of each sampled point.  The chunk
         extends upward in index from the sample point, along each chunked
         axis. If one of the chunk dimensions is 0, the corresponding axis is
-        omitted from the output.
+        omitted from the output.  For example indexing a BxA array with 
+        an Nx2 "index" parameter and a "chunk" parameter of 3 yields an output
+        that is Nx3x3, with the 3x3 containing an extracted chunk of the 
+        "source" parameter, in (B-axis,A-axis) order, for each of the N 
+        2-vectors in the "index".
         
     bound : string or list (default 'forbid')
         This is either a string describing the boundary conditions to apply to 
@@ -191,7 +210,7 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
             'f' - forbid boundary violations
             
             't' - truncate the array at the boundary.  Values outside are
-                replaced with the fillvalue.
+                replaced with the fillvalue (default 0)
                 
             'e' - extend the array at the boundary.  Values outside are 
                 replaced with the nearest value in the source array.
@@ -202,6 +221,10 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
             'm' - mirror boundary conditions apply.  Indices reflect off each
                 boundary of the data, counting backward to the opposite 
                 boundary (where they reflect again).
+                
+    fillvalue : float (default 0)
+        This is a fill value used for points outside the source array, along 
+        axes with the "truncate" boundary condition.
         
     strict : Boolean (default False)
         The 'strict' parameter forces strict matching of index vector dimension
@@ -221,10 +244,14 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
         source = np.array(source)
     
     if( strict and  len(source.shape) != index.shape[-1] ):
-        raise ValueError("sampleND: source shape must match index size when strict flag is set")
+        raise ValueError(
+            "sampleND: source shape must match index size when "
+            "strict flag is set"
+            )
             
     if(fillvalue is None):
         fillvalue = np.array([0])
+        
     elif( not isinstance(fillvalue, np.ndarray)):
         fillvalue = np.array(fillvalue)
     
@@ -239,9 +266,9 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
         if( not isinstance(chunk,np.ndarray ) ):
             chunk = np.array(chunk)
             
-        if(len(chunk.shape)==0):
+        if( len(chunk.shape)==0 ):
             chunk = np.expand_dims( chunk, -1 )
-        elif(len(chunk.shape) > 1):
+        elif( len(chunk.shape) > 1 ):
             raise ValueError("sampleND: chunk must be a scalar or 1-D array")
         
         # Make sure the chunk size is an integer
@@ -252,18 +279,28 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
         if( any(chunk < 0) ):
             raise ValueError("sampleND: chunk size must be nonnegative")
         
-        # Broadcast the chunk shape to the size of the index vector, if it's a scalar
+        # Broadcast the chunk shape to the size of the index vector, if it's 
+        # a scalar. There's probably a better way than adding zeroes to it --
+        # but cost is microscopic.
         if(chunk.shape[0] == 1):
             chunk = chunk + np.zeros( index.shape[-1] )
             
         # Now extend the index along each requested size of the chunk, to 
         # return the requested chunk, starting at each indexed point.
+        # We walk through the chunk axes in reverse order since the chunk 
+        # is specified forward (X,Y,...) and shapes are backward (...,Y,X).
         for ii in range( chunk.shape[0]-1, -1, -1 ):
             ch = chunk[ii]
             if(ch>0):
                 # chunksize is greater than zero: insert the new dimension,
                 # and increment the appropriate index along that dimension
-                index = np.expand_dims( index, axis=-2 ) + np.zeros([int(ch), index.shape[-1]])
+                # we expand at -2 since that's the last axis before the index
+                # vector axis.  Then add more zeros to broadcast.
+                index = ( np.expand_dims( index, axis=-2 ) + 
+                          np.zeros([int(ch), index.shape[-1]])
+                        )
+                # Now add the offset index to the corresponding element 
+                # of the index vector, along the new chunk axis.  
                 index[...,ii] = index[...,ii] + np.mgrid[0:ch] 
     
     ## Convert to integer, and apply boundary conditions
@@ -291,7 +328,12 @@ def sampleND(source, /, index=None, chunk=None, bound='f', fillvalue=0, strict=F
     return retval
     
 
-def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=False):
+def interpND(source, /, 
+             index=None, 
+             method='n', 
+             bound='t', 
+             fillvalue=0, 
+             strict=False):
     '''
     interpND - a better N-dimensional interpolator, with switchable boundaries.
     
@@ -358,12 +400,13 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                 boundary of the data, counting backward to the opposite 
                 boundary (where they reflect again).
     
-    fillvalue : scalar (default 0)
+    fillvalue : float (default 0)
         This is the value used to fill elements that are outside the bounds of
         the source array, if the 'truncate' boundary condition is selected.
         
-    method : string (default 'sample')
-        This controls the interpolation method.  The character may be one of:
+    method : string (default 'nearest')
+        This controls the interpolation method.  The value may be a string,
+        but only the first character is checked. The character may be one of:
             
             'n' - nearest-value interpolate (sample) the array.
             
@@ -387,7 +430,7 @@ def interpND(source, /, index=None, method='n', bound='t', fillvalue=0, strict=F
                 at integer pixel offsets, so it reproduces the source data when
                 evaluated at pixel centers.
                 
-            'h' - Use Hanning window (overlapping sin^2) interpolation; the 
+            'h' - Use Hann window (overlapping sin^2) interpolation; the 
                 kernel is enumerated for 1 full pixel in all directions.  The
                 Hanning function produces smooth transitions between pixels, but
                 introduces ripple for smoothly varying curves.

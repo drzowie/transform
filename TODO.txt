@@ -9,6 +9,16 @@ Transforms to fix
 * Polar & tests
    - Check degrees implementation: not working quite right yet? (inverse/forward not in agreement?)
 
+Functionality to add
+--------------------
+* Propagate units through apply (think about this)
+* Vet and update FITS handling
+  - Solve weirdnesses with WCS overlay
+  - Add SunPy objects
+  - handle FITS objects better
+  - handle tuples
+* Add anti-aliasing to interpND (will require Cython)
+
 Transforms to implement
 -----------------------
 * Projective

@@ -1,3 +1,8 @@
-graft src
+include README.md
+recursive-include transform *.py
+recursive-include tests *.py
 include *.txt
+include *.rst
+include sample.fits
+include *.ipynb
 recursive-include docs *.txt
