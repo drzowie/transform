@@ -754,7 +754,8 @@ class Spherical(Transform):
                  otype  = None,
                  idim  = 3, 
                  odim = 3,
-                 origin = np.zeros(3)
+                 origin = np.zeros(3),
+                 unit = 'radian'
                 ):
 
         otype = ["Polar Angle", "Azimuth", "Radius"]
