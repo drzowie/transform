@@ -283,11 +283,10 @@ def test_007_Radial():
     assert(np.all(np.isclose(a,c,atol=1e-10)))
    
     
-    
-    
-    
-
 def test_008_Spherical():
+    # Start with a transform with origin at (130,130,130), and
+    # test inversion.  
+
     x = np.arange(27.).reshape(3,3,3)
     a = t.Spherical(origin=[130,130,130])
     d1 = a.apply(x)  
@@ -305,3 +304,22 @@ def test_008_Spherical():
     d4 = x
     assert(  np.allclose(d3,d4, atol=1e-2))
     
+    #set y to 0, rotate, transform [2,0,6] to [th,ph,r]
+    xyz_i = np.array([2.0, 0.0, 6.])
+    ats = t.Spherical()
+    tpr = ats.apply(xyz_i)  
+    #rotate phi by pi
+    tpr = tpr + np.array([0.0,np.pi,0])
+    #invert transform, 
+    xyz_o = ats.invert(tpr)  
+    assert(  np.allclose(xyz_i,-1*xyz_o, atol=1e-2))
+
+    #set x to 0, rotate, transform [0,2,4] to [th,ph,r]
+    xyz1_i = np.array([0.0, 2.0, 4.])
+    ats1 = t.Spherical()
+    tpr1 = ats1.apply(xyz1_i)  
+    #rotate theta by pi
+    tpr1 = tpr1 + np.array([np.pi,0.0,0.0])
+    #invert transform, 
+    xyz1_o = ats1.invert(tpr1)  
+    assert(  np.allclose(xyz1_o,np.array([0.0, -2.0, 4.]), atol=1e-2))
