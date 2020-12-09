@@ -723,11 +723,9 @@ class Spherical(Transform):
     (3-D; with inverse)
 
     Convert 3-D Cartesian to spherical (theta, phi, r) coordinates.  Theta
-    is longitude, centered on 0, and phi is latitude, also centered on 0.
-    Unless you specify Euler angles, the pole points in the +Z direction
-    and the prime meridian is in the +X direction.  The default is for
-    theta and phi to be in radians; you can select degrees if you want
-    them.
+    is longitude, centered on 0, and phi is latitude, also centered on 0. 
+    The default is for theta and phi to be in radians; you can select degrees 
+    if you want them.
 
     Just as the transform.Radial 2-D transform acts like a 3-D
     cylindrical transform by ignoring third and higher dimensions,
@@ -742,14 +740,13 @@ class Spherical(Transform):
     is set to np.array([0,0,0])
 
     unit: Unit [default 'rad'] This is the angular unit to be used for the 
-    azimuth. This option sets the angular unit to be used.  Acceptable values are
-    "degrees","radians".  Once genuine unit processing
-    comes online (a la Math::Units) any angular unit should be OK.
+    azimuth and the polar angle. Acceptable values are "degrees","radians". 
+
     '''
 
     def __init__(self, *,
-                 iunit = 'rad', 
-                 ounit  = 'rad', 
+                 iunit = None, 
+                 ounit  = None, 
                  itype = None, 
                  otype  = None,
                  idim  = 3, 
@@ -758,17 +755,33 @@ class Spherical(Transform):
                  unit = 'radian'
                 ):
 
+        if( not( isinstance( origin, np.ndarray ) ) ) :
+            origin = np.array([origin])
+
         otype = ["Polar Angle", "Azimuth", "Radius"]
 
-        angunit = 1.0*getattr(units, unit)
-        angunit = angunit.to(units.radian)  
+        # Generate the angular coefficient using the astropy Quantity infrastructure
+        if(isinstance(unit,units.quantity.Quantity)):
+            ang_quantity = unit
+        elif(isinstance(unit,units.core.Unit)):
+            ang_quantity= 1.0 * unit
+        else:
+            try:
+                unit = getattr(units,unit)
+            except:
+                raise ValueError(f"Spherical: couldn't convert '{unit}' to an astropy unit object")
+            ang_quantity = 1.0 * unit   
+        try:
+            ang_quantity = ang_quantity.to(units.radian)
+        except:
+            raise ValueError(f"Spherical: '{unit}' doesn't appear to be an angular unit or quantity")
 
         if ounit is None:
-            ounit = [angunit.unit, angunit.unit, None]
+            ounit = [f"{ang_quantity.unit}", None]
         elif ounit[0] is None:
-            ounit[0] = angunit.unit
+            ounit[0] = f"{ang_quantity.unit}"
         elif ounit[1] is None:
-            ounit[1] = angunit.unit
+            ounit[1] = f"{ang_quantity.unit}"
 
         ###Generate the object        
         self.idim = idim
@@ -781,13 +794,14 @@ class Spherical(Transform):
         self.otype = otype
         self.params = {
             'origin'  : origin,
-            'angunit' : angunit 
+            'ang_coeff': ang_quantity.value,
             }
 
 
     def _forward( self, data: np.ndarray ):
 
         out = data.copy()
+
         origin = self.params['origin'][0:3]
 
         if not np.all((origin == 0)):
@@ -801,26 +815,22 @@ class Spherical(Transform):
         out[..., 2] = (np.sqrt(d0*d0 + d1*d1 + d2*d2))
         out[..., 1] = (np.arcsin(d2 / out[..., 2]))
                        
-        out[..., 0:2] = out[..., 0:2] * self.params['angunit']
+        out[..., 0:2] = out[..., 0:2] * self.params['ang_coeff'] 
 
         return out
 
-        
     def _reverse( self, data: np.ndarray ):
 
-        theta = data[..., 0].copy()# * self.params['angunit']
-        phi = data[..., 1].copy()# * self.params['angunit']
-        r = data[..., 2].copy()# * self.params['angunit']
+        theta = data[..., 0].copy() * self.params['ang_coeff']
+        phi = data[..., 1].copy() * self.params['ang_coeff']
+        r = data[..., 2].copy()
 
         out = np.ndarray(data.shape)
-
-        ph = self.params['angunit'] * phi;
-        th = self.params['angunit'] * theta;
         
-        out[..., 2] = r * np.sin(ph) #z
-        out[..., 0] = r * np.cos(ph) #x
-        out[..., 1] = out[..., 0] * np.sin(th) #y
-        out[..., 0] = out[..., 0] * np.cos(th) #x
+        out[..., 2] = r * np.sin(phi) #z
+        out[..., 0] = r * np.cos(phi) #x
+        out[..., 1] = out[..., 0] * np.sin(theta) #y
+        out[..., 0] = out[..., 0] * np.cos(theta) #x
         
         origin = self.params['origin'][0:3]
         if not np.all((origin == 0)):
@@ -831,3 +841,4 @@ class Spherical(Transform):
         if(not hasattr(self,'_strtmp')):
             self._strtmp = 'Spherical'
         return super().__str__()    
+
