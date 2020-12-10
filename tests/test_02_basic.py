@@ -367,3 +367,38 @@ def test_009_Quadpin():
     assert(  np.allclose(d11,d12, atol=1e-2))
     d13 = a.invert(d12) 
     assert(  np.allclose(d13,d4, atol=1e-2))
+
+def test_010_Cubicpin():
+    x = np.arange(9.).reshape(3,3)
+    a = t.Cubicpin(strength=2)
+    d1 = a.apply(x)
+    d2 = np.array( [[    0,   0.6,   3.6],
+                    [ 11.4,  26.4,    51],
+                    [ 87.6, 138.6, 206.4]])
+    assert(  np.allclose(d1,d2, atol=1e-2))
+    d3 = a.invert(d1) 
+    d4 = np.array( [[         0, 0.79501675,  1.6595098],
+                    [ 2.5116355,  3.3596201,  4.2058325],
+                    [ 5.0511344,  5.8959087,  6.7403507]])
+    assert(  np.allclose(d3,d4, atol=1e-2))
+
+    a = t.Cubicpin(length=2.0)
+    d5 = a.apply(x)
+    d6 = x
+    assert(  np.allclose(d5,d6, atol=1e-2))
+    d7 = a.invert(d5)
+    d8 = np.empty((3,3))
+    d8[:] = np.NaN
+    assert(  np.allclose(d7,d8, atol=1e-2, equal_nan=True))
+
+    a = t.Cubicpin(idim=2)
+    d9 = a.apply(x)
+    d10 = x
+    assert(  np.allclose(d9,d10, atol=1e-2))
+    d11 = a.invert(d9)
+    d12 = x
+    #d12[:,:2] = np.NaN
+    d12[:] = np.NaN
+    assert(  np.allclose(d11,d12, atol=1e-2, equal_nan=True))
+    
+    

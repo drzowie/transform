@@ -856,7 +856,7 @@ class Quadpin(Transform):
 
     The formula for the expansion is:
 
-        f(a) = ( <a'> + <strength> * <a'>^2/<L_0> ) / (abs(<strength>) + 1)
+        f(a) = ( <a'> + <strength> * <a'>^2/<length> ) / (abs(<strength>) + 1)
 
     where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
     a fundamental length scale. Negative values of <strength> result in a 
@@ -951,10 +951,7 @@ class Quadpin(Transform):
                 origin = np.array([origin])
                 out = out - origin
             except:
-                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
-
-        if( dim != None ):
-            out = data[..., :dim].copy()
+                raise ValueError("Quadpin : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
 
         out = out + strength * (out * np.abs(out)) / length
         out = out / ( np.abs(strength)+1 )
@@ -1016,4 +1013,194 @@ class Quadpin(Transform):
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
             self._strtmp = 'Quadratic Pincushion'
+        return super().__str__()
+
+
+class Cubicpin(Transform):
+    '''
+    transform.Cubicpin scaling - cubic pincushion scaling (n-d; with inverse)
+
+    Cubic scaling is a generalization of Transform.Quadpin to a purely cubic 
+    expansion.  You can apply separate distortion along any of the principal 
+    axes.  If you want different axes, compose with Linear to rotate them to 
+    the correct angle.  The scaling options may be scalars or vectors; if they 
+    are scalars then the expansion is isotropic.
+
+    The formula for the expansion is:
+
+        f(a) = ( <a'> + <strength> * <a>^3/<length>^2 ) / (1 + abs(<strength>) + origin
+
+    where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
+    a fundamental length scale. Negative values of <strength> result in a 
+    pincushion type contraction.
+
+    That is a simple pincushion expansion/contraction that is fixed at a 
+    distance of length from the origin.
+
+    Because there is no quadratic term the result is always invertible with
+    one real root, removing the need for complex numbers or multivalued 
+    solutions.
+
+
+    Parameters
+    ----------
+        
+    origin :  numpy.ndarray (optional; default = np.array([0,0]))
+        This is the origin of the pincushion. Pass in a np.array. 
+
+    length : float (optional; default = 1)
+        The fundamental scale of the transformation -- the radius that remains
+        unchanged.  (default=1)
+
+    strength : float (optional; default = 0.0)
+        The relative strength of the pincushion.
+
+    dim : int (optional; positional or keyword)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
+
+    '''
+
+    def __init__(self, *,
+                 iunit = None, 
+                 ounit  = None, 
+                 itype = None, 
+                 otype  = None,
+                 idim  = 0, 
+                 odim = 0,
+                 origin = 0,
+                 length = 1,
+                 strength = 0.0,
+                 dim = None
+                 ):
+
+        ### Finally - if dim, this becomes idim and odim
+        if ( dim != None ):
+            idim = dim
+            odim = dim
+
+        ###Generate the object        
+        self.idim = idim
+        self.odim = odim
+        self.no_forward = False
+        self.no_reverse = False
+        self.iunit = iunit
+        self.ounit = ounit
+        self.itype = itype
+        self.otype = otype
+        self.params = {
+            'origin'   : origin,
+            'length'   : length,
+            'strength' : strength,
+            'dim'      : dim
+            }
+
+
+    def _forward( self, data: np.ndarray ):
+
+        data = data.copy()
+
+        if((self.idim == 0) and (self.odim ==0)):
+            self.idim, self.odim = data.shape
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+        dim = self.params['dim']
+
+        if( dim != None ):
+            out = data[..., :dim].copy()
+        else:
+            out = data.copy()
+
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                out = out - origin
+            except:
+                raise ValueError("Cubicpin : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
+
+        dl0 = out / length
+        out = out + strength * out * dl0 * dl0
+        out = out / ( (strength*strength)+1 )
+
+        if not np.all((origin == 0)):
+            out = out + origin
+
+        if( dim != None ):
+            data[..., :dim] = out
+        else:
+            data = out
+
+        return data
+
+
+    def _reverse( self, data: np.ndarray ):
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+        dim = self.params['dim']
+
+        data = data.copy()
+
+        if((self.idim==0) and (self.odim==0)):
+            self.idim, self.odim = data.shape
+
+        if( dim != None ):
+            out = data[..., :dim].copy()
+        else:
+            out = data.copy()
+
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                out = out - origin
+            except:
+                raise ValueError("Cubicpin : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
+        else:
+            out = out.copy()
+
+        out = out * (strength+1)
+        Avar = strength/length/length
+        Cvar = 1
+        Dvar = -out
+        Alphavar = 27 * Avar * Avar * Dvar;
+        Betavar = 3 * Avar * Cvar        
+        inner_root = np.sqrt( Alphavar * Alphavar + 4.0 * Betavar * Betavar * Betavar )
+            
+        try:
+            aVar2 = 0.5 * ( Alphavar - inner_root )
+            cuberootNegative = 1 - 2 * (aVar2<0);
+            cuberootNegative = cuberootNegative * (  abs(aVar2) ** (1/3) )
+            cuberoot = cuberootPositive
+        except: 
+            aVar2 = 0.5 * ( Alphavar + inner_root )
+            cuberootPositive = 1 - 2 * (aVar2<0);
+            cuberootPositive = cuberootPositive * (  abs(aVar2) ** (1/3) )
+            cuberoot = cuberootPositive
+        
+        cuberoot = cuberootPositive + cuberootNegative
+            
+        try:
+            out = (-1 / (3 * Avar)) * cuberoot
+        except ZeroDivisionError:
+            out = (-1 / (3 * np.nan)) * cuberoot
+            
+        if not np.all((origin == 0)):
+            try:
+                out = out + origin
+            except:
+                raise ValueError("Cubicpin : origin shape %s is not broadcastable with data shape %s" % (data.shape, origin.shape))
+
+        if( dim != None ):
+            data[..., :dim] = out
+        else:
+            data = out
+
+        return data
+
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Cubic Pincushion'
         return super().__str__()
