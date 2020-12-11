@@ -740,7 +740,7 @@ class Spherical(Transform):
     is set to np.array([0,0,0])
 
     unit: Unit [default 'rad'] This is the angular unit to be used for the 
-    azimuth and the polar angle. Acceptable values are "degrees","radians". 
+    longitude and latitude angles. Acceptable values are "degrees","radians". 
 
     '''
 
@@ -758,7 +758,7 @@ class Spherical(Transform):
         if( not( isinstance( origin, np.ndarray ) ) ) :
             origin = np.array([origin])
 
-        otype = ["Polar Angle", "Azimuth", "Radius"]
+        otype = ["Longitude", "Latitude", "Radius"]
 
         # Generate the angular coefficient using the astropy Quantity infrastructure
         if(isinstance(unit,units.quantity.Quantity)):
@@ -882,9 +882,10 @@ class Quadpin(Transform):
     strength : float (optional; default = 0.1)
         The relative strength of the pincushion.
 
-    dim : int (optional; positional or keyword)
+    dim : int (optional; positional or keyword; default = size of input)
         This is an optional dimension specifier in case you pass in a scalar
         and no other dimensionality hints.
+
 
 
     Notes
@@ -908,7 +909,6 @@ class Quadpin(Transform):
                  dim = None
                  ):
 
-        ### Finally - if dim, this becomes idim and odim
         if ( dim != None ):
             idim = dim
             odim = dim
@@ -1012,8 +1012,9 @@ class Quadpin(Transform):
 
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
-            self._strtmp = 'Quadratic Pincushion'
+            self._strtmp = 'Quadpin'
         return super().__str__()
+
 
 
 class Cubicpin(Transform):
@@ -1055,9 +1056,10 @@ class Cubicpin(Transform):
     strength : float (optional; default = 0.0)
         The relative strength of the pincushion.
 
-    dim : int (optional; positional or keyword)
+    dim : int (optional; positional or keyword; default = size of input)
         This is an optional dimension specifier in case you pass in a scalar
         and no other dimensionality hints.
+
 
     '''
 
@@ -1074,7 +1076,6 @@ class Cubicpin(Transform):
                  dim = None
                  ):
 
-        ### Finally - if dim, this becomes idim and odim
         if ( dim != None ):
             idim = dim
             odim = dim
@@ -1131,9 +1132,7 @@ class Cubicpin(Transform):
             data[..., :dim] = out
         else:
             data = out
-
         return data
-
 
     def _reverse( self, data: np.ndarray ):
 
@@ -1202,5 +1201,325 @@ class Cubicpin(Transform):
 
     def __str__(self):
         if(not hasattr(self,'_strtmp')):
-            self._strtmp = 'Cubic Pincushion'
+            self._strtmp = 'Cubicpin'
         return super().__str__()
+
+
+class Poly(Transform):
+
+    '''
+    transform.Poly scaling - Generic forward polynomial scaling using 
+    a pincusion formalism (n-d; with no inverse).
+
+    The Polynomial scaling is a generalization using both even and odd powers, 
+    and therefore inverse transforms are not possible. A generic Quadratic 
+    pincusion transform, with inverse, can be generated with the 
+    transform.QuadPin tranformation. A generic Cubic pincusion transform, with 
+    inverse, can be generated with the transform.CubicPin tranformation.
+
+    You can apply a separate distortion along any of the principal axes. If
+    you want different axes, use Transform.Linear to rotate them to the 
+    correct angle.  The scaling options may be scalars or vectors; if they 
+    are scalars then the expansion is isotropic.
+
+    Two polynomial expansions are included, and can be chosen with the 
+    denominator keyword, (0|1). The difference between the expansions are
+    the denominator strengths; <den>=0 uses a non varying (1 + <strength>) 
+    <den>=1 uses (1 + <strength>^(<degree>-1)).
+
+    The formula for expansion 0 is:
+
+    f(a) = ( <a'> 
+             + <a'>^2 * <strength>/<length> 
+             + <a'>^3 * <strength>/<length>^2 
+                     .... 
+             + <a'>^<degree> * <strength>/<length>^(<degree>-1) ) 
+             / (1 + <strength>)
+             + origin
+
+    The formula for expansion 1 is:
+
+    f(a) = ( <a'> 
+             + <a'>^2 * <strength>/<length> 
+             + <a'>^3 * <strength>/<length>^2 
+                     .... 
+             + <a'>^<degree> * <strength>/<length>^(<degree>-1) ) 
+             / (1 + <strength>^(<degree>-1))
+             + origin
+
+    where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
+    a fundamental length scale. Negative values of <strength> result in a 
+    pincushion type contraction.
+
+
+    Parameters
+    ----------
+        
+    origin :  numpy.ndarray (optional; default = np.array([0,0]))
+        This is the origin of the pincushion. Pass in a np.array. 
+
+    length : float (optional; default=1)
+        The fundamental scale of the transformation -- the radius that remains
+        unchanged.  (default=1)
+
+    strength : float (optional; default=0.1)
+        The relative strength of the pincushion.
+
+    dim : int (optional; positional or keyword; default = size of input)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
+    
+    degree :  int (optional; default=2)
+        TThe largest degree of the polynomial expansion.
+
+    den : int (optional; (0|1); default=1)
+        The den keyword decides which deminator to use in the polynomial 
+        expansion. If any other value is selected the method reverts to the
+        default. 
+
+    '''
+
+    def __init__(self, *,
+                 iunit = None, 
+                 ounit  = None, 
+                 itype = None, 
+                 otype  = None,
+                 idim  = 0, 
+                 odim = 0,
+                 origin = 0,
+                 length = 1,
+                 strength = 0.0,
+                 degree = 2,
+                 dim = None,
+                 den = 1
+                 ):
+
+        if ( dim != None ):
+            idim = dim
+            odim = dim
+
+        self.idim       = idim
+        self.odim       = odim
+        self.no_forward = False
+        self.no_reverse = True
+        self.iunit      = iunit
+        self.ounit      = ounit
+        self.itype      = itype
+        self.otype      = otype
+        self.params = {
+            'origin'  : origin,
+            'length'  : length,
+            'strength': strength,
+            'degree'  : degree,
+            'dim'     : dim,
+            'den'     : den
+            }
+            
+    
+    def _forward( self, data: np.ndarray ):
+
+        data = data.copy()
+
+        if((self.idim == 0) and (self.odim ==0)):
+            self.idim, self.odim = data.shape
+
+        origin = self.params['origin']
+        strength = self.params['strength']
+        length = self.params['length']
+        degree = self.params['degree']
+        den = self.params['den']
+        dim = self.params['dim']        
+
+        if( dim != None ):
+            out = data[..., :dim].copy()
+        else:
+            out = data.copy()
+
+        if not np.all((origin == 0)):
+            try:
+                origin = np.array([origin])
+                out = out - origin
+            except:
+                raise ValueError("Poly : origin shape %s is not broadcastable with data shape %s" % (out.shape, origin.shape))
+
+        aConst = out
+        if (den!=1):
+            StrengthConst = (1.0 / (np.abs(strength) +1 ))
+        else:
+            StrengthConst = (1.0 / (np.abs(strength)**(degree-1) +1 ))
+
+        for degreeStep in range(2, degree+1):
+            aConst = aConst + strength * (out ** degreeStep) / (length**(degreeStep-1))
+
+        #invoke below with degree = 3 to produce the forward cubic transform
+        #aConst = aConst - strength * (out**(degree-1)) / (length**(degree-2))
+
+        out = StrengthConst * aConst
+
+        if not np.all((origin == 0)):
+            out = out + origin
+
+        if( dim != None ):
+            data[..., :dim] = out
+        else:
+            data = out
+
+        return data
+
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Poly'
+        return super().__str__()
+
+
+
+class Quarticpin(Poly):
+    '''
+    Transform.Quartic scaling - pincushion (n-d; with inverse)
+
+    Transform.Quartic is a subclass of the Poly(nomial) class with polynomial
+    of <degree>=4 and denominator <den>=1 preselected to emulate a Quartic
+    scaling.
+
+    You can apply separate distortion along any of the principal axes.  If
+    you want different axes, use Transform.Linear to rotate them to the 
+    correct angle. The scaling options may be scalars or vectors; if they 
+    are scalars then the expansion is isotropic.
+
+    The formula for the expansion is:
+
+    f(a) = ( <a'> 
+             + <a'>^2 * <strength>/<length> 
+             + <a'>^3 * <strength>/<length>^2 
+                     .... 
+             + <a'>^<degree> * <strength>/<length>^(<degree>-1) ) 
+             / (1 + <strength>^(<degree>-1))
+             + origin
+
+    where <a'>=(<a>-origin), <strength> is a scaling coefficient and <length> is 
+    a fundamental length scale. Negative values of <strength> result in a 
+    pincushion type contraction.
+
+
+    Parameters
+    ----------
+        
+    origin :  numpy.ndarray (optional; default = np.array([0,0]))
+        This is the origin of the pincushion. Pass in a np.array. 
+
+    length : float (optional; default = 1)
+        The fundamental scale of the transformation -- the radius that remains
+        unchanged.  (default=1)
+
+    strength : float (optional; default = 0.1)
+        The relative strength of the pincushion.
+
+    dim : int (optional; positional or keyword; default = size of input)
+        This is an optional dimension specifier in case you pass in a scalar
+        and no other dimensionality hints.
+
+    '''
+    def __init__(self, *,
+                 iunit = None, 
+                 ounit  = None, 
+                 itype = None, 
+                 otype = None,
+                 idim  = 0, 
+                 odim = 0,
+                 origin = 0,
+                 length = 1,
+                 strength = 0.1,
+                 degree = 4,
+                 dim = None,
+                 den=1
+                 ):
+
+        ### Finally - if dim, this becomes idim and odim
+        if ( dim != None ):
+            idim = dim
+            odim = dim
+
+        self.idim       = idim
+        self.odim       = odim
+        self.no_forward = False
+        self.no_reverse = True
+        self.iunit      = iunit
+        self.ounit      = ounit
+        self.itype      = itype
+        self.otype      = otype
+        self.params = {
+            'origin'   : origin,
+            'length'   : length,
+            'strength' : strength,
+            'degree'   : degree,
+            'dim'      : dim,
+            'den'      : den            
+            }
+        
+    def __str__(self):
+        if(not hasattr(self,'_strtmp')):
+            self._strtmp = 'Poly/Quarticpin'
+        return super().__str__()
+
+
+
+class Projective(Transform):
+
+    '''
+    Projective transformation
+
+    Projective transforms are simple quadratic, quasi-linear
+    transformations.  They are the simplest transformation that
+    can continuously warp an image plane so that four arbitrarily chosen
+    points exactly map to four other arbitrarily chosen points.  They
+    have the property that straight lines remain straight after transformation.
+
+    You can specify your projective transformation directly in homogeneous
+    coordinates, or (in 2 dimensions only) as a set of four unique points that
+    are mapped one to the other by the transformation.
+
+    Projective transforms are quasi-linear because they are most easily
+    described as a linear transformation in homogeneous coordinates
+    (e.g. (x',y',w) where w is a normalization factor: x = x'/w, etc.).
+    In those coordinates, an N-D projective transformation is represented
+    as simple multiplication of an N+1-vector by an N+1 x N+1 matrix,
+    whose lower-right corner value is 1.
+
+    If the bottom row of the matrix consists of all zeroes, then the
+    transformation reduces to a linear affine transformation (as in
+    L<transform.Linear.apply|/transform.Linear.invert>).
+
+    If the bottom row of the matrix contains nonzero elements, then the
+    transformed x,y,z,etc. coordinates are related to the original coordinates
+    by a quadratic polynomial, because the normalization factor 'w' allows
+    a second factor of x,y, and/or z to enter the equations.
+
+    Notes
+    -----
+    
+
+    Parameters
+    ----------
+
+    matrix : numpy.ndarray (optional; default = identity)
+        Optional; if specified must be a 2-D array and the homogeneous-
+        coordinate matrix to use. As always in numpy, the
+        matrix is addressed in (row,column) format -- so if you use 
+        nested-brackets notation for np.array(), then the innermost vectors
+        are rows of the matrix. If specified, this is the homogeneous-coordinate 
+        matrix to use.  It must be N+1 x N+1, for an N-dimensional transformation.
+
+    points : numpy.ndarray (optional)
+    If specified, this is the set of four points that should be mapped 
+        one to the other. The homogeneous-coordinate matrix is calculated from 
+        them.  You should feed in a 2x2x4 numpy.ndarray, where the 0 dimension 
+        runs over coordinate, the 1 dimension runs between input and output, and
+        the 2 dimension runs over point.  For example, specifying:
+
+        input = numpy.ndarray([ [[0,1],[0,1]], [[5,9],[5,8]], 
+                                [[9,4],[9,3]], [[0,0],[0,0]] ])
+
+        maps the origin and the point (0,1) to themselves, 
+                            the point (5,9) to (5,8), and
+                            the point (9,4) to (9,3).
+    ''' 

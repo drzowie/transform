@@ -284,9 +284,6 @@ def test_007_Radial():
    
     
 def test_008_Spherical():
-    # Start with a transform with origin at (130,130,130), and
-    # test inversion.  
-
     x = np.arange(27.).reshape(3,3,3)
     a = t.Spherical(origin=[130,130,130])
     d1 = a.apply(x)  
@@ -401,4 +398,23 @@ def test_010_Cubicpin():
     d12[:] = np.NaN
     assert(  np.allclose(d11,d12, atol=1e-2, equal_nan=True))
     
+def test_011_Poly():
+    x = np.arange(9.).reshape(3,3)
+    a = t.Poly()
+    d1 = a.apply(x)
+    assert(  np.allclose(d1,x, atol=1e-2))
     
+    a = t.Poly(strength=1)
+    d2 = a.apply(x)
+    d3 = np.array([[ 0.        ,  1.        ,  2.18181818],
+                   [ 3.54545455,  5.09090909,  6.81818182],
+                   [ 8.72727273, 10.81818182, 13.09090909]])
+    assert(  np.allclose(d1,x, atol=1e-2))
+
+    a = t.Poly(length=3.0, strength=2.0)
+    d4 = a.apply(x)
+    d5 = np.array([[ 0.         , 0.55555556 , 1.55555556],
+                   [ 3.         , 4.88888889 , 7.22222222],
+                   [10.         ,13.22222222 ,16.88888889]])
+    assert(  np.allclose(d4,d5, atol=1e-2))
+
