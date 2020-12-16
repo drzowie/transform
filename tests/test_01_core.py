@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 pytest test suite for the core module of Transform
@@ -136,7 +135,7 @@ def test_009_ArrayIndex():
     
       
 def test_010_WCS():
-    a = t.WCS('sample.fits')
+    a = t.WCS(astropy.io.fits.open('sample.fits'))
     assert(a.idim == 2)
     assert(a.odim == 2)
     assert(len(a.itype)==2 and len(a.otype)==2 and len(a.iunit)==2 and len(a.ounit)==2)
@@ -147,8 +146,15 @@ def test_010_WCS():
     assert( np.all( np.isclose ( a.apply([[0,0]],0), np.array([[-386.15825,  -676.1092]]), atol=1e-4 ) ) )
 
 def test_011_DataWrapper():
-    # string should get read as a FITS file
-    a = t.DataWrapper('sample.fits')
+    # string should throw an error
+    try:
+        a = t.DataWrapper('sample.fits')
+        assert(False)
+    except: 
+        pass
+    
+    # FITS file should load okay
+    a = t.DataWrapper( astropy.io.fits.open('sample.fits'))
     assert( isinstance(a.data, np.ndarray))
     assert( isinstance(a.header, astropy.io.fits.header.Header) )
     assert(a.header['NAXIS']==2)
@@ -157,8 +163,6 @@ def test_011_DataWrapper():
     assert(a.wcs.wcs.naxis == 2)
     assert(a.wcs.pixel_shape[0] == a.header['NAXIS1'])
     assert(a.wcs.pixel_shape[1] == a.header['NAXIS2'])
-    b = a.export()
-    assert(isinstance(b,t.DataWrapper)) # original was a string; result is a DataWrapper
     
     # Non-file string should fail
     try:
@@ -174,10 +178,7 @@ def test_011_DataWrapper():
     assert(isinstance(a.header, astropy.io.fits.header.Header) )
     assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
     assert(a.header['NAXIS']==2)
-    a.header['TEST'] = "Testing testing"
-    b = a.export()
-    assert( isinstance(b, astropy.io.fits.hdu.image.PrimaryHDU))
-    assert( b.header['TEST'] == "Testing testing" )
+
     
     # FITS file object should pull the first HDU
     a = t.DataWrapper(fits)
@@ -185,8 +186,6 @@ def test_011_DataWrapper():
     assert(isinstance(a.header, astropy.io.fits.header.Header) )
     assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
     assert(a.header['NAXIS']==2)
-    b = a.export()
-    assert( isinstance(b, astropy.io.fits.hdu.image.PrimaryHDU))
 
     # Feeding in a dictionary should work right
     f0 = {'header':fits[0].header, 'data':fits[0].data}
@@ -195,11 +194,6 @@ def test_011_DataWrapper():
     assert(isinstance(a.header, astropy.io.fits.header.Header) )
     assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
     assert(a.header['NAXIS']==2)
-    b = a.export()
-    assert( isinstance(b,dict))
-    assert( isinstance(b['data'],np.ndarray))
-    assert( isinstance(b['header'], astropy.io.fits.header.Header))
-    assert( isinstance(b['wcs'], astropy.wcs.wcs.WCS))
     
     # Feeding in just a header should work okay
     hdr = dict(fits[0].header)
@@ -208,8 +202,6 @@ def test_011_DataWrapper():
     assert(isinstance(a.header,dict))
     assert(isinstance(a.wcs,astropy.wcs.wcs.WCS))
     assert( a.data is None )
-    b = a.export()
-    assert( isinstance( b,dict ) )
     
     # Sunpy map tests should go here ... eventually.
     # For now it doesn't make sense since we don't export to maps yet.
