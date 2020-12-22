@@ -991,32 +991,32 @@ class DataWrapper():
         # Tuple - (data, header, wcs).  Be generous and take a list also
         if (isinstance(this,tuple) or isinstance(this,list)):
             try:
-                data = this[0]
-                header = this[1]
+                data = copy.copy(this[0])
+                header = copy.copy(this[1])
             except:
                 raise ValueError("DataWrapper: tuple requies both data and header")
             try:
-                wcs = this[2]
+                wcs = copy.copy(this[2])
             except:
                 pass
 
         # If it's a PrimaryHDU then parse appropriately.
         elif isinstance(this, ap.io.fits.hdu.image.PrimaryHDU):
-            data = this.data
-            header = this.header
+            data = copy.copy(this.data)
+            header = copy.copy(this.header)
             wcs = ap.wcs.WCS(header)
         
         # If it's just a FITS header, that is okay.
         elif isinstance(this, ap.io.fits.header.Header):
-            header = this
+            header = copy.copy(this)
             
         # If it's a WCS object, that is okay also.
         elif( isinstance( this, ap.wcs.wcs.WCS ) ):
-            wcs = this
+            wcs = copy.copy(this)
             
         # If it's a NumPy object, that is also okay.
         elif( isinstance( this, np.ndarray ) ):
-            data = this
+            data = copy.copy(this)
             
         # If it's a dict then it must either have data, header, or wcs 
         # tags -- or else look like a FITS header
@@ -1032,7 +1032,7 @@ class DataWrapper():
                     wcs = this['wcs']
             # Doesn't have tags -- check if it looks like a FITS header
             elif( ('NAXIS' in this) or ('SIMPLE' in this)):
-                header = this
+                header = copy.copy(this)
             else:
                 raise ValueError(
                     "DataWrapper: dict requires either: FITS header tags; or "
@@ -1044,11 +1044,11 @@ class DataWrapper():
               hasattr( this, 'header') or
               hasattr( this, 'wcs') ):
             if(hasattr(this, 'data')):
-                data = this.data
+                data = copy.copy(this.data)
             if(hasattr(this, 'header')):
-                header = this.header
+                header = copy.copy(this.header)
             if(hasattr(this, 'wcs')):
-                wcs = this.wcs
+                wcs = copy.copy(this.wcs)
         
         else:
             raise ValueError("DataWrapper: couldn't parse meaningful data "

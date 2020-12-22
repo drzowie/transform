@@ -151,6 +151,10 @@ def test_009b__FITSHeaderFromDict():
     assert(h['COMMENT'][1]=='bar')
     assert(h['COMMENT'][2]=='baz')
     assert(f"{h['COMMENT']}"=='foo\nbar\nbaz')
+    
+    hh = t.FITSHeaderFromDict(h)
+    assert(h==hh)
+    
 
     
 def test_010_WCS():
@@ -222,6 +226,22 @@ def test_011_DataWrapper():
     assert(isinstance(a.wcs,astropy.wcs.wcs.WCS))
     assert( a.data is None )
     
+    # a tuple should work  right
+    a = t.DataWrapper((fits[0].data,fits[0].header))
+    assert(isinstance(a.data, np.ndarray))
+    assert(isinstance(a.header, astropy.io.fits.header.Header))
+    assert(isinstance(a.wcs, astropy.wcs.wcs.WCS))
+    assert(a.header['NAXIS']==2)
+    
+    # A template should override the input
+    a = t.DataWrapper((fits[0].data, fits[0].header),template=
+                      {'CRPIX1':99})
+    assert(a.header['CRPIX1']==99)
+    assert(fits[0].header['CRPIX1'] != 99)
+    assert(a.header['CRPIX2'] == fits[0].header['CRPIX2'])
+
+    
+
     # Sunpy map tests should go here ... eventually.
     # For now it doesn't make sense since we don't export to maps yet.
     
