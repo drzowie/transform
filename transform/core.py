@@ -1197,20 +1197,31 @@ class DataWrapper():
         if(header is None):
             header = {}
             
-        # Remove CDa_b matrix if present:
-        # WCS exports PCa_b instad.  CDa_b is deprecated in favor of
-        # PCa_b.
-        for ky in header.keys():
-            if( re.match('CD\\d_\\d',ky) ):
-                print(f"Deleting key {ky}")
-                del header[ky]
-                
         hdr = self.wcs.to_header()
+
+        # Make sure that keys that might
+        # conflict with the WCS pointing info are deleted
+        for i in range(hdr['WCSAXES']):
+            if f"CDELT{i+1}" in header:
+                del header[f"CDELT{i+1}"]
+            if f"CRPIX{i+1}" in header:
+                del header[f"CRPIX{i+1}"]
+            if f"CRVAL{i+1}" in header:
+                del header[f"CRVAL{i+1}"]
+            for j in range(hdr['WCSAXES']):
+                if f"CD{i+1}_{j+1}" in header:
+                    del header[f"CD{i+1}_{j+1}"]
+                if f"PC{i+1}_{j+1}" in header:
+                    del header[f"PC{i+1}_{j+1}"]
+        if "CROTA2" in header:
+            del header["CROTA2"]
+            
+        # TODO: Find nonlinear terms and remove them also
 
         # Copy keys from WCS header to the main FITS header
         for ky in hdr.keys():
             header.set(ky,hdr[ky])
-        
+            
         # Copy NAXIS
         if(self.wcs.pixel_shape is not None):
             for i in range(self.header['NAXIS']):
