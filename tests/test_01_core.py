@@ -133,7 +133,26 @@ def test_009_ArrayIndex():
     data2 = a.apply(data)
     assert( np.all(data2 == data[::-1]) ) 
     
-      
+def test_009b__FITSHeaderFromDict():
+    h = t.FITSHeaderFromDict({'A':3,
+                                         'B':'foo',
+                                         'HISTORY':'hey there',
+                                         '':['one','two','three'],
+                                         'COMMENT':"foo\nbar\nbaz"})
+    assert(h['A']==3)
+    assert(h['B']=='foo')
+    assert(h[''][0]=='one')
+    assert(h[''][1]=='two')
+    assert(h[''][2]=='three')
+    assert(f"{h['']}" == 'one\ntwo\nthree')
+    assert(h['HISTORY']=='hey there')
+    assert(f"{h['HISTORY']}"=='hey there')
+    assert(h['COMMENT'][0]=='foo')
+    assert(h['COMMENT'][1]=='bar')
+    assert(h['COMMENT'][2]=='baz')
+    assert(f"{h['COMMENT']}"=='foo\nbar\nbaz')
+
+    
 def test_010_WCS():
     a = t.WCS(astropy.io.fits.open('sample.fits'))
     assert(a.idim == 2)
@@ -199,7 +218,7 @@ def test_011_DataWrapper():
     hdr = dict(fits[0].header)
     
     a = t.DataWrapper(hdr)
-    assert(isinstance(a.header,dict))
+    assert(isinstance(a.header,astropy.io.fits.header.Header))
     assert(isinstance(a.wcs,astropy.wcs.wcs.WCS))
     assert( a.data is None )
     
@@ -270,10 +289,11 @@ def test_013_remap():
     # This tests actual transformation and also broadcast since 
     # PlusOne_ is 1D and a is 2D
     # 
-    # The autoscaling out to completely undo the plus-one, so this should
+    # The autoscaling ought to completely undo the plus-one, so this should
     # be a no-op except for incrementing CRVAL1.
     trans = t.PlusOne_()
     b = trans.remap({'data':a,'header':ahdr},method='nearest')
+
     assert(np.all(a == b['data']))
     assert(b['header']['CRPIX1']==4)
     assert(b['header']['CRPIX2']==4)
