@@ -2,7 +2,6 @@ Methods to fix
 --------------
 * Check DataWrapper methods and header export
   - CTYPE and CUNIT not being exported from wcs objects in wcs2head method (track in header manually?)
-  - HISTORY and COMMENT card handling needs fixing
 
 Transforms to fix
 -----------------

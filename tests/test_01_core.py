@@ -240,6 +240,16 @@ def test_011_DataWrapper():
     assert(fits[0].header['CRPIX1'] != 99)
     assert(a.header['CRPIX2'] == fits[0].header['CRPIX2'])
 
+    # Check that CTYPE/CUNIT are exported from the WCS to the head if need be
+    a = t.DataWrapper((fits[0].data, fits[0].header))
+    a.header = None
+    a.wcs2head()
+    assert(isinstance(a.header, astropy.io.fits.header.Header))
+    assert(a.header['NAXIS']==2)
+    assert(a.header['CTYPE1'] == fits[0].header['CTYPE1'])
+    assert(a.header['CRPIX1'] == fits[0].header['CRPIX1'])
+    
+           
     
 
     # Sunpy map tests should go here ... eventually.

@@ -1194,42 +1194,46 @@ class DataWrapper():
         
     def wcs2head(self):
         header = self.header
+
         if(header is None):
-            header = {}
-            
-        hdr = self.wcs.to_header()
-
-        # Make sure that keys that might
-        # conflict with the WCS pointing info are deleted
-        for i in range(hdr['WCSAXES']):
-            if f"CDELT{i+1}" in header:
-                del header[f"CDELT{i+1}"]
-            if f"CRPIX{i+1}" in header:
-                del header[f"CRPIX{i+1}"]
-            if f"CRVAL{i+1}" in header:
-                del header[f"CRVAL{i+1}"]
-            for j in range(hdr['WCSAXES']):
-                if f"CD{i+1}_{j+1}" in header:
-                    del header[f"CD{i+1}_{j+1}"]
-                if f"PC{i+1}_{j+1}" in header:
-                    del header[f"PC{i+1}_{j+1}"]
-        if "CROTA2" in header:
-            del header["CROTA2"]
-            
-        # TODO: Find nonlinear terms and remove them also
-
-        # Copy keys from WCS header to the main FITS header
-        for ky in hdr.keys():
-            header.set(ky,hdr[ky])
-            
-        # Copy NAXIS
+            self.header = self.wcs.to_header()
+            header = self.header
+        else:
+            hdr = self.wcs.to_header()
+    
+            # Make sure that keys that might
+            # conflict with the WCS pointing info are deleted
+            for i in range(hdr['WCSAXES']):
+                if f"CDELT{i+1}" in header:
+                    del header[f"CDELT{i+1}"]
+                if f"CRPIX{i+1}" in header:
+                    del header[f"CRPIX{i+1}"]
+                if f"CRVAL{i+1}" in header:
+                    del header[f"CRVAL{i+1}"]
+                for j in range(hdr['WCSAXES']):
+                    if f"CD{i+1}_{j+1}" in header:
+                        del header[f"CD{i+1}_{j+1}"]
+                    if f"PC{i+1}_{j+1}" in header:
+                        del header[f"PC{i+1}_{j+1}"]
+            if "CROTA2" in header:
+                del header["CROTA2"]
+                
+            # TODO: Find nonlinear terms and remove them also
+    
+            # Copy keys from WCS header to the main FITS header
+            for ky in hdr.keys():
+                header.set(ky,hdr[ky])
+                
+        # Copy NAXIS limitsfrom WCS into the header - this is necessary if 
+        # reconstituting a header entirely from the WCS object.
+        if not 'NAXIS' in header:
+            header['NAXIS'] = self.wcs.naxis
+        
         if(self.wcs.pixel_shape is not None):
-            for i in range(self.header['NAXIS']):
-                header.set(f"NAXIS{i+1}", self.wcs.pixel_shape[-1-i])
-        
-        # Convert dict to a real Header object if necessary
-        self.header = FITSHeaderFromDict(header)
-        
+            for i in range(self.wcs.naxis):
+                axis = f'NAXIS{i+1}'
+                # Note: wcs pixel_shape is in axis order, not array index order
+                header[axis] = self.wcs.pixel_shape[i]
     
     def __getitem__(self,index):
         '''
