@@ -903,6 +903,7 @@ class Transform:
             #    otwcs.wcs.cunit = copy.copy(self.ounit)
                 
             otwcs.pixel_shape = list(shape).reverse()
+            
             out_template = DataWrapper(data.header,template=otwcs)
             
         ## Now we have an out_template -- either via autoscaling or 
@@ -912,8 +913,9 @@ class Transform:
         ## Finally ... dispatch the actual resampling
         total_trans = Composition([output_trans, self, input_trans])
         data_resampled = total_trans.resample(data.data, method=method, bound=bound, phot=phot, shape=shape)
+
         output = DataWrapper(
-            data_resampled,
+            (data_resampled,data.header),
             template = out_template
         )
         return output
@@ -1143,10 +1145,10 @@ class DataWrapper():
             # We got a template and it's not a WCS.  Try to make it into one.
             else:
                 if ( isinstance(template, ap.io.fits.header.Header) ):
-                    wcs = ap.wcs.WCS(h)
+                    self.wcs = ap.wcs.WCS(template)
 
                 elif ( isinstance(template,dict) ):
-                    wcs = ap.wcs.WCS(h)
+                    self.wcs = ap.wcs.WCS(FITSHeaderFromDict(template))
 
                 # A list or tuple is an *array* shape (...,Y,X order)                    
                 elif( isinstance(template, list) or 
@@ -1167,9 +1169,11 @@ class DataWrapper():
                            for i in range(self.header['NAXIS']) 
                            ]
                 else:
-                    print(f"template is {template}")
                     raise ValueError("DataWrapper: template must be a "
                                      "FITS header, WCS object, or shape")
+                
+                self.wcs2head()
+                
         
     def WCS(self):
         '''
@@ -1198,13 +1202,19 @@ class DataWrapper():
         # PCa_b.
         for ky in header.keys():
             if( re.match('CD\\d_\\d',ky) ):
+                print(f"Deleting key {ky}")
                 del header[ky]
                 
         hdr = self.wcs.to_header()
 
         # Copy keys from WCS header to the main FITS header
         for ky in hdr.keys():
-            header[ky]=hdr[ky]
+            header.set(ky,hdr[ky])
+        
+        # Copy NAXIS
+        if(self.wcs.pixel_shape is not None):
+            for i in range(self.header['NAXIS']):
+                header.set(f"NAXIS{i+1}", self.wcs.pixel_shape[-1-i])
         
         # Convert dict to a real Header object if necessary
         self.header = FITSHeaderFromDict(header)
