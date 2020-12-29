@@ -405,49 +405,52 @@ def interpND(source, /,
         the source array, if the 'truncate' boundary condition is selected.
         
     method : string (default 'nearest')
-        This controls the interpolation method.  The value may be a string,
-        but only the first character is checked. The character may be one of:
+        This controls the interpolation method.  The value is a string.  Each
+        method has a single-letter abbreviation:
             
-            'n' - nearest-value interpolate (sample) the array.
+            'nearest'/'n' - nearest-value interpolate (sample) the array.
             
-            'l' - linearly interpolate from the hypercube surrounding each point.
+            'linear'/'l' - linearly interpolate from the hypercube surrounding 
+                each point.
             
-            'c' - cubic-spline interpolate from the 4-pixel hypercube around 
-                each point.  Cubic splines reproduce the value and the first 
-                and second derivatives of the data at original pixel centers. 
+            'cubic'/'c' - cubic-spline interpolate from the 4-pixel hypercube 
+                around each point.  Cubic splines reproduce the value and the 
+                first and second derivatives of the data at original pixel 
+                centers. 
             
-            's' - Use sinc-function filtering in the input plane; the sinc 
+            'sinc'/s' - Use sinc-function filtering in the input plane; the sinc 
                 function has zeroes at integer pixel offsets, so it reproduces
                 the source data when evaluated at pixel centers.  The sidelobes
                 fall off slowly, so the sinc is enumerated for 8 pixels in all 
                 directions.  The sinc-function weighting is equivalent to a 
                 hard cutoff filter in the frequency domain.
             
-            'z' - Use Lanczos-function weighting in the input plane; this is
-                a modified sinc that rolls off smoothly over 3 pixels.  It is 
-                equivalent to an approximate trapezoid filter in the frequency
-                domain. Like the sinc function, the Lanczos filter has zeroes
-                at integer pixel offsets, so it reproduces the source data when
-                evaluated at pixel centers.
+            'lanczos'/'z' - Use Lanczos-function weighting in the input plane; 
+                this is a modified sinc that rolls off smoothly over 3 pixels.  
+                It is equivalent to an approximate trapezoid filter in the 
+                frequency domain. Like the sinc function, the Lanczos filter 
+                has zeroes at integer pixel offsets, so it reproduces the 
+                source data when evaluated at pixel centers.
                 
-            'h' - Use Hann window (overlapping sin^2) interpolation; the 
+            'hann'/h' - Use Hann window (overlapping sin^2) interpolation; the 
                 kernel is enumerated for 1 full pixel in all directions.  The
                 Hanning function produces smooth transitions between pixels, but
                 introduces ripple for smoothly varying curves.
                 
-            'r' - Use rounded corners (quasi-Hanning) interpolation; this imposes
-                a Hanning rolloff over 1/2 a pixel width around pixel boundaries.
-                The result is smoother than sampling, but preserves vestiges of
-                pixel edges.  It can be useful for rendering pixelated data and
-                leaving pixel edges both visible and unobtrusive.
+            'rounded'/'r' - Use rounded corners (quasi-Hanning) interpolation; 
+                this imposes a Hanning rolloff over 1/2 a pixel width around 
+                pixel boundaries. The result is smoother than sampling, but 
+                preserves vestiges of pixel edges.  It can be useful for 
+                rendering pixelated data and leaving pixel edges both visible 
+                and unobtrusive.
             
-            'g' - Use Gaussian weighted smoothing with 1 pixel FW; the kernel
-                is enumerated for 3 pixels in all directions. Note that this
-                method does not guarantee the value of integer-indexed samples
-                will match the value in the array itself.
+            'gaussian'/'g' - Use Gaussian weighted smoothing with 1 pixel FW; 
+                the kernel is enumerated for 3 pixels in all directions. Note 
+                that this method does not guarantee the value of integer-
+                indexed samples will match the value in the array itself.
             
-            'f' - fourier interpolate using discrete FFT coefficients; this
-                is useful for periodic data such as wave patterns.  Note,
+            'fourier'/'f' - fourier interpolate using discrete FFT coefficients; 
+                this is useful for periodic data such as wave patterns.  Note,
                 this involves taking the FFT of the entire input dataset, which
                 is then discarded -- therefore this method benefits strongly
                 from vectorization.  Because of the way Fourier interpolation is
@@ -466,6 +469,10 @@ def interpND(source, /,
     The indexed data extracted from the source array, as a numpy ND array
 
     '''
+    meth = method[0]
+    if(method=='lanczos'):
+        meth = 'z'
+    
     if not isinstance(index,np.ndarray):
         index = np.array(index)
         
@@ -473,7 +480,7 @@ def interpND(source, /,
         index = np.array(index)
         
     # Sample: just grab the nearest value using sampleND
-    if(method[0] == 'n'):
+    if(method[0] == 'n' or method[0]=='nearest'):
         return np.array(sampleND(source, 
                         index=index, 
                         bound=bound, 
@@ -486,7 +493,7 @@ def interpND(source, /,
     # 
     # linear is implemented differently than the other filters because 
     # it is simpler to broadcast.  This makes it slightly faster.
-    elif(method[0] == 'l'):
+    elif(meth == 'l'):
         fldex = np.floor(index)
         # sample the ncube region around each point.  Dimensions of 
         # region are [ <index-broadcast-dims>, <N twos> ]
@@ -502,9 +509,9 @@ def interpND(source, /,
                               )
                           )
         
-        # Enumerate a hypercube with 0/1
+        # Enumerate an N-cube with 0/1 on all corners
         # Dimension is [<N twos>, index-vec-dim-size-N]
-        ncube = np.mgrid[ tuple( repeat( range(2), index.shape[-1])) ].transpose()
+        ncube = np.mgrid[ tuple( repeat( range(2), index.shape[-1])) ].T
         
         # Now assemble alpha/beta weighting coefficients
         # expand the index dims by adding ncube dimensions
@@ -544,7 +551,7 @@ def interpND(source, /,
     ## Fourier interpolation: find the Fourier components of the data, and 
     ## explicitly evaluate them at the provided points
 
-    elif(method[0]=='f'):
+    elif(meth=='f'):
 
         # FFT the source along all (and only) the axes used by the index.
         sourcefft = np.fft.fftn(source,
@@ -559,7 +566,7 @@ def interpND(source, /,
                                  range( -1, -1 - index.shape[-1], -1 )
                                )
                             )
-            ].transpose().astype(float)
+            ].T.astype(float)
         # convert from 0:n to 0:2PI along each axis
         for i in range(index.shape[-1]):
             freq[...,i] = freq[...,i] * np.pi * 2 / freq.shape[-2-i]
@@ -620,15 +627,17 @@ def interpND(source, /,
         
     #####################
     ## Collapsible filter interpolation
-    ## This implements cubic, sinc, Lanczos, Gaussian, and Hanning 
+    ## This implements cubic, sinc, Lanczos, Gaussian, Hann, and rounded
     ## interpolation, which differ in the size of region they sample
     ## and also in the actual formula.
                                                   
-    elif(method[0] in ('c','s','z','g','h','r')):
+    elif(meth in ('c','s','z','g','h','r')):
         fldex = np.floor(index)
         
-        size = {'c':4, 's':16, 'z':6, 'g':6, 'h':2, 'r':2}[method]
-        offset = (size/2)-1
+        # Different methods have different region sizes that get sampled 
+        # around each point.
+        size = {'c':4, 's':16, 'z':6, 'g':8, 'h':2, 'r':2}[method]
+        offset = int(size/2)-1
         
         # sample the ncube region around each point.  Dimensions of 
         # region are [ <index-broadcast-dims>, <N size's> ]
@@ -698,6 +707,9 @@ def interpND(source, /,
             # off of region, which now just has dimension [<index-broadcast>]
             return region
     
+        # The other methods (sinc, lanczos, gaussian, hanning, and rounded) 
+        # each use a tailored filter function averaged over the ROI defined up 
+        # above.
         elif(method[0] in ('s','z','g','h','r')):
             
             # of gets the offset of each pixel in the sampled subregion, 
@@ -741,7 +753,6 @@ def interpND(source, /,
         
     else: 
         
-        raise ValueError("interpND: valid methods are 'n','l','c','f','s','z','g', or 'h')")
-
-
-        
+        raise ValueError(
+            "interpND: valid methods are ('n','l','c','f','s','z','g','h','r')"
+            )
