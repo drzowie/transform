@@ -1,8 +1,3 @@
-Methods to fix
---------------
-* Check DataWrapper methods and header export
-  - CTYPE and CUNIT not being exported from wcs objects in wcs2head method (track in header manually?)
-
 Transforms to fix
 -----------------
 * Polar & tests
@@ -12,10 +7,7 @@ Functionality to add
 --------------------
 * Propagate units through apply (think about this)
 * Vet and update FITS handling
-  - Solve weirdnesses with WCS overlay
   - Add SunPy objects
-  - handle FITS objects better
-  - handle tuples
 * Add anti-aliasing to interpND (will require Cython)
 
 Transforms to implement
