@@ -332,7 +332,8 @@ def interpND(source, /,
              index=None, 
              method='n', 
              bound='t', 
-             fillvalue=0, 
+             fillvalue=0,
+             oblur=None,
              strict=False):
     '''
     interpND - a better N-dimensional interpolator, with switchable boundaries.
@@ -376,7 +377,7 @@ def interpND(source, /,
         final axis must match the number of dimensions in source.  If index
         has additional dimensions they are broadcast.
         
-    bound : string or list (default 'truncate')
+    bound : string or list or tuple (default 'truncate')
         This is either a string describing the boundary conditions to apply to 
         every axis in the input data, or a list of strings containing the
         boundary conditions on each axis.  The boundary conditions are listed
@@ -417,13 +418,13 @@ def interpND(source, /,
                 around each point.  Cubic splines reproduce the value and the 
                 first and second derivatives of the data at original pixel 
                 centers. 
-            
-            'sinc'/s' - Use sinc-function filtering in the input plane; the sinc 
-                function has zeroes at integer pixel offsets, so it reproduces
-                the source data when evaluated at pixel centers.  The sidelobes
-                fall off slowly, so the sinc is enumerated for 8 pixels in all 
-                directions.  The sinc-function weighting is equivalent to a 
-                hard cutoff filter in the frequency domain.
+                
+            'sinc'/'s' - use Sinc-function weighting in the input plane; this
+                corresponds to a sharp cutoff at the Nyquist frequency of the
+                input plane.  The sinc function falls off only very slowly,
+                so the input is enumerated over 6 pixels in all directions.
+                Because the sinc function has zeroes at integer pixel offsets,
+                this reproduces the original value at pixel centers.
             
             'lanczos'/'z' - Use Lanczos-function weighting in the input plane; 
                 this is a modified sinc that rolls off smoothly over 3 pixels.  
@@ -432,17 +433,16 @@ def interpND(source, /,
                 has zeroes at integer pixel offsets, so it reproduces the 
                 source data when evaluated at pixel centers.
                 
-            'hann'/h' - Use Hann window (overlapping sin^2) interpolation; the 
+            'hann'/'h' - Use Hann window (overlapping cos^2) interpolation; the 
                 kernel is enumerated for 1 full pixel in all directions.  The
                 Hanning function produces smooth transitions between pixels, but
                 introduces ripple for smoothly varying curves.
                 
-            'rounded'/'r' - Use rounded corners (quasi-Hanning) interpolation; 
-                this imposes a Hanning rolloff over 1/2 a pixel width around 
-                pixel boundaries. The result is smoother than sampling, but 
-                preserves vestiges of pixel edges.  It can be useful for 
-                rendering pixelated data and leaving pixel edges both visible 
-                and unobtrusive.
+            'tukey'/'t' - use Tukey window (cos^2 rolloff) with alpha=0.5;
+                yields a flat center to each pixel, with rounded transitions. 
+                The result is smoother than sampling, but preserves vestiges 
+                of pixel edges.  It can be useful for rendering pixelated data 
+                and leaving pixel edges both visible and unobtrusive.
             
             'gaussian'/'g' - Use Gaussian weighted smoothing with 1 pixel FW; 
                 the kernel is enumerated for 3 pixels in all directions. Note 
@@ -457,6 +457,15 @@ def interpND(source, /,
                 implemented (via explicit evaluation of a complex exponential)
                 you can do Laplacian analytically continued "interpolation" also, 
                 by feeding in complex-valued coordinates.
+                
+    oblur : Float or None (default None)
+        If set, this parameter scales the width of the filter function on
+        filter interpolation, which is most of the methods.  A value of 1.0 
+        does nothing.  A value of greater than 1.0 yields blur in the output
+        space.  Values smaller than 1.0 are allowed but not recommended: they
+        may do strange things to the output, and very small values may crash
+        the code. Values different from 1.0 break alignment properties of some 
+        filters (e.g. the sinc and Lanczos filters).
         
     strict : Boolean (default True)
         The 'strict' parameter forces strict matching of index vector dimension
@@ -472,7 +481,9 @@ def interpND(source, /,
     meth = method[0]
     if(method=='lanczos'):
         meth = 'z'
-    
+    if(method=='hamming'):
+        meth = 'm'
+        
     if not isinstance(index,np.ndarray):
         index = np.array(index)
         
@@ -481,6 +492,9 @@ def interpND(source, /,
         
     # Sample: just grab the nearest value using sampleND
     if(method[0] == 'n' or method[0]=='nearest'):
+        if(oblur is not None):
+            raise ValueError("interpND: oblur is not allowed with nearest-neighbor interpolation.")
+            
         return np.array(sampleND(source, 
                         index=index, 
                         bound=bound, 
@@ -492,8 +506,9 @@ def interpND(source, /,
     # usual alpha/beta mult-and-sum)
     # 
     # linear is implemented differently than the other filters because 
-    # it is simpler to broadcast.  This makes it slightly faster.
-    elif(meth == 'l'):
+    # it is simpler to broadcast.  This makes it slightly faster, which 
+    # is a win since people seem to reach for it alla time.
+    elif(meth == 'l' and (oblur is None)):
         fldex = np.floor(index)
         # sample the ncube region around each point.  Dimensions of 
         # region are [ <index-broadcast-dims>, <N twos> ]
@@ -549,10 +564,15 @@ def interpND(source, /,
         
     ############################
     ## Fourier interpolation: find the Fourier components of the data, and 
-    ## explicitly evaluate them at the provided points
-
+    ## explicitly evaluate them at the provided points.
+    ## 
+    ## Collapsing this type of interpolation one dimension at a time would be 
+    ## inefficient, it is broken out into its own thang.
     elif(meth=='f'):
 
+        if(oblur is not None):
+            raise ValueError("interpND: oblur is not allowed with Fourier interpolation.")
+            
         # FFT the source along all (and only) the axes used by the index.
         sourcefft = np.fft.fftn(source,
                                 axes=range( -1, -1 - index.shape[-1], -1 )
@@ -617,8 +637,9 @@ def interpND(source, /,
                                        )
                                 )
                             )
-        # Now check for complex indices and/or source.  If both are not 
-        # complex, then return the real part only.
+        # Now check for complex indices and/or source.  If both are real 
+        # then return the real part only (which loses some information but 
+        # best approximates what the user probably wants).
         complexes = (np.dtype('complex64'), np.dtype('complex128'))
         if( not ((source.dtype in complexes) or (index.dtype in complexes) )):
             result = result.real
@@ -627,16 +648,20 @@ def interpND(source, /,
         
     #####################
     ## Collapsible filter interpolation
-    ## This implements cubic, sinc, Lanczos, Gaussian, Hann, and rounded
+    ## This implements cubic-spline, sinc, Lanczos, Gaussian, Hann, and rounded
     ## interpolation, which differ in the size of region they sample
     ## and also in the actual formula.
                                                   
-    elif(meth in ('c','s','z','g','h','r')):
+    elif(meth in ('l','c','s','z','g','h','t')):
         fldex = np.floor(index)
         
         # Different methods have different region sizes that get sampled 
         # around each point.
-        size = {'c':4, 's':16, 'z':6, 'g':8, 'h':2, 'r':2}[method]
+        size = {'l':2, 'c':4, 's':16, 'z':6, 'g':8, 'h':2, 't':2}[method]
+        
+        if(oblur is not None):
+            size = (2 * np.ceil(size/2 * oblur)).astype(int)
+            
         offset = int(size/2)-1
         
         # sample the ncube region around each point.  Dimensions of 
@@ -667,8 +692,14 @@ def interpND(source, /,
         ### Now collapse one dim at a time according to method
         
         #######
-        ## Cubic interpolation
-        if(method[0]=='c'):
+        ## Cubic spline interpolation
+        ## This uses a formula that is more complex than a simple linear-
+        ## response filter function, so it gets broken out from the filters
+        ## (below).
+        if(meth=='c'):
+            if(oblur is not None):
+                raise ValueError("interpND: oblur is not allowed with cubic-spline interpolation.")
+            
             for ii in range(index.shape[-1]):
                 # a0 gets just-under sample; 
                 # a1 gets just-over sample;
@@ -707,38 +738,45 @@ def interpND(source, /,
             # off of region, which now just has dimension [<index-broadcast>]
             return region
     
-        # The other methods (sinc, lanczos, gaussian, hanning, and rounded) 
-        # each use a tailored filter function averaged over the ROI defined up 
-        # above.
-        elif(method[0] in ('s','z','g','h','r')):
+        # The other methods (linear, sinc, lanczos, gaussian, hann, hamming, 
+        # and tukey) each use a tailored filter function averaged over the ROI 
+        # defined up above.
+        elif(meth in ('l','s','z','g','h','t')):
+  
+            if(oblur is None):
+                oblur = 1.0
             
             # of gets the offset of each pixel in the sampled subregion, 
             # relative to the requested location.  This requires indexing 
             # mgrid with an asssembled tuple of ranges.  
             of = ( (1 - b) - (offset + 1) +
                   np.mgrid[ tuple( map( lambda i:range(size), range(index.shape[-1]) ))].transpose()
-            )
+            ) / oblur
             
-
             # Now loop over axes, collapsing them in turn until we get to the 
             # size we need
             for ii in range(index.shape[-1]):
                 bb = of[...,ii]
 
-                if(method=='s'):     ## sinc
+                if(meth=='s'):     ## sinc
                     k = np.sinc(bb)
 
-                elif(method=='z'):   ## lanczos
+                elif(meth=='z'):   ## lanczos
+                    bb = np.clip(bb,-3,3)
                     k = 3 * np.sinc(bb) * np.sinc(bb/3)
 
-                elif(method=='g'):   ## Gaussian
+                elif(meth=='g'):   ## Gaussian
                     k = np.exp( - bb * bb / 0.5 / 0.5 )
 
-                elif(method=='h'):   ## Hanning (no need to divide by 2 since we normalize by k)
-                    k = (1 + np.cos( np.pi * bb ))
+                elif(meth=='h'):   ## Hann (no need to divide by 2 since we normalize by k)
+                    k = (1 + np.cos( np.pi * np.clip(bb,-1,1) ) )
                     
-                elif(method=='r'):   ## Rounded-corners (hanning over 1/2 pixel)
-                    k = (1 + np.cos( np.pi * np.clip( np.abs(bb) * 2-0.5,0,1)))
+                elif(meth=='t'):   ## Tukey (cosine rollof over half a pixel)
+                    k = (1 + np.cos( np.pi * np.clip( np.abs(bb) * 2-0.5, 0, 1)))
+                    
+                elif(meth=='l'):  ## Generalized linear (tent function)
+                    k = 1 - np.clip(np.abs(bb),0,1)
+                        
                 else:
                     raise AssertionError("This can't happen")
                 
@@ -754,5 +792,189 @@ def interpND(source, /,
     else: 
         
         raise ValueError(
-            "interpND: valid methods are ('n','l','c','f','s','z','g','h','r')"
+            "interpND: valid methods are ('n','l','c','f','s','z','g','h','t')"
             )
+
+
+def interpND_grid(source, /, 
+             index=None, 
+             method='l', 
+             bound='t', 
+             antialias=True, aa=True,
+             fillvalue=0, 
+             strict=False):
+    '''
+    interpND_grid - a better N-D interpolator for grids (with anti-aliasing)
+    
+    You supply source data in reversed dimension order (...,Y,X) and index
+    data as a collection of vectors pointing into the source.  The index is 
+    collapsed one dimension by interpolation into source: the contents along
+    the final dimension axis are a vector that points (as (X,Y,...)) to a 
+    location in the source; other prior axes in the index are broadcast. 
+    The index vectors are taken to represent a regular grid (implicit in their
+    broadcast axis coordinates).  This means that the index data themselves
+    can be used to infer how best to sample the source data at each point.
+    
+    interpND_grid differs from interpND in that interpND does not use the 
+    relationship between sample points, while interpND_grid can.  In other
+    respects, interpND_grid is identical to interpND.  In fact, if the 
+    "antialias" parameter or its, er, alias "aa" is set to False (default is 
+    True), then interpND is used to generate the output.
+    
+    If "antialias" and "aa" are True, then interpND_grid linearizes the 
+    implicit coordinate transformation at each gridpoint, using the discrete
+    Jacobian derivative of the grid vector values to calculate a tailored
+    resampling function at each sample point.  This eliminates aliasing, at 
+    the cost of band-limiting the input data.
+    
+    Local filter calculation uses a variant of the singular-value padding 
+    described by DeForest (2004, Sol. Phys. 219, 3):  singular values of the 
+    Jacobian matrix are used to find the "footprint" of the grid in the 
+    input plane.  These singular values are padded to unity (using either 
+    the min function or quadrature addition), and used to modify the filter
+    function used for weighted interpolation of nearby points.                                                        
+    
+    Parameters
+    ----------
+    
+    source : numpy.ndarray
+        The source data from which to interpolate.
+        
+    index : numpy.ndarray
+        The index data to collapse by interpolation from source.  The final
+        axis runs across dimensionality of the index vector into source.  If
+        the 'strict' flag is set (the default case) then the size of the 
+        final axis must match the number of dimensions in source.  If index 
+        has additional dimensions they are broadcast.
+        
+    bound : string or list or tuple (default 'truncate')
+        This is either a string describing the boundary conditions to apply to
+        every axis in the input data, or a list of strings containing the 
+        boundary conditions on each axis.  The boundary conditions are listed
+        in vector order, not index order -- so an image array containing
+        values in (Y,X) order should be indexed in (X,Y) order in the index 
+        array, and boundary conditions are [boundX, boundY].  Only the first
+        character of each string is checked.   The strings must be one of:
+            
+            'f' - forbid boundary violations
+            
+            't' - truncate the array at the boundary.  Values outside are 
+                replaced with the fillvalue.
+                
+            'e' - extend the array at the boundary.  Values outside are 
+                replaced with the nearest value in the source array.
+                
+            'p' - periodic boundary conditions apply.  Indices are modded with
+                the size of the corresponding axis in the source array.
+                
+            'm' - mirror boundary conditions apply.  Indices reflect off each
+                boundary of the data, counting backward to the opposite 
+                boundary (where they reflect again).
+                
+    fillvalue : float (default 0)
+        This is the value used to fill elements that are outside the bounds of
+        the source array, if the 'truncate' boundary condition is selected.
+        
+    method : string (default 'nearest')
+        This controls the interpolation method.  The value is a string.  Each 
+        method has a single-letter abbreviation.  If the aa or antialias flag
+        is set to False, then the interpND methods are accepted. If it is set
+        to True (the default) then only the following methods are accepted.  
+        
+            'linear'/'l' - use linear (tent function) interpolation; this is 
+                only true linear interpolation for grid offset operations, as
+                the tent filter includes more than just two points along each
+                axis in the general case.
+        
+            'lanczos'/'z' - use Lanczos-function weighting in the input plane; 
+                this is a modified sinc that rolls off smoothly over three 
+                samples and approximates a trapezoid in frequency space.  In 
+                the context of anti-aliasing, the Lanczos filter loses the 
+                property of reproducing the input value exactly at pixel centers.
+        
+            'hann'/'h' - use Hann window (overlapping sin^2) interpolation.  
+                The Hann window smoothly transitions between pixels in the 
+                up-sampling case and preserves correct weighting in the 
+                down-sampling case with affine (uniform-Jacobian) resampling.
+            
+            'tukey'/'t' - The Tukey window rolls off with a cosine taper like
+                the Hann window, but over only half the width of each pixel. 
+                This imposes slightly broader sidelobes on the data but also
+                (gently) renders pixel boundaries for upsampled data.      
+    
+            'gaussian'/'g' - use Gaussian weighted smoothing.  The Gaussian 
+                has a full-width of 1 pixel, and is enumerated for a radius
+                of three half-widths in all directions.  Gaussian filtering 
+                is an analytic balance between frequency response and 
+                spatial footprint. 
+        
+        antialias : Boolean (default True)
+            Setting this to False falls through to InterpND, providing a 
+            uniform API for the two methods.
+            
+        aa : Boolean (default True)
+            Abbreviation for "antialias".
+            
+        oblur: Float (default 1.0)
+            This is a coefficient applied to the width parameter of the filter
+            function, in the output space after padding.  1.0 uses the nominal 
+            width (typically 1 adjusted pixel); larger numbers cause uniform
+            blur in the output space.  Numbers smaller than 1.0 are allowed
+            but not recommended.
+        
+        iblur: Float (default 1.0)
+            This is the value to which the singular values of the Jacobian are
+            padded, in the input plane.  The default ensures sampling of a 
+            one-pixel neighborhood even for upsampling.  Larger values cause
+            some blurring on upsample/enlargement, but do not affect resampling 
+            to decimate/reduce data.
+        
+        pad_type: String (default "quadratic")
+            This controls how the singular values of the Jacobian are padded to
+            ensure that a reasonable neighborhood in the input plane is sampled.
+            
+        sv_limit: Float (default 0.25)
+            This controls what fraction of the input array may be averaged over
+            by a single output pixel, to prevent runaway in case of singular or
+            pathological sampling.  The default value allows up to a quarter of
+            each dimension to be averaged over in a single output pixel.
+            
+        jump_detect: Float or Boolean (default 4.0)
+            This flag indicates whether the linearizing logic should detect 
+            jumps in the Jacobian values from pixel to pixel, and guess at a 
+            reasonable smooth Jacobian value at those jumps.  Some transforms 
+            (for example radial coordinate transforms) include jumps between
+            branches of the analytic solution; this causes local jumps in the
+            value of the Jacobian, from reasonable values to very large values.
+            Jump detection works by finding jumps in the Jacobian values.
+            Spikes that are more than <jump_detect> times the value of the 
+            running local median for that value cause that particular value 
+            to be replaced with the median.  Setting jump_detect to False or 0
+            turns off the feature.
+    
+        strict : Boolean (default True)
+        The 'strict' parameter forces strict matching of index vector dimension
+        to the number of axes in the source array.  If it is False, then the
+        indexing vectors may be smaller than the number of indices in Source, 
+        in which case the interpolation is broadcast over the additional axes.
+            
+    Returns
+    -------
+    The indexed data resampled from the source array, as a numpy ND array
+    '''
+
+        
+            
+            
+        
+            
+
+            
+        
+            
+            
+    
+                
+    
+    
+    

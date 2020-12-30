@@ -325,6 +325,17 @@ def test_007_interpND_filtermethods():
     b = t.interpND(a,dex,method='h')
     assert np.all(np.isclose(a,b,atol=1e-9))
     
+# oblur scales the filter function - blurring by 3 should expand the filter 
+# function by 3.  test this with generalized linear interpolation (additional
+# code path); the code is straightforward enough that the other filters are 
+# good if this one is.
+def test_008_interpND_with_oblur():
+    a = np.zeros((7,7))
+    a[3,3] = 1
+    grid = np.mgrid[0:7,0:7].T
+    b = t.interpND(a,grid,method='l',oblur=3)
+    assert(np.all(np.isclose(b[3],np.array([0,0.037,0.074,0.111,0.074,0.037,0]),atol=1e-3)))
+    assert(np.isclose(b.sum(),1.0,atol=1e-8))
     
     
 
