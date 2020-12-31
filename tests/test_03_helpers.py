@@ -337,7 +337,269 @@ def test_008_interpND_with_oblur():
     assert(np.all(np.isclose(b[3],np.array([0,0.037,0.074,0.111,0.074,0.037,0]),atol=1e-3)))
     assert(np.isclose(b.sum(),1.0,atol=1e-8))
     
+def test_009_SimpleJacobian():
+    ### Test error cases
     
+    # Nonsquare Jacobian doesn't work (for now -- broadcasting is a useful idea)
+    try:
+        grid = np.mgrid[0:10,0:100:10,0:1000:100].T
+        g1 = grid[...,0:2]
+        J = t.SimpleJacobian(g1)
+        assert(False)
+    except:
+        pass
+    
+    # Single element along an axis doesn't work
+    try:
+        grid= (np.mgrid[0:1,0:10].T)
+        J = t.SimpleJacobian(grid)
+        assert(False)
+    except:
+        pass
+    
+    # 1-D Jacobian
+    grid = np.zeros([5,1])
+    grid[2,0] = 1
+    J = t.SimpleJacobian(grid)
+    assert(np.all(J.shape == np.array([4,1,1])))
+    assert(all(J[...,0,0] == [0,1,-1,0]))
+    
+    # 2-D Jacobian
+    grid = np.zeros([4,4,2])
+    # X component is 1 at X=2,Y=1
+    grid[1,2,0] = 1
+    # Y component is 0.5 at X=2,Y=2
+    grid[2,2,1] = 0.5
+    J = t.SimpleJacobian(grid)
+    assert(np.all(J.shape == np.array([3,3,2,2])))
+    # Check X component of X derivative
+    assert(np.all(  J[...,0,0] == 
+           np.array( [[0,0.5,-0.5],[0,0.5,-0.5],[0,0,0]] )
+           ))
+    # Check X component of Y derivative 
+    assert(np.all( J[...,0,1] == 
+            np.array( [[0,0.5,0.5],[0,-0.5,-0.5],[0,0,0]] )
+            ))
+    # Check Y component of X derivative
+    assert(np.all( J[...,1,0] ==
+            np.array( [[0,0,0],[0,0.25,-0.25],[0,0.25,-0.25]])
+            ))
+    # Check Y component of Y derivative
+    assert(np.all( J[...,1,1]  == 
+            np.array( [[0,0,0],[0,0.25,0.25],[0,-0.25,-0.25]])
+            ))
+            
+    # 3-D Jacobian (exercises N-D code)
+    # 4x4x4 grid of 3-vectors
+    grid = np.zeros([4,4,4,3])
+    # X component is 1 at X=2,Y=1,Z=1
+    grid[1,1,2,0] = 1
+    # Y component is 2 at X=1,Y=2,Z=2
+    grid[1,2,2,1] = 2
+    # Z component is 3 at X=2,Y=2,Z=2
+    grid[2,2,2,2] = 3
+    J = t.SimpleJacobian(grid)
+    assert(np.all(J.shape == np.array([3,3,3,3,3])))
+    # Check X component of X derivative - horizontal
+    assert(np.all(  J[...,0,0] ==
+        np.array( [
+                    [[0.,  0.25, -0.25],
+                     [0.,  0.25, -0.25],
+                     [0.,  0.,    0.  ]],
+                    
+                    [[0.,  0.25, -0.25],
+                     [0.,  0.25, -0.25],
+                     [0.,  0.,    0.  ]],
+                    
+                    [[0.,  0.,    0.  ],
+                     [0.,  0.,    0.  ],
+                     [0.,  0.,    0.  ]]
+                    ]
+            )
+        ))
+    # Check X component of Y derivative - vertical
+    assert(np.all( 
+        np.isclose(
+            J[...,0,1],
+            np.array( [[[ 0.,  0.25,  0.25],
+                        [ 0., -0.25, -0.25],
+                        [ 0.,  0.,    0.  ]
+                        ],
+                       [[ 0.,  0.25,  0.25],
+                        [ 0., -0.25, -0.25],
+                        [ 0.,  0,     0.  ]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ]
+                        ]
+                       ]
+                     ),
+            atol=1e-10
+            )
+        )
+        )
+    # Check X component of Z derivative - cross-plane
+    assert(np.all( 
+        np.isclose(
+            J[...,0,2],
+            np.array( [[[ 0.,  0.25,  0.25],
+                        [ 0.,  0.25,  0.25],
+                        [ 0.,  0.,    0.  ]
+                        ],
+                       [[ 0., -0.25, -0.25],
+                        [ 0., -0.25, -0.25],
+                        [ 0.,  0,     0.  ]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ]
+                        ]
+                       ]
+                     ),
+            atol=1e-10
+            )
+        )
+        )
+    # Check Y component of X derivative - horizontal
+    assert(np.all( 
+        np.isclose(
+            J[...,1,0],
+            np.array( [[[ 0.,  0.  ,  0.  ],
+                        [ 0.,  0.5,  -0.5 ],
+                        [ 0.,  0.5,  -0.5 ]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.5,  -0.5 ],
+                        [ 0.,  0.5,  -0.5 ],
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ]
+                        ]
+                       ]
+                     ),
+            atol=1e-10
+            )
+        )
+        )
+    # Check Y component of Y derivative - vertical
+    assert(np.all( 
+        np.isclose(
+            J[...,1,1],
+            np.array( [[[ 0.,  0.  ,  0.  ],
+                        [ 0.,  0.5,   0.5 ],
+                        [ 0., -0.5,  -0.5 ]
+                        ],
+                       [[ 0.,  0,     0.  ],
+                        [ 0.,  0.5,   0.5 ],
+                        [ 0., -0.5,  -0.5 ]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ]
+                        ]
+                       ]
+                     ),
+            atol=1e-10
+            )
+        )
+        )
+     # Check Y component of Z derivative - cross-plane
+    assert(np.all( 
+        np.isclose(
+            J[...,1,2],
+            np.array( [[[ 0.,  0.  ,  0.  ],
+                        [ 0.,  0.5,   0.5 ],
+                        [ 0.,  0.5,   0.5 ]
+                        ],
+                       [[ 0.,  0,     0.  ],
+                        [ 0., -0.5,  -0.5 ],
+                        [ 0., -0.5,  -0.5 ],
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ]
+                        ]
+                       ]
+                     ),
+            atol=1e-10
+            )
+        )
+        )
+    # Check X component of Z derivative - horizontal
+    assert(np.all( 
+        np.isclose(
+            J[...,2,0],
+            np.array( [
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.75, -0.75],
+                        [ 0.,  0.75, -0.75]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.75, -0.75],
+                        [ 0.,  0.75, -0.75]
+                        ]
+                       ]
+                     ),
+            atol=1e-10
+            )
+        )
+        )
+    # Check Y component of Z derivative - vertical
+    assert(np.all( 
+        np.isclose(
+            J[...,2,1],
+            np.array( [
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.75,  0.75],
+                        [ 0., -0.75, -0.75]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.75,  0.75],
+                        [ 0., -0.75, -0.75]
+                        ]
+                       ]
+                     ),
+            atol=1e-10
+            )
+        )
+        )
+    # Check Z component of Z derivative - cross-plane
+    assert(np.all( 
+        np.isclose(
+            J[...,2,2],
+            np.array( [
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ],
+                        [ 0.,  0.,    0.  ]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0.,  0.75,  0.75],
+                        [ 0.,  0.75,  0.75]
+                        ],
+                       [[ 0.,  0.,    0.  ],
+                        [ 0., -0.75, -0.75],
+                        [ 0., -0.75, -0.75]
+                        ]
+                       ]
+                     ),
+            atol=1e-10
+            )
+        )
+        )
+    
+    
+    
+        
 
     
     

@@ -996,40 +996,117 @@ def interpND_grid(source, /,
         if len(source.shape) != len(index.shape)-1:
             raise ValueError("interpND_grid: index broadcast dims must match source dims")
 
+
+
+
+def SimpleJacobian(index):
+    '''
+    SimpleJacobian - given an N-D grid of N-vectors, find the numeric Jacobian 
+    of the implied transformation (delta(grid-vec) / delta(pixel-loc)).
+    
+    Parameters
+    ----------
+    index : NumPy array, with N+1 axes, the last of which has size N
+        index is considered as an N-D array of N-vectors. The axes are
+        in reverse order (...,Y,X) and the vector is in forward order 
+        (X,Y,...).
+
+    Returns
+    -------
+    the Jacobian matrix at each pixel boundary in the array, as an 
+    array with N+2 axes, the last two of which have size N.  The first
+    N axes are shrunk by one element compared to the input.  Indexing
+    the output with [...,i,j] yields the ith component of the derivative
+    vector with respect to the jth direction.
+    '''
+    if(np.any(np.array(index.shape[0:-1]) < 2)):
+        raise ValueError("SimpleJacobian: must have at least two vectors along each grid axis")
+        
     ndim = index.shape[-1]
-    ### Calculate all the Jacobians up-front for easier jump detection later
-    ### J gets (Xn-1...X0,Jr,Jc) where Xi is the index 
     
+    if(ndim != len(index.shape)-1 ):
+        raise ValueError("SimpleJacobian: vector dimension must match broadcast axes")
 
-    # Allocate the Jacobian matrix
+    # Allocate the Jacobian.  Don't bother initializing since all the values
+    # are computed and inserted later.
     Jdims = [index.shape[i]-1 for i in range(ndim)] + [ndim,ndim]
-    J = np.zeros( Jdims )
+    J = np.ndarray( Jdims )
+ 
+    #########################################################
+    # 1-D case: trivial
+    if(ndim==1):
+        J[...,:,0] = index[1:index.shape[0]]-index[0:-1]
     
-    # assemble the Jacobian one column at a time.
-    # Each column of the Jacobian (set of rows; index -2) contains a derivative. 
-    # vector from the index vector collection, along a particular axis.
-    # Each row of the Jacobian (set of columns; index -1) describes the
-    # derivative of a particular index vector with respect to each direction.
-    #
-    # Jacobian components exist between samples, not at samples; to make that
-    # happen we average across the other dimensions.
-    #
-    # To make all *that* happen, we make several passes through the data, summing
-    # along most axes and differencing across the active one to get the derivative
-    # we want.  At the end we divide by 2^N to make the cross-dimensional mean.
-    #
-    # This code should be Cythonified as a unit.  The Jacobians need to be 
-    # calculated en masse at present, so that adjacent Jacobians are available
-    # for jump detection. Ultimately we could avoid breaking cache by calculating
-    # and caching adjacent Jacobian as we walk around -- but that might not
-    # win all that much.
-    #
+    #########################################################
+    # 2-D case: not quite so trivial but directly enumerable
+    elif(ndim==2):
+        J[...,:,0] = ( + index[1:index.shape[0],1:index.shape[1],:]
+                       - index[1:index.shape[0],0:-1,            :]
+                       + index[0:-1,            1:index.shape[1],:]
+                       - index[0:-1,            0:-1,            :]
+                       )/2
+        J[...,:,1] = ( + index[1:index.shape[0],1:index.shape[1],:]
+                       + index[1:index.shape[0],0:-1,            :]
+                       - index[0:-1,            1:index.shape[1],:]
+                       - index[0:-1,            0:-1,            :]
+                       )/2   
     
-    # Offsets: N-cube with 0/1 on all corners.
-    ncube = np.mgrid[ tuple( repeat( range(2), ndim))].T
+    #########################################################          
+    # N-D case: we assemble one column at a time.  We reduce the offet 
+    # operation to a multiply-and-sum that produces the mean along each axis 
+    # except the one we care about for each column.
+    else:
+        
+        # ncube: N-cube of vector offsets with 0/1 on all corners.
+        # ncube_enum: flattened collection of vectors
+        ncube = np.mgrid[ tuple( repeat( range(2), ndim))].T
+        ncube_enum = np.reshape(ncube,(2**ndim,ndim))
 
-    for col in range(ndim):
-        factors = np.ones(mcube)
+
+        # Set all elements of J to 0, so we can accumulate sums in it.
+        J[...,:] = 0
+    
+        # Loop over column of the Jacobian 
+        for col in range(ndim):
+        
+            # Generate an N-cube similar to the ncube above, but 
+            # of scalar coefficientsl  The coefficient should be 
+            # with 1 in the upper and -1 on the lower side of the 
+            # axis we care about for this column.  The axes count
+            # backward compared to column, because of the (...,Y,X)
+            # indexing in numpy.  The 0 index after the ellipsis
+            # selects the lower index.
+            factors = np.ones( tuple( repeat( 2, ndim ) ) )
+            factors[ tuple( [..., 0 ] + 
+                            [ np.s_[:] for i in range(col)]
+                            )
+                    ] = -1
+
+            # Dividing by 2**(n-1) yields the appropriate mean with 
+            # a multiply-and-sum
+            factors /= 2**(ndim-1)
+            factors_1d = np.reshape(factors,2**ndim)
+        
+            for corner in range(2**ndim):
+                ncv = ncube_enum[corner]            
+                # Soooo cumbersome.  Grab each trimmed-by-one-in-all-directions
+                # slice of index, and multiply by corresponding factor to get the
+                # term in the mean-of-differences sum.  (PDL does this more 
+                # elegantly with its range() -- we could do that here with a 
+                # sampleND call -- but it would be very very slow)
+                rangedex = tuple( 
+                      [ np.s_[ ncv[i] : ncv[i]+Jdims[i]] for i in range(ndim-1,-1,-1) ]
+                    + [ range(ndim) ]
+                    )
+                corner_term = index[ rangedex ] * factors_1d[corner]
+                J[...,col] += corner_term
+    
+    return J
+
+
+        
+        
+        
         
             
         
