@@ -802,6 +802,11 @@ def interpND_grid(source, /,
              bound='t', 
              antialias=True, aa=True,
              fillvalue=0, 
+             oblur=1.0,
+             iblur=1.0,
+             pad_pow=8,
+             sv_limit=0.25,
+             jump_detect=4.0,
              strict=False):
     '''
     interpND_grid - a better N-D interpolator for grids (with anti-aliasing)
@@ -929,9 +934,15 @@ def interpND_grid(source, /,
             some blurring on upsample/enlargement, but do not affect resampling 
             to decimate/reduce data.
         
-        pad_type: String (default "quadratic")
+        pad_pow: Float (default 8)
             This controls how the singular values of the Jacobian are padded to
             ensure that a reasonable neighborhood in the input plane is sampled.
+            Singular values padded using the formula
+                (S = (1 + s^pad_pow)^(1/pad_pow)).  
+            High values of pad_pow approximate direct padding (as in DeForest 
+            2004).  The default value of 8 has the effect of broadening the 
+            filter function by 9% if the input and output grids have exactly
+            the same spacing.
             
         sv_limit: Float (default 0.25)
             This controls what fraction of the input array may be averaged over
@@ -957,13 +968,78 @@ def interpND_grid(source, /,
         to the number of axes in the source array.  If it is False, then the
         indexing vectors may be smaller than the number of indices in Source, 
         in which case the interpolation is broadcast over the additional axes.
+        (Strict must be True at present)
             
     Returns
     -------
     The indexed data resampled from the source array, as a numpy ND array
     '''
+    if not(antialias and aa):
+        return interpND(source,
+                        index=index,
+                        method=method,
+                        bound=bound,
+                        fillvalue=fillvalue,
+                        strict=strict)
+    if not isinstance(index, np.ndarray):
+        index = np.array(index)
+    
+    if not isinstance(source, np.ndarray):
+        index = np.array(index)
+        
+    if not strict:
+        raise ValueError("interpND_grid: non-strict interpolation is not implemented")
+        
+    if strict:
+        if index.shape[-1] != len(source.shape):
+            raise ValueError("interpND_grid: source shape must match index vector length")
+        if len(source.shape) != len(index.shape)-1:
+            raise ValueError("interpND_grid: index broadcast dims must match source dims")
+
+    ndim = index.shape[-1]
+    ### Calculate all the Jacobians up-front for easier jump detection later
+    ### J gets (Xn-1...X0,Jr,Jc) where Xi is the index 
+    
+
+    # Allocate the Jacobian matrix
+    Jdims = [index.shape[i]-1 for i in range(ndim)] + [ndim,ndim]
+    J = np.zeros( Jdims )
+    
+    # assemble the Jacobian one column at a time.
+    # Each column of the Jacobian (set of rows; index -2) contains a derivative. 
+    # vector from the index vector collection, along a particular axis.
+    # Each row of the Jacobian (set of columns; index -1) describes the
+    # derivative of a particular index vector with respect to each direction.
+    #
+    # Jacobian components exist between samples, not at samples; to make that
+    # happen we average across the other dimensions.
+    #
+    # To make all *that* happen, we make several passes through the data, summing
+    # along most axes and differencing across the active one to get the derivative
+    # we want.  At the end we divide by 2^N to make the cross-dimensional mean.
+    #
+    # This code should be Cythonified as a unit.  The Jacobians need to be 
+    # calculated en masse at present, so that adjacent Jacobians are available
+    # for jump detection. Ultimately we could avoid breaking cache by calculating
+    # and caching adjacent Jacobian as we walk around -- but that might not
+    # win all that much.
+    #
+    
+    # Offsets: N-cube with 0/1 on all corners.
+    ncube = np.mgrid[ tuple( repeat( range(2), ndim))].T
+
+    for col in range(ndim):
+        factors = np.ones(mcube)
+        
+            
+        
+
 
         
+    
+    
+    
+    
             
             
         
