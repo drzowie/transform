@@ -54,13 +54,25 @@ def test_001_apply_boundary():
     assert all(v1[:,0]==[0,2,2,1,0,1,0,0,0,0])
     
     v0 = copy.copy(vec)
-    v1 = apply_boundary(vec,[3,3],bound='e',rint=False)
-    # make sure non-rint version doesn't change original
+    v1 = apply_boundary(vec,[3,3],bound='e',rint=False,pixels=False)
+    # make sure non-rint,non-pixels version doesn't change original
     assert all(v0.flat==vec.flat)
     assert all(v1[:,1]==2)
-    assert all(v1[:,0]==[0,2,2,2,0,0,0,0,0,0])
+    assert all(np.isclose(v1[:,0],[0,2,3,3,0,0,0,0,0,0],atol=1e-9))
     
-    v1 = apply_boundary(vec,[3,3],bound='p',rint=False)
+    v0 = copy.copy(vec)
+    v1 = apply_boundary(vec,[3,3],bound='e',rint=False,pixels=True)
+    # make sure non-rint,non-pixels version doesn't change original
+    assert all(v0.flat==vec.flat)
+    assert all(v1[:,1]==2)
+    assert all( np.isclose(v1[:,0], 
+                           [0,2,2.5,2.5,-0.5,-0.5,-0.49,-0.5,-0.1,-0.5],
+                           atol=1e-9
+                           )
+               )
+                           
+    
+    v1 = apply_boundary(vec,[3,3],bound='p',rint=False,pixels=False)
     assert all(v0.flat==vec.flat)
     assert all(np.isclose(v1[:,0],[0,2,0,1,2,1,2.51,2.49,2.9,2.1],atol=1e-8))
     
@@ -344,7 +356,7 @@ def test_009_SimpleJacobian():
     try:
         grid = np.mgrid[0:10,0:100:10,0:1000:100].T
         g1 = grid[...,0:2]
-        J = t.SimpleJacobian(g1)
+        J = t.simple_jacobian(g1)
         assert(False)
     except:
         pass
@@ -352,7 +364,7 @@ def test_009_SimpleJacobian():
     # Single element along an axis doesn't work
     try:
         grid= (np.mgrid[0:1,0:10].T)
-        J = t.SimpleJacobian(grid)
+        J = t.simple_jacobian(grid)
         assert(False)
     except:
         pass
@@ -360,7 +372,7 @@ def test_009_SimpleJacobian():
     # 1-D Jacobian
     grid = np.zeros([5,1])
     grid[2,0] = 1
-    J = t.SimpleJacobian(grid)
+    J = t.simple_jacobian(grid)
     assert(np.all(J.shape == np.array([4,1,1])))
     assert(all(J[...,0,0] == [0,1,-1,0]))
     
@@ -370,7 +382,7 @@ def test_009_SimpleJacobian():
     grid[1,2,0] = 1
     # Y component is 0.5 at X=2,Y=2
     grid[2,2,1] = 0.5
-    J = t.SimpleJacobian(grid)
+    J = t.simple_jacobian(grid)
     assert(np.all(J.shape == np.array([3,3,2,2])))
     # Check X component of X derivative
     assert(np.all(  J[...,0,0] == 
@@ -398,7 +410,7 @@ def test_009_SimpleJacobian():
     grid[1,2,2,1] = 2
     # Z component is 3 at X=2,Y=2,Z=2
     grid[2,2,2,2] = 3
-    J = t.SimpleJacobian(grid)
+    J = t.simple_jacobian(grid)
     assert(np.all(J.shape == np.array([3,3,3,3,3])))
     # Check X component of X derivative - horizontal
     assert(np.all(  J[...,0,0] ==

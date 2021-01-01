@@ -10,8 +10,9 @@ or an orthogonal interface for the various common interpolation methods.
 import numpy as np
 import copy
 from itertools import repeat
+import itertools
 
-def apply_boundary(vec, size, /, bound='f', rint=True):
+def apply_boundary(vec, size, /, bound='f', rint=True, pixels=True):
     '''
     apply_boundary - apply boundary conditions to a vector or collection
     
@@ -19,6 +20,8 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
     on a suitably-dimensioned N-rectangular volume.  It can process generic
     floating-point vectors but by default it rounds its input to int,
     for use in indexing arrays.
+    
+    
 
     Parameters
     ----------
@@ -54,6 +57,15 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
     rint : Boolean (default True)
         Causes the vectors to be rounded and reduced to ints, for use in 
         indexing regular gridded data.  
+        
+    pixels: Boolean (default True)
+        In the event that rint is false, the pixels flag causes the boundaries
+        to be offset a half-pixel downward from their nominal position, i.e. 
+        from [-0.5, size-0.5) along each axis.  This is consistent with the 
+        behavior of rint, in the sense that the positions can be rinted 
+        afterward to get integer pixel locations.  This is the
+        intended behavior so the default is True.  Clearing the flag gives 
+        boundaries for the active interval [0,size) along each axis.]
 
     Returns
     -------
@@ -89,11 +101,17 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
         raise ValueError("apply_boundary: boundary list must match vec dims")
         
     # rint if clled for
-    if rint and not issubclass(vec.dtype.type, np.integer):
-        vec = np.floor(vec+0.5).astype('int')
+    if(rint):
+        if issubclass(vec.dtype.type, np.integer):
+            vec = copy.copy(vec)
+        else: 
+            vec = np.floor(vec+0.5).astype('int')
     else:
-        vec = copy.copy(vec)
-        
+        if(pixels):
+            vec = vec+0.5
+        else:
+            vec = copy.copy(vec)
+    
     
     # Apply boundary conditions one dim at a time
     for ii in range(shape[-1]):
@@ -115,7 +133,10 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
             # Use explicit place() because clip() doesn't do the right thing
             # at the upper boundary.
             np.place(vec[...,ii], (vec[...,ii]<0), 0)
-            np.place(vec[...,ii], (vec[...,ii]>= s), s-1)
+            if(rint):
+                np.place(vec[...,ii], (vec[...,ii]>= s), s-1)
+            else:
+                np.place(vec[...,ii], (vec[...,ii]>=s), s-1e-10)
         ## periodic - modulo works fine
         elif  b=='p':
             # modulo
@@ -130,10 +151,11 @@ def apply_boundary(vec, size, /, bound='f', rint=True):
             raise ValueError(
                 "apply_boundary: boundaries are 'f', 't', 'e', 'p', or 'm'.")
         
+    if( (not rint) and pixels ):
+        vec -= 0.5
+        
     return vec
             
-
-
 def sampleND(source, /, 
              index=None, 
              chunk=None, 
@@ -795,6 +817,270 @@ def interpND(source, /,
             "interpND: valid methods are ('n','l','c','f','s','z','g','h','t')"
             )
 
+def simple_jacobian(index):
+    '''
+    simple_jacobian - given an N-D grid of N-vectors, find the numeric Jacobian 
+    of the implied transformation (delta(grid-vec) / delta(pixel-loc)).  The 
+    simple jacobian is just the enumerated difference between adjacent vectors,
+    in each possible direction.  The size of the grid is shrunk by one in each
+    direction, since the simple Jacobian exists halfway between gridpoints.  
+    The derivatives along each axis are averaged over the 2**(N-1) grid edges 
+    parallel to that axis (4 values for a 3D Jacobian; 2 values for a 2D 
+    Jacobian).
+    
+    The calculation is is not broadcastable (i.e. the index variable must be
+    N+1-D and its last axis must have size N), although the algorithm could
+    easily be adapted to support broadcasting.
+    
+    Parameters
+    ----------
+    index : NumPy array, with N+1 axes, the last of which has size N.
+        The parameter is treated as an N-D array of N-vectors. The axes are
+        in reverse order (...,Y,X) and the vector is in forward order 
+        (X,Y,...).
+
+    Returns
+    -------
+    the Jacobian matrix at each pixel boundary in the array, as an 
+    array with N+2 axes, the last two of which have size N.  The first
+    N axes are shrunk by one element compared to the input.  Indexing
+    the output with [...,i,j] yields the ith component of the derivative
+    vector with respect to the jth direction.
+    '''
+    if(np.any(np.array(index.shape[0:-1]) < 2)):
+        raise ValueError("SimpleJacobian: must have at least two vectors along each grid axis")
+        
+    ndim = index.shape[-1]
+    
+    if(ndim != len(index.shape)-1 ):
+        raise ValueError("SimpleJacobian: vector dimension must match broadcast axes")
+
+    # Allocate the Jacobian.  Don't bother initializing since all the values
+    # are computed and inserted later.
+    Jdims = [index.shape[i]-1 for i in range(ndim)] + [ndim,ndim]
+    J = np.ndarray( Jdims )
+ 
+    #########################################################
+    # 1-D case: trivial
+    if(ndim==1):
+        J[...,:,0] = index[1:index.shape[0]]-index[0:-1]
+    
+    #########################################################
+    # 2-D case: not quite so trivial but directly enumerable
+    elif(ndim==2):
+        J[...,:,0] = ( + index[1:index.shape[0],1:index.shape[1],:]
+                       - index[1:index.shape[0],0:-1,            :]
+                       + index[0:-1,            1:index.shape[1],:]
+                       - index[0:-1,            0:-1,            :]
+                       )/2
+        J[...,:,1] = ( + index[1:index.shape[0],1:index.shape[1],:]
+                       + index[1:index.shape[0],0:-1,            :]
+                       - index[0:-1,            1:index.shape[1],:]
+                       - index[0:-1,            0:-1,            :]
+                       )/2   
+    
+    #########################################################          
+    # N-D case: we assemble one column at a time.  We reduce the offet 
+    # operation to a multiply-and-sum that produces the mean along each axis 
+    # except the one we care about for each column.
+    else:
+        
+        # ncube: N-cube of vector offsets with 0/1 on all corners.
+        # ncube_enum: flattened collection of vectors
+        ncube = np.mgrid[ tuple( repeat( range(2), ndim))].T
+        ncube_enum = np.reshape(ncube,(2**ndim,ndim))
+
+
+        # Set all elements of J to 0, so we can accumulate sums in it.
+        J[...,:] = 0
+    
+        # Loop over column of the Jacobian 
+        for col in range(ndim):
+        
+            # Generate an N-cube similar to the ncube above, but 
+            # of scalar coefficientsl  The coefficient should be 
+            # with 1 in the upper and -1 on the lower side of the 
+            # axis we care about for this column.  The axes count
+            # backward compared to column, because of the (...,Y,X)
+            # indexing in numpy.  The 0 index after the ellipsis
+            # selects the lower index.
+            factors = np.ones( tuple( repeat( 2, ndim ) ) )
+            factors[ tuple( [..., 0 ] + 
+                            [ np.s_[:] for i in range(col)]
+                            )
+                    ] = -1
+
+            # Dividing by 2**(n-1) yields the appropriate mean with 
+            # a multiply-and-sum
+            factors /= 2**(ndim-1)
+            factors_1d = np.reshape(factors,2**ndim)
+        
+            for corner in range(2**ndim):
+                ncv = ncube_enum[corner]            
+                # Soooo cumbersome.  Grab each trimmed-by-one-in-all-directions
+                # slice of index, and multiply by corresponding factor to get the
+                # term in the mean-of-differences sum.  (PDL does this more 
+                # elegantly with its range() -- we could do that here with a 
+                # sampleND call -- but it would be very very slow)
+                rangedex = tuple( 
+                      [ np.s_[ ncv[i] : ncv[i]+Jdims[i]] for i in range(ndim-1,-1,-1) ]
+                    + [ range(ndim) ]
+                    )
+                corner_term = index[ rangedex ] * factors_1d[corner]
+                J[...,col] += corner_term
+    
+    return J
+
+def jacobian(index, 
+             jump_detect=True,
+             jump_thresh=10.
+             ):
+    '''
+    jacobian - given an N-D grid of N-vectors, find the conditioned numeric 
+    Jacobian of the implied transform (delta(grid-vec) / delta(pixel-loc)).  
+    The Jacobian is assembled from the enumerated difference between adjacent 
+    vectors, in each possible direction.  The Jacobian is estimated at 
+    gridpoints, using the simple_jacobian as a starting point.  If the 
+    jump_detect flag is set, then jumps are detected and eliminated, yielding
+    a value that is not strictly a numeric Jacobian but an estimate of the 
+    underlying Jacobian (ignoring jumps). The jump detection happens *before*
+    the averaging over each neighborhood to grid-center the Jacobian.
+    
+    This routine is a great candidate for being dropped into C: the memory
+    accesses break cache in a bad way.
+
+    Parameters
+    ----------
+    index : NumPy array, with N+1 axes, the last of which has size N.
+        The parameter is treated as an N-D array of N-vectors. The axes are
+        in reverse order (...,Y,X) and the vector is in forward order 
+        (X,Y,...).
+    
+    jump_detect : Boolean, optional
+        If this flag is set, then jump detection is included, to try to 
+        identify discontinuities in the underlying transformation and sidestep
+        them by extrapolation from valid points.  Jump detection examines
+        neighborhoods around each Jacobian point to identify places where the
+        local linearization isn't valid.  It needs a neighborhood to do that,
+        so it only works at least 3 pixels from the edge of the grid along 
+        each axis.
+        
+        The jump detector uses the typical magnitude (distance from determinant) 
+        of the Jacobian offset vector:
+            Jmag2 = sum_j sum_i (J_ij**2)
+        
+        The value of M2 is calculated around the entire 5x...x5 neighborhood
+        of each simple_jacobian value, and the 20-percentile value is kept.
+        Anywhere that
+            Jmag2 > Jmag2_20pct * jump_detect
+        
+        is marked as a jump.  The the simple-Jacobian components there are 
+        replaced with the mean of those from nearby non-marked locations.
+    
+        The default is True.
+        
+    jump_thresh : Float, optional
+        If jump_detect is set, this is the size of step (normalized to the 
+        neighborhood median in the Jacobian) that is considered a jump.
+        The default value of 10 means that a lone increase in offset magnitude
+        by a factor of 10 (compared to the 5-step neighborhood mdian in all
+        directions)
+
+    Returns
+    -------
+    the Jacobian matrix at each pixel boundary in the array, as an 
+    array with N+2 axes, the last two of which have size N.  The first
+    N axes are have the same size as the corresponding axes on input.  Indexing
+    the output with [...,i,j] yields the ith component of the estimated 
+    derivative vector with respect to the jth direction.
+    '''
+    Js = simple_jacobian(index)
+    
+    ndim = index.shape[-1]
+    if(ndim != len(index.shape)-1 ):
+        raise ValueError("jacobian: input must be N+1-dimensional, with last axis size N")
+    
+    J = np.ndarray( index.shape + [index.shape[-1]] )
+    
+    if(not jump_detect):
+        # No jump detection -- just simple averaging  
+        if(ndim==1):
+            J[1:-1,...] = Js[ 0:Js.shape[0]-1,...] + Js[ 1:Js.shape[0],... ]
+            J[ 0, ...] = J[ 1, ...]
+            J[-1, ...] = J[-2, ...]
+            J *= 0.5
+            
+        elif(ndim==2):
+            J[1:-1,1:-1,...] = ( Js[ 0:Js.shape[0]-1, 0:Js.shape[1]-1,...] +
+                                 Js[ 1:Js.shape[0],   0:Js.shape[1]-1,...] +
+                                 Js[ 0:Js.shape[0]-1, 1:Js.shape[1],  ...] +
+                                 Js[ 1:Js.shape[0],   1:Js.shape[1]-1,...]
+                                 )
+            J[ 0, ...] = J[ 1, ...]
+            J[-1, ...] = J[-2, ...]
+            J[ :,  0, ...] = J[ :,  1, ... ]
+            J[ :, -1, ...] = J[ :, -2, ... ]
+            J *= 0.25
+        
+        else:
+            pass
+            # implement N-D case here
+    
+    else:
+        # Jump detection - look for v. high or v. low cases
+        jumpflag = np.zeros(index.shape[0:-2],dtype=int)
+        Jmag2 = (J*J).sum(axis=(-2,-1))
+        
+        
+        # Calculate the magnitude of the offset vector in the Jacobian:
+        # useful for characterizing neighborhoods
+        Jmag2 = (J*J).sum(axis=-2)
+        
+        # sudden jumps 10x the size of the neighborhood's typical step
+        # are suppressed
+        
+        
+        if(ndim==1):
+            # Find lags along the lone axis, to characterize each neighborhood
+            # (in the final axis)
+            Jmag2lag = numpy.stack( 
+                [ J[i:i+J.shape[0]-4,:,:] for i in range(5) ], 
+                axis=-1) 
+            Jmag2lag.sort(axis=-1)
+            Jmag2_20pct = Jmag2lag[...,1]
+            jumpflag[2:-2] = (Jmag2[2:-2] > Jmag2_20pct * jump_thresh)
+        
+        elif(ndim==2):
+            Jmag2lags = numpy.stack(
+               [ J[i:i+J.shape[0]-4,
+                   j:j+J.shape[1]-4]
+                for i in range(5) for j in range()],
+               axis=-1)
+            Jmag2lag.sort(axis=-1)
+            Jmag2_20pct = Jmag2lag[...,5]
+            jumpflag[2:-2,2:-2] = (Jmag2[2:-2,2:-2] > Jmag2_20pct * jump_thresh)
+        
+            
+        else:
+            assert(False)
+        print(f"jumpflag is:")
+        print(f"jumpflag")
+        
+    
+    
+            
+            
+            
+            
+        
+            
+
+            
+            
+        
+        
+            
+    
 
 def interpND_grid(source, /, 
              index=None, 
@@ -955,13 +1241,14 @@ def interpND_grid(source, /,
             jumps in the Jacobian values from pixel to pixel, and guess at a 
             reasonable smooth Jacobian value at those jumps.  Some transforms 
             (for example radial coordinate transforms) include jumps between
-            branches of the analytic solution; this causes local jumps in the
-            value of the Jacobian, from reasonable values to very large values.
-            Jump detection works by finding jumps in the Jacobian values.
-            Spikes that are more than <jump_detect> times the value of the 
-            running local median for that value cause that particular value 
-            to be replaced with the median.  Setting jump_detect to False or 0
-            turns off the feature.
+            branches of the analytic solution; and others involve wrapping
+            around a source array with periodic boundary conditions.  Either 
+            condition causes local jumps in the value of the Jacobian, from 
+            reasonable values to very large values. Jump detection works by 
+            finding jumps in the Jacobian values. Spikes that are more than 
+            <jump_detect> times the value of the running local median for that 
+            value cause that particular value to be replaced with the median.  
+            Setting jump_detect to False or 0 turns off the feature.
     
         strict : Boolean (default True)
         The 'strict' parameter forces strict matching of index vector dimension
@@ -996,118 +1283,16 @@ def interpND_grid(source, /,
         if len(source.shape) != len(index.shape)-1:
             raise ValueError("interpND_grid: index broadcast dims must match source dims")
 
-
-
-
-def SimpleJacobian(index):
-    '''
-    SimpleJacobian - given an N-D grid of N-vectors, find the numeric Jacobian 
-    of the implied transformation (delta(grid-vec) / delta(pixel-loc)).
+    # Apply boundary conditions *before* calculating the Jacobian, to catch jumps 
+    # from either the intrinsic transformation or the applied boundaries.
+    bindex = apply_boundary(index, source.shape, bound=bound, rint=False)
+    dims = len(index.shape[-1])
     
-    Parameters
-    ----------
-    index : NumPy array, with N+1 axes, the last of which has size N
-        index is considered as an N-D array of N-vectors. The axes are
-        in reverse order (...,Y,X) and the vector is in forward order 
-        (X,Y,...).
+    J = jacobian(bindex, jump_detect=jump_detect)
 
-    Returns
-    -------
-    the Jacobian matrix at each pixel boundary in the array, as an 
-    array with N+2 axes, the last two of which have size N.  The first
-    N axes are shrunk by one element compared to the input.  Indexing
-    the output with [...,i,j] yields the ith component of the derivative
-    vector with respect to the jth direction.
-    '''
-    if(np.any(np.array(index.shape[0:-1]) < 2)):
-        raise ValueError("SimpleJacobian: must have at least two vectors along each grid axis")
-        
-    ndim = index.shape[-1]
+
     
-    if(ndim != len(index.shape)-1 ):
-        raise ValueError("SimpleJacobian: vector dimension must match broadcast axes")
-
-    # Allocate the Jacobian.  Don't bother initializing since all the values
-    # are computed and inserted later.
-    Jdims = [index.shape[i]-1 for i in range(ndim)] + [ndim,ndim]
-    J = np.ndarray( Jdims )
- 
-    #########################################################
-    # 1-D case: trivial
-    if(ndim==1):
-        J[...,:,0] = index[1:index.shape[0]]-index[0:-1]
     
-    #########################################################
-    # 2-D case: not quite so trivial but directly enumerable
-    elif(ndim==2):
-        J[...,:,0] = ( + index[1:index.shape[0],1:index.shape[1],:]
-                       - index[1:index.shape[0],0:-1,            :]
-                       + index[0:-1,            1:index.shape[1],:]
-                       - index[0:-1,            0:-1,            :]
-                       )/2
-        J[...,:,1] = ( + index[1:index.shape[0],1:index.shape[1],:]
-                       + index[1:index.shape[0],0:-1,            :]
-                       - index[0:-1,            1:index.shape[1],:]
-                       - index[0:-1,            0:-1,            :]
-                       )/2   
-    
-    #########################################################          
-    # N-D case: we assemble one column at a time.  We reduce the offet 
-    # operation to a multiply-and-sum that produces the mean along each axis 
-    # except the one we care about for each column.
-    else:
-        
-        # ncube: N-cube of vector offsets with 0/1 on all corners.
-        # ncube_enum: flattened collection of vectors
-        ncube = np.mgrid[ tuple( repeat( range(2), ndim))].T
-        ncube_enum = np.reshape(ncube,(2**ndim,ndim))
-
-
-        # Set all elements of J to 0, so we can accumulate sums in it.
-        J[...,:] = 0
-    
-        # Loop over column of the Jacobian 
-        for col in range(ndim):
-        
-            # Generate an N-cube similar to the ncube above, but 
-            # of scalar coefficientsl  The coefficient should be 
-            # with 1 in the upper and -1 on the lower side of the 
-            # axis we care about for this column.  The axes count
-            # backward compared to column, because of the (...,Y,X)
-            # indexing in numpy.  The 0 index after the ellipsis
-            # selects the lower index.
-            factors = np.ones( tuple( repeat( 2, ndim ) ) )
-            factors[ tuple( [..., 0 ] + 
-                            [ np.s_[:] for i in range(col)]
-                            )
-                    ] = -1
-
-            # Dividing by 2**(n-1) yields the appropriate mean with 
-            # a multiply-and-sum
-            factors /= 2**(ndim-1)
-            factors_1d = np.reshape(factors,2**ndim)
-        
-            for corner in range(2**ndim):
-                ncv = ncube_enum[corner]            
-                # Soooo cumbersome.  Grab each trimmed-by-one-in-all-directions
-                # slice of index, and multiply by corresponding factor to get the
-                # term in the mean-of-differences sum.  (PDL does this more 
-                # elegantly with its range() -- we could do that here with a 
-                # sampleND call -- but it would be very very slow)
-                rangedex = tuple( 
-                      [ np.s_[ ncv[i] : ncv[i]+Jdims[i]] for i in range(ndim-1,-1,-1) ]
-                    + [ range(ndim) ]
-                    )
-                corner_term = index[ rangedex ] * factors_1d[corner]
-                J[...,col] += corner_term
-    
-    return J
-
-
-        
-        
-        
-        
             
         
 
