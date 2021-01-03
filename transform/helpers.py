@@ -880,9 +880,9 @@ def simple_jacobian(index):
                        )/2   
     
     #########################################################          
-    # N-D case: we assemble one column at a time.  We reduce the offet 
+    # N-D case: we assemble one column at a time.  We reduce the offset 
     # operation to a multiply-and-sum that produces the mean along each axis 
-    # except the one we care about for each column.
+    # except the one we care about for this loop iteration.
     else:
         
         # ncube: N-cube of vector offsets with 0/1 on all corners.
@@ -898,8 +898,8 @@ def simple_jacobian(index):
         for col in range(ndim):
         
             # Generate an N-cube similar to the ncube above, but 
-            # of scalar coefficientsl  The coefficient should be 
-            # with 1 in the upper and -1 on the lower side of the 
+            # of scalar coefficients.  The coefficient should be 
+            #  1 in the upper and -1 on the lower side of the 
             # axis we care about for this column.  The axes count
             # backward compared to column, because of the (...,Y,X)
             # indexing in numpy.  The 0 index after the ellipsis
@@ -931,6 +931,158 @@ def simple_jacobian(index):
     
     return J
 
+def jump_detect(Js, 
+                jump_thresh = 10
+                ):
+    '''
+    jump_detect - find discontinuities in a Jacobian grid.
+    
+    You supply a grid of Jacobians that represent a coordinate transform. 
+    
+    The jump detector uses the typical magnitude (distance from determinant) 
+    of the Jacobian offset vector:
+        Jmag2 = sum_j sum_i (J_ij**2).
+    The value of M2 is calculated around the entire 3x...x3 neighborhood
+    of each simple_jacobian value, and the 33 percentile value is kept.
+    Anywhere that
+        Jmag2 > Jmag2_33pct * jump_detect  
+    is marked as a jump.  The  Jacobian's components there are 
+    replaced with the mean of those from nearby non-marked locations.
+        
+    The average-magnitude-of-Jacobian method works okay because the 
+    typical use case is for pixel to pixel mapping (reampling data 
+    sets), where the overall singular value ratio is not likely to be 
+    large (less than, say, 30).
+    
+    The method currently considers only the non-boundary case and single
+    boundaries:  i.e. in a 2-D grid the general case and edges are handled.
+    Corners are ignored.  In a 3-D grid the general case and faces are
+    handled; edges and corners are ignored.
+    
+    The return value is a scalar grid that contains a flag: 0 at most
+    locations; 1 at locations with jumps.
+
+    Parameters
+    ----------
+    Js : Numpy array 
+        Js is a an N-D grid of Jacobians.  It must have dimension N+2, and
+        each of the last axes must have size N.
+        
+    jump_thresh : float, optional
+        This is the size of step (normalized to the neighborhood median in the 
+        Jacobian) that is considered a jump. The default value of 10 means that 
+        a lone increase in offset magnitude by a factor of 10 (compared to the 
+        5-step neighborhood mdian in all directions)
+
+    Returns
+    -------
+        An N-D array containing 1 where the Jacobian is okay, and 0 where it
+        contains a jump.
+    '''
+    
+    ndim = len(Js.shape)-2
+    if(Js.shape[-1] != ndim or Js.shape[-2] != ndim):
+        raise ValueError("jump_detect: Jacobian-grid input has inconsistent dims")
+    
+    jumpflag = np.zeros(Js.shape[0:-2],dtype=int) + 1
+    
+
+    # Calculate the "typical magnitude" of the offset vector in the Jacobian
+    Jmag2 = (Js*Js).sum(axis=(-2,-1))
+    jump_thresh2 = jump_thresh * jump_thresh
+    
+    # 1-dimensional case: trivial.  Boundaries are ignored.
+    if(ndim==1):
+        # Find lags along the lone axis, to characterize each neighborhood
+        # (in the final axis)
+        Jmag2lag = np.stack( 
+            [ Jmag2[i:i+Js.shape[0]-2] for i in range(3) ], 
+            axis=-1) 
+        Jmag2lag.sort(axis=-1)
+        Jmag2_33pct = Jmag2lag[...,1]
+        jumpflag[1:-1] = (Jmag2[1:-1] < Jmag2_33pct * jump_thresh2)
+        
+        jumpflag[0] = (Jmag2[0]   <= Jmag2[1] * jump_thresh2 )
+        jumpflag[-1] = (Jmag2[-1]  <= Jmag2[-2] * jump_thresh2 )
+        
+       
+    # 2-dimensional case: nearly trivial.  One general case and 
+    # four edges.
+    elif(ndim==2):
+        # Find lags along both axes to characterize each neighborhood.
+        # Then treat the boundaries independently.  Dual-boundaries
+        # (corners) are unimportant; ignore them.
+        Jmag2lag = np.stack(
+               [ Jmag2[
+                   i:i+Js.shape[0]-2,
+                   j:j+Js.shape[1]-2
+                   ]
+                   for i in range(3) for j in range(3)
+                   ],
+               axis=-1)
+        Jmag2lag.sort(axis=-1)
+        Jmag2_33pct = Jmag2lag[...,3]
+        jumpflag[1:-1,1:-1] = (Jmag2[1:-1,1:-1] <= Jmag2_33pct * jump_thresh)
+            
+        # Low-Y edge:
+        Jmag2lag = np.stack(
+            [ Jmag2[
+                i:i+1,
+                j:j+Js.shape[1]-2
+                ]
+                for i in range(2) for j in range(3) 
+                ],
+            axis=-1)
+        Jmag2lag.sort(axis=-1)
+        Jmag2_33pct = Jmag2lag[...,2]
+        jumpflag[0:1,1:-1] = (Jmag2[0:1,1:-1] <= Jmag2_33pct * jump_thresh)
+            
+        # High-Y edge:
+        Jmag2lag = np.stack(
+            [ Jmag2[
+                i+Js.shape[0]-2:i+Js.shape[0]-1,
+                j:j+Js.shape[1]-2
+                ]
+                for i in range(2) for j in range(3) 
+                ],
+            axis=-1)
+        Jmag2lag.sort(axis=-1)
+        Jmag2_33pct = Jmag2lag[...,2]
+        jumpflag[-1:, 1:-1] = ( Jmag2[-1:, 1:-1]  <= Jmag2_33pct * jump_thresh)
+            
+        # Low-X edge:
+        Jmag2lag = np.stack(
+            [ Jmag2[
+                j:j+Js.shape[0]-2,
+                i:i+1,
+                ]
+                for i in range(2) for j in range(3) 
+                ],
+            axis=-1)
+        Jmag2lag.sort(axis=-1)
+        Jmag2_33pct = Jmag2lag[...,2]
+        jumpflag[1:-1,0:1] = (Jmag2[1:-1,0:1] <= Jmag2_33pct * jump_thresh)
+            
+        # High-Y edge:
+        Jmag2lag = np.stack(
+            [ Jmag2[
+                j:j+Js.shape[0]-2,
+                i+Js.shape[1]-2:i+Js.shape[1]-1,
+                ]
+                for i in range(2) for j in range(3) 
+                ],
+            axis=-1)
+        Jmag2lag.sort(axis=-1)
+        Jmag2_33pct = Jmag2lag[...,2]
+        jumpflag[1:-1, -1: ] = ( Jmag2[1:-1, -1:] <= Jmag2_33pct * jump_thresh)
+    else:
+        assert(False)
+        # STILL NEED TO IMPLEMENT N-D CASE
+        
+    return jumpflag
+
+        
+        
 def jacobian(index, 
              jump_detect=True,
              jump_thresh=10.
@@ -959,23 +1111,9 @@ def jacobian(index,
     jump_detect : Boolean, optional
         If this flag is set, then jump detection is included, to try to 
         identify discontinuities in the underlying transformation and sidestep
-        them by extrapolation from valid points.  Jump detection examines
-        neighborhoods around each Jacobian point to identify places where the
-        local linearization isn't valid.  It needs a neighborhood to do that,
-        so it only works at least 3 pixels from the edge of the grid along 
-        each axis.
+        them by extrapolation from valid points nearby.
         
-        The jump detector uses the typical magnitude (distance from determinant) 
-        of the Jacobian offset vector:
-            Jmag2 = sum_j sum_i (J_ij**2)
-        
-        The value of M2 is calculated around the entire 5x...x5 neighborhood
-        of each simple_jacobian value, and the 20-percentile value is kept.
-        Anywhere that
-            Jmag2 > Jmag2_20pct * jump_detect
-        
-        is marked as a jump.  The the simple-Jacobian components there are 
-        replaced with the mean of those from nearby non-marked locations.
+        If set, this uses the jump_detector subroutine to do its dirty work.
     
         The default is True.
         
@@ -1000,87 +1138,100 @@ def jacobian(index,
     if(ndim != len(index.shape)-1 ):
         raise ValueError("jacobian: input must be N+1-dimensional, with last axis size N")
     
-    J = np.ndarray( index.shape + [index.shape[-1]] )
-    
-    if(not jump_detect):
-        # No jump detection -- just simple averaging  
-        if(ndim==1):
-            J[1:-1,...] = Js[ 0:Js.shape[0]-1,...] + Js[ 1:Js.shape[0],... ]
-            J[ 0, ...] = J[ 1, ...]
-            J[-1, ...] = J[-2, ...]
-            J *= 0.5
-            
-        elif(ndim==2):
-            J[1:-1,1:-1,...] = ( Js[ 0:Js.shape[0]-1, 0:Js.shape[1]-1,...] +
-                                 Js[ 1:Js.shape[0],   0:Js.shape[1]-1,...] +
-                                 Js[ 0:Js.shape[0]-1, 1:Js.shape[1],  ...] +
-                                 Js[ 1:Js.shape[0],   1:Js.shape[1]-1,...]
-                                 )
-            J[ 0, ...] = J[ 1, ...]
-            J[-1, ...] = J[-2, ...]
-            J[ :,  0, ...] = J[ :,  1, ... ]
-            J[ :, -1, ...] = J[ :, -2, ... ]
-            J *= 0.25
-        
-        else:
-            pass
-            # implement N-D case here
-    
-    else:
-        # Jump detection - look for v. high or v. low cases
-        jumpflag = np.zeros(index.shape[0:-2],dtype=int)
-        Jmag2 = (J*J).sum(axis=(-2,-1))
-        
-        
-        # Calculate the magnitude of the offset vector in the Jacobian:
-        # useful for characterizing neighborhoods
-        Jmag2 = (J*J).sum(axis=-2)
-        
-        # sudden jumps 10x the size of the neighborhood's typical step
-        # are suppressed
-        
-        
-        if(ndim==1):
-            # Find lags along the lone axis, to characterize each neighborhood
-            # (in the final axis)
-            Jmag2lag = numpy.stack( 
-                [ J[i:i+J.shape[0]-4,:,:] for i in range(5) ], 
-                axis=-1) 
-            Jmag2lag.sort(axis=-1)
-            Jmag2_20pct = Jmag2lag[...,1]
-            jumpflag[2:-2] = (Jmag2[2:-2] > Jmag2_20pct * jump_thresh)
-        
-        elif(ndim==2):
-            Jmag2lags = numpy.stack(
-               [ J[i:i+J.shape[0]-4,
-                   j:j+J.shape[1]-4]
-                for i in range(5) for j in range()],
-               axis=-1)
-            Jmag2lag.sort(axis=-1)
-            Jmag2_20pct = Jmag2lag[...,5]
-            jumpflag[2:-2,2:-2] = (Jmag2[2:-2,2:-2] > Jmag2_20pct * jump_thresh)
-        
-            
-        else:
-            assert(False)
-        print(f"jumpflag is:")
-        print(f"jumpflag")
-        
-    
-    
-            
-            
-            
-            
-        
-            
+    J = np.ndarray( tuple(list(index.shape) + [index.shape[-1]]) )
 
+    # For jump detection we produce a validity flag (1/0) in jumpflag.
+    # Also set the corresponding Js values to 0.  This allows "simple" 
+    # averaging of neighborhoods in most cases.
+    if(jump_detect):
+        jf=jump_detect(Js)
+        Js = np.where(jf.T, Js.T, np.array([0])).T
+   
+    # 1-D: stoopid
+    if(ndim==1):
+        # Direct 1-D averaging (no jump detection)            
+        J[1:-1,...] = Js[ 0:Js.shape[0]-1,...] + Js[ 1:Js.shape[0],... ]
             
-            
+        if(jump_detect):
+            wgt =         jf[ 0:Js.shape[0]-1]     + jf[ 1:Js.shape[0]:-2  ]
+            J[1:-1,...].T /= wgt.clip(1)
+        else:
+            J /= 2
+                
+        # copy over boundaries
+        J[ 0, ...] = J[ 1, ...]
+        J[-1, ...] = J[-2, ...]
+
+    # 2-D: slightly less stoopid but manageable            
+    elif(ndim==2):
+        # Direct 2-D averaging, plus four boundaries
+        J[1:-1,1:-1,...] = ( Js[ 0:Js.shape[0]-1, 0:Js.shape[1]-1,...] +
+                             Js[ 1:Js.shape[0],   0:Js.shape[1]-1,...] +
+                             Js[ 0:Js.shape[0]-1, 1:Js.shape[1],  ...] +
+                             Js[ 1:Js.shape[0],   1:Js.shape[1],  ...]
+                             )
         
+        if(jump_detect):
+            wgt          = ( jf[ 0:Js.shape[0]-1, 0:Js.shape[1]-1] +
+                             jf[ 1:Js.shape[0],   0:Js.shape[1]-1] +
+                             jf[ 0:Js.shape[0]-1, 1:Js.shape[1]  ] +
+                             jf[ 1:Js.shape[0],   1:Js.shape[1]  ]
+                            )
+            J[1:-1,1:-1,...].T /= wgt.clip(1)
+        else:
+            J[1:-1,1:-1,...] /= 4
+
+        # Copy over boundaries
+        J[ 0, ... ] = J[ 1, ... ] 
+        J[-1, ... ] = J[-2, ... ]
+        J[ :,  0, ...] = J[ :,  1, ... ]
+        J[ :, -1, ...] = J[ :, -2, ... ]
         
+    # All other cases: use a general algo
+    else:
+        ndim = index.shape[-1]
+        
+        # Generate an N-cube of size 2 to use in assembling lags
+        ncube = np.mgrid[ tuple( repeat( range(2), ndim ) )].T
+        ncube_enum = np.reshape(ncube,(2**ndim, ndim))
+
+        # Use stupid N-pass algorithm to avoid large memory suck for the 
+        # sum.  In C or Cython we'd use a local algorithm.          
+        J[...,:,:] = 0
             
-    
+        if(jump_detect):
+            wgt = np.zeros(Js.size[0:ndim]-1)
+        
+        # Assemble mean where possible
+        croptuple = tuple( [ np.s_[1:-1] for i in range(ndim)] )
+        
+        for corner in range(2**ndim):
+            ncv = ncube_enum[corner]
+            rangedex = tuple(
+                [ np.s_[ ncv[i]: ncv[i]+Js.size[i]-1 ] 
+                for i in range(ndim-1,-1,-1)
+                ] )
+            J[ croptuple ] += Js[rangedex]
+            
+            if(jump_detect):
+                wgt += jf[rangedex]
+            
+        if(jump_detect):
+            J[ croptuple ] /= wgt.clip(1)
+        else:
+            J[ croptuple ] /= 2**ndim
+            
+        # Sweep out to the boundaries.
+        for axis in range(ndim):
+            J[ tuple(     list(repeat(np.s_[:], axis)) + [0] ) ] = (
+                J[ tuple( list(repeat(np.s_[:], axis)) + [1] ) ]
+                )
+            J[ tuple(     list(repeat(np.s_[:], axis)) + [J.size[axis]-1] ) ] = (
+                J[ tuple( list(repeat(np.s_[:], axis)) + [J.size[axis]-2] ) ]
+                )
+                
+
+        
 
 def interpND_grid(source, /, 
              index=None, 

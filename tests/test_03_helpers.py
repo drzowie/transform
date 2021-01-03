@@ -609,7 +609,44 @@ def test_009_SimpleJacobian():
         )
         )
     
+def test_010_jump_detect():
+    # Just like simple_jacobian, test 1, 2, and 3 dimensiona cases.
     
+    # 1-D typical case:
+    J1 = np.array([[[1]],[[1]],[[30]],[[1]]])
+    assert( np.all(J1.shape == np.array([4,1,1])))
+    jf = t.jump_detect(J1)
+    assert( np.all( jf == np.array([1,1,0,1])))
+    
+    # 1-D end case:
+    J1 = np.array([[[30]],[[1]],[[1]],[[11]]])
+    jf = t.jump_detect(J1)
+    assert( np.all( jf == np.array([0,1,1,0])))
+   
+    J1 = np.array([[[30]],[[1]],[[1]],[[10]]])
+    jf = t.jump_detect(J1)
+    assert( np.all( jf == np.array([0,1,1,1])))
+   
+    
+    # 2-D typical  case:
+    grid = np.zeros([5,5,2])
+    grid[1,2,0] = 1
+    grid[2,2,1] = 0.5
+    J2 = t.simple_jacobian(grid)
+    jf = t.jump_detect(J2)
+    assert( np.all( jf == 
+                    np.array([
+                        [1,1,1,1],
+                        [1,1,1,1],
+                        [1,0,0,1],
+                        [1,1,1,1]
+                        ])
+                    )
+            )
+    
+                       
+        
+
     
         
 
