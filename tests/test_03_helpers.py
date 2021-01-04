@@ -644,6 +644,28 @@ def test_010_jump_detect():
                     )
             )
     
+    # 3-D case: just dup the 2-D case along an axis.
+    # Simple test exercises 3-D code and makes sure it gets 
+    # the right answer in at least a trivial case.
+    grid = np.zeros((5,5,5,3))
+    grid[1,2,:,0] = 1
+    grid[2,2,:,1] = 0.5
+    J3 = t.simple_jacobian(grid)
+    jf = t.jump_detect(J3)
+    for i in range(4):
+        assert( np.all( jf[:,:,i] ==
+                       np.array([
+                           [1,1,1,1],
+                           [1,1,1,1],
+                           [1,0,0,1],
+                           [1,1,1,1]
+                           ])
+                       )
+               )
+    
+    
+        
+    
                        
         
 

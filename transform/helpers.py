@@ -1075,9 +1075,119 @@ def jump_detect(Js,
         Jmag2lag.sort(axis=-1)
         Jmag2_33pct = Jmag2lag[...,2]
         jumpflag[1:-1, -1: ] = ( Jmag2[1:-1, -1:] <= Jmag2_33pct * jump_thresh)
+        
     else:
-        assert(False)
-        # STILL NEED TO IMPLEMENT N-D CASE
+        # Generate a 3x3x...x3 N-cube to enumerate the lags
+        ncube = np.mgrid[ tuple( repeat( range(3), ndim))].T
+        ncube_enum = np.reshape(ncube, (3**ndim, ndim))
+        
+        # Generate the lags for the general case
+        Jmag2lags = np.stack(
+            [ Jmag2[
+                tuple(
+                    [ np.s_[ ncube_enum[i,j] : ncube_enum[i,j] + Js.shape[j]-2 ] 
+                     for j in range(ndim)    
+                     ]
+                    )
+                ] 
+                for i in range( ncube_enum.shape[0] )
+            ],
+            axis=-1
+            )
+        Jmag2lags.sort(axis=-1)
+        Jmag2_33pct = Jmag2lags[...,int(ncube_enum.shape[0]/3+0.5)]
+        
+        inset_by_one = tuple(
+            [ np.s_[1:-1] for i in range(ndim) ]
+            )
+        
+        jumpflag[ inset_by_one ] = (
+            Jmag2[ inset_by_one ] <= Jmag2_33pct * jump_thresh 
+            )
+        
+        # Now handle boundary case.  For N dimensions there are 2**N 
+        # major boundaries (e.g. faces, in 3D).  Neglect the minor
+        # boundaries (boundary intersections).
+
+        # Generate a 2x3x3x...x3 (N)-rectangle to average over 
+        ncube = np.mgrid[ tuple( [range(2)] + [range(3) for i in range(1,ndim)])].T
+        ncube_enum = np.reshape(ncube, (2 * (3**(ndim-1)), ndim))
+        
+        # Loop over the axes, getting lower and upper bounds on each.
+        # Move the target axis to 0 position, then enumerate the hypercube on
+        # it.
+        for axis in range(ndim):
+            # Move appropriate axis to start, in jf_tmp (view on jumpflag)
+            jf_tmp = np.moveaxis(jumpflag,axis,0)
+            Jmag2_tmp = np.moveaxis(Jmag2,axis,0)
+            
+            # Same offset construction as for major case -- except that on 
+            # the boundary axis we take just a 1-pixel slice at value=0
+            Jmag2lags = np.stack( [
+                Jmag2_tmp[
+                    tuple(
+                        [ np.s_[ ncube_enum[i,0] : ncube_enum[i,0]+1 ] 
+                         ] +
+                        [ np.s_[ ncube_enum[i,j] : ncube_enum[i,j] + jf_tmp.shape[j]-2 ]
+                           for j in range(1,ndim) 
+                        ]    
+                        )
+                    ]
+                    for i in range(ncube_enum.shape[0])
+                ],
+                axis=-1
+                )
+            Jmag2lags.sort(axis=-1)
+            Jmag2_33pct = Jmag2lags[...,int(ncube_enum.shape[0]/3+0.5)]
+            #jf_tmp is a view on jumpflag - flows back
+            jf_tmp[ tuple(
+                [ np.s_[ 0:1 ] ] +
+                [ np.s_[ 1:-1 ] for j in range(1,ndim) ]
+                )
+                ] = Jmag2_tmp[ tuple(
+                    [ np.s_[ 0:1 ] ] +
+                    [ np.s_[ 1:-1 ] for j in range(1,ndim) ]
+                    )
+                    ] <= Jmag2_33pct * jump_thresh
+            
+            # Same construction as above -- but offset to max value instead of 0.
+            Jmag2lags = np.stack( [
+                Jmag2_tmp[
+                    tuple(
+                        [ np.s_[ ncube_enum[i,0] + jf_tmp.shape[0]-2 : ncube_enum[i,0] + jf_tmp.shape[0] - 1 ] 
+                         ] +
+                        [ np.s_[ ncube_enum[i,j] : ncube_enum[i,j] + jf_tmp.shape[j]-2 ]
+                           for j in range(1,ndim)
+                        ]
+                        )
+                    ]
+                    for i in range(ncube_enum.shape[0])
+                ],
+                axis=-1
+                )
+            Jmag2lags.sort(axis=-1)
+            Jmag2_33pct = Jmag2lags[...,int(ncube_enum.shape[0]/3+0.5)]
+            #jf_tmp is a view on jumpflag - flows back
+            jf_tmp[ tuple(
+                [ np.s_[ jf_tmp.shape[-1]-1: jf_tmp.shape[-1] ] ]+
+                [ np.s_[ 1:-1 ] for j in range(1,ndim) ]
+                )
+                ] = Jmag2_tmp[ tuple(
+                    [ np.s_[ jf_tmp.shape[-1]-1: jf_tmp.shape[-1] ]] +
+                    [ np.s_[ 1:-1 ] for j in range(1,ndim) ]
+                     )
+                    ] <= Jmag2_33pct * jump_thresh
+        
+            
+            
+        
+        
+                                
+        
+        
+        
+
+                
         
     return jumpflag
 
