@@ -935,9 +935,12 @@ def jump_detect(Js,
                 jump_thresh = 10
                 ):
     '''
-    jump_detect - find discontinuities in a Jacobian grid.
+    jump_detect - find discontinuities in a Jacobian grid, to avoid 
+    weirdnesses in neighborhood tracking, near boundaries (e.g. transforms
+    that have periodic boundary conditions).
     
-    You supply a grid of Jacobians that represent a coordinate transform. 
+    You supply a grid of Jacobians that represent a coordinate transform as
+    enumerated at a bunch of points.
     
     The jump detector uses the typical magnitude (distance from determinant) 
     of the Jacobian offset vector:
@@ -959,8 +962,8 @@ def jump_detect(Js,
     Corners are ignored.  In a 3-D grid the general case and faces are
     handled; edges and corners are ignored.
     
-    The return value is a scalar grid that contains a flag: 0 at most
-    locations; 1 at locations with jumps.
+    The return value is a scalar grid that contains a validity flag: 1 at most
+    locations; 0 at locations with jumps.
 
     Parameters
     ----------
@@ -991,7 +994,7 @@ def jump_detect(Js,
     Jmag2 = (Js*Js).sum(axis=(-2,-1))
     jump_thresh2 = jump_thresh * jump_thresh
     
-    # 1-dimensional case: trivial.  Boundaries are ignored.
+    # 1-dimensional case: trivial.  
     if(ndim==1):
         # Find lags along the lone axis, to characterize each neighborhood
         # (in the final axis)
@@ -1005,83 +1008,18 @@ def jump_detect(Js,
         jumpflag[0] = (Jmag2[0]   <= Jmag2[1] * jump_thresh2 )
         jumpflag[-1] = (Jmag2[-1]  <= Jmag2[-2] * jump_thresh2 )
         
-       
-    # 2-dimensional case: nearly trivial.  One general case and 
-    # four edges.
-    elif(ndim==2):
-        # Find lags along both axes to characterize each neighborhood.
-        # Then treat the boundaries independently.  Dual-boundaries
-        # (corners) are unimportant; ignore them.
-        Jmag2lag = np.stack(
-               [ Jmag2[
-                   i:i+Js.shape[0]-2,
-                   j:j+Js.shape[1]-2
-                   ]
-                   for i in range(3) for j in range(3)
-                   ],
-               axis=-1)
-        Jmag2lag.sort(axis=-1)
-        Jmag2_33pct = Jmag2lag[...,3]
-        jumpflag[1:-1,1:-1] = (Jmag2[1:-1,1:-1] <= Jmag2_33pct * jump_thresh)
-            
-        # Low-Y edge:
-        Jmag2lag = np.stack(
-            [ Jmag2[
-                i:i+1,
-                j:j+Js.shape[1]-2
-                ]
-                for i in range(2) for j in range(3) 
-                ],
-            axis=-1)
-        Jmag2lag.sort(axis=-1)
-        Jmag2_33pct = Jmag2lag[...,2]
-        jumpflag[0:1,1:-1] = (Jmag2[0:1,1:-1] <= Jmag2_33pct * jump_thresh)
-            
-        # High-Y edge:
-        Jmag2lag = np.stack(
-            [ Jmag2[
-                i+Js.shape[0]-2:i+Js.shape[0]-1,
-                j:j+Js.shape[1]-2
-                ]
-                for i in range(2) for j in range(3) 
-                ],
-            axis=-1)
-        Jmag2lag.sort(axis=-1)
-        Jmag2_33pct = Jmag2lag[...,2]
-        jumpflag[-1:, 1:-1] = ( Jmag2[-1:, 1:-1]  <= Jmag2_33pct * jump_thresh)
-            
-        # Low-X edge:
-        Jmag2lag = np.stack(
-            [ Jmag2[
-                j:j+Js.shape[0]-2,
-                i:i+1,
-                ]
-                for i in range(2) for j in range(3) 
-                ],
-            axis=-1)
-        Jmag2lag.sort(axis=-1)
-        Jmag2_33pct = Jmag2lag[...,2]
-        jumpflag[1:-1,0:1] = (Jmag2[1:-1,0:1] <= Jmag2_33pct * jump_thresh)
-            
-        # High-Y edge:
-        Jmag2lag = np.stack(
-            [ Jmag2[
-                j:j+Js.shape[0]-2,
-                i+Js.shape[1]-2:i+Js.shape[1]-1,
-                ]
-                for i in range(2) for j in range(3) 
-                ],
-            axis=-1)
-        Jmag2lag.sort(axis=-1)
-        Jmag2_33pct = Jmag2lag[...,2]
-        jumpflag[1:-1, -1: ] = ( Jmag2[1:-1, -1:] <= Jmag2_33pct * jump_thresh)
-        
+    # 2-dimensional case was too much of a hassle - so we do the N-dimensional
+    # case eve for that.  For N dimensions, the smallest boundary we 
+    # deal with has N-1 dimensions (edges but not corners in the 2D case; 
+    # faces but not edges in the 3D case).
     else:
-        # Generate a 3x3x...x3 N-cube to enumerate the lags
+        
+        # Generate a 3x3x...x3 N-cube to enumerate the lags around each 
+        # point of interest. 
         ncube = np.mgrid[ tuple( repeat( range(3), ndim))].T
         ncube_enum = np.reshape(ncube, (3**ndim, ndim))
         
-        # Generate the lags for the general case
+        # Generate the lags for the general case (inside the boundary)
         Jmag2lags = np.stack(
             [ Jmag2[
                 tuple(
@@ -1094,6 +1032,8 @@ def jump_detect(Js,
             ],
             axis=-1
             )
+        
+        # Find the 33 percentile
         Jmag2lags.sort(axis=-1)
         Jmag2_33pct = Jmag2lags[...,int(ncube_enum.shape[0]/3+0.5)]
         
@@ -1117,11 +1057,14 @@ def jump_detect(Js,
         # Move the target axis to 0 position, then enumerate the hypercube on
         # it.
         for axis in range(ndim):
-            # Move appropriate axis to start, in jf_tmp (view on jumpflag)
+            # Move appropriate axis to start, in jf_tmp (view on jumpflag) and
+            # Jmag2_tmp (view on Jmag2).  This lets us deal with all dimensions
+            # the same -- which is important since the indexing is already 
+            # hairy enough.
             jf_tmp = np.moveaxis(jumpflag,axis,0)
             Jmag2_tmp = np.moveaxis(Jmag2,axis,0)
             
-            # Same offset construction as for major case -- except that on 
+            # Same offset construction as for general case -- except that on 
             # the boundary axis we take just a 1-pixel slice at value=0
             Jmag2lags = np.stack( [
                 Jmag2_tmp[
@@ -1139,18 +1082,14 @@ def jump_detect(Js,
                 )
             Jmag2lags.sort(axis=-1)
             Jmag2_33pct = Jmag2lags[...,int(ncube_enum.shape[0]/3+0.5)]
-            #jf_tmp is a view on jumpflag - flows back
-            jf_tmp[ tuple(
+            inset = tuple(
                 [ np.s_[ 0:1 ] ] +
                 [ np.s_[ 1:-1 ] for j in range(1,ndim) ]
                 )
-                ] = Jmag2_tmp[ tuple(
-                    [ np.s_[ 0:1 ] ] +
-                    [ np.s_[ 1:-1 ] for j in range(1,ndim) ]
-                    )
-                    ] <= Jmag2_33pct * jump_thresh
+            jf_tmp[ inset ] = Jmag2_tmp[ inset ] <= Jmag2_33pct * jump_thresh
             
-            # Same construction as above -- but offset to max value instead of 0.
+            # Same construction as above -- but offset to max value instead
+            # of 0 along the boundary axis.
             Jmag2lags = np.stack( [
                 Jmag2_tmp[
                     tuple(
@@ -1167,27 +1106,11 @@ def jump_detect(Js,
                 )
             Jmag2lags.sort(axis=-1)
             Jmag2_33pct = Jmag2lags[...,int(ncube_enum.shape[0]/3+0.5)]
-            #jf_tmp is a view on jumpflag - flows back
-            jf_tmp[ tuple(
+            inset = tuple(
                 [ np.s_[ jf_tmp.shape[-1]-1: jf_tmp.shape[-1] ] ]+
                 [ np.s_[ 1:-1 ] for j in range(1,ndim) ]
                 )
-                ] = Jmag2_tmp[ tuple(
-                    [ np.s_[ jf_tmp.shape[-1]-1: jf_tmp.shape[-1] ]] +
-                    [ np.s_[ 1:-1 ] for j in range(1,ndim) ]
-                     )
-                    ] <= Jmag2_33pct * jump_thresh
-        
-            
-            
-        
-        
-                                
-        
-        
-        
-
-                
+            jf_tmp[ inset ] = Jmag2_tmp[ inset ] <= Jmag2_33pct * jump_thresh
         
     return jumpflag
 
