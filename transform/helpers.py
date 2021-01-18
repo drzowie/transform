@@ -936,8 +936,8 @@ def jump_detect(Js,
                 ):
     '''
     jump_detect - find discontinuities in a Jacobian grid, to avoid 
-    weirdnesses in neighborhood tracking, near boundaries (e.g. transforms
-    that have periodic boundary conditions).
+    weirdnesses in neighborhood tracking, near boundaries (e.g., for
+    transforms that have periodic boundary conditions).
     
     You supply a grid of Jacobians that represent a coordinate transform as
     enumerated at a bunch of points.
@@ -1220,7 +1220,7 @@ def jacobian(index,
         J[ :,  0, ...] = J[ :,  1, ... ]
         J[ :, -1, ...] = J[ :, -2, ... ]
         
-    # All other cases: use a general algo
+    # All other cases: use a general algorithm
     else:
         ndim = index.shape[-1]
         
@@ -1467,12 +1467,23 @@ def interpND_grid(source, /,
         if len(source.shape) != len(index.shape)-1:
             raise ValueError("interpND_grid: index broadcast dims must match source dims")
 
-    # Apply boundary conditions *before* calculating the Jacobian, to catch jumps 
-    # from either the intrinsic transformation or the applied boundaries.
-    bindex = apply_boundary(index, source.shape, bound=bound, rint=False)
-    dims = len(index.shape[-1])
     
-    J = jacobian(bindex, jump_detect=jump_detect)
+    J = jacobian(index, jump_detect=jump_detect)
+    
+    # Now drop into Cython for the actual work
+    interpND_jacobian(source,
+                      index=index,
+                      jacobian=J,
+                      method=method,
+                      bound=bound,
+                      fillvalue=fillvalue,
+                      oblur=oblur,
+                      iblur=iblur,
+                      pad_pow=pad_pow,
+                      sv_limit=sv_limit
+                      )
+                      
+
 
 
     
