@@ -10,6 +10,8 @@ import sys
 from shutil import rmtree
 
 from setuptools import find_packages, setup, Command
+from setuptools.extension import Extension
+from Cython.Build import cythonize
 
 # Package meta-data.
 NAME = 'transform'
@@ -96,6 +98,14 @@ class UploadCommand(Command):
         sys.exit()
 
 
+# Set up extensions - trivial with just chelpers, but 
+# useful later if we have to link in C libraries etc.
+extensions = [
+    Extension("Transform.helpers",
+              ["Transform/helpers.pyx"],
+              )
+    ]
+
 # Where the magic happens:
 setup(
     name=NAME,
@@ -131,4 +141,6 @@ setup(
     cmdclass={
         'upload': UploadCommand,
     },
+    ext_modules = cythonize(extensions),
+    zip_safe = False
 )

@@ -6,6 +6,7 @@
 from .core import *
 
 # Ancillary methods (interpolation etc.)
+# helpers is Cython.
 from .helpers import *
 
 # Main supplied utility subclasses

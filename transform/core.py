@@ -79,11 +79,21 @@ class Transform:
         - inverse: returns a Transform that is the functional inverse 
              of the original Transform.
              
-        - compose: [UNDER CONSTRUCTION]: returns a Transform that 
-             is the composition of two or more existing Transforms.
+        - compose: returns a Transform that is the composition of this
+             one with one or more existing Transforms. 
         
-        - map: accepts an ndarray and resamples it using the original
-             Transform.
+        - resample: accepts an ndarray and uses the Transform to resample
+             its pixel coordinates into a new ndarray.  The Transform is
+             treated as mapping old pixel indices to new pixel indices in
+             the (implicit) pixel coordinate system.
+             
+        - remap: accepts a compound object that contains a WCS header (such as
+             the included helper DataWrapper object, an NDCube object, or a 
+             tuple containing an ndarray and a FITS header ) and uses the 
+             Transform to resample its data into a new compound object.  The
+             Transform is treated as mapping old world coordinates to new world
+             coordinates via the WCS header, and the new array can either be
+             autoscaled or can support a specified WCS transformation.
         
          
     Built-in Subclasses
@@ -277,7 +287,6 @@ class Transform:
             if ( self.idim > 0  and  data.shape[-1] > self.idim ):
                 data0 = data[...,0:self.idim]
                 data0 = self._forward(data0)
-                sl0 = data[...,self.idim:]
                 data = np.append( data0, data[...,self.idim:], axis=-1 )
             else:
                 data = self._forward(data)

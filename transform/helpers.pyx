@@ -12,7 +12,7 @@ import copy
 from itertools import repeat
 import itertools
 
-def apply_boundary(vec, size, /, bound='f', rint=True, pixels=True):
+def apply_boundary(vec, size, bound='f', rint=True, pixels=True):
     '''
     apply_boundary - apply boundary conditions to a vector or collection
     
@@ -100,7 +100,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True, pixels=True):
     if(len(bound) != shape[-1]):
         raise ValueError("apply_boundary: boundary list must match vec dims")
         
-    # rint if clled for
+    # rint if called for
     if(rint):
         if issubclass(vec.dtype.type, np.integer):
             vec = copy.copy(vec)
@@ -123,10 +123,12 @@ def apply_boundary(vec, size, /, bound='f', rint=True, pixels=True):
             if not  (np.all((vec[...,ii] >= 0) * (vec[...,ii] < s))):
                 raise ValueError(
                   "apply_boundary: boundary violation with 'forbid' condition")
+                
         ## truncate - set violating values to -1    
         elif  b=='t': 
             # Replace values outside the boundary with -1
             np.place(vec[...,ii], (vec[...,ii]<0)+(vec[...,ii]>=s), -1)
+            
         ## extend - clip the vectors
         elif  b=='e':
             # Replace values outside the boundary with the nearest boundary
@@ -137,16 +139,19 @@ def apply_boundary(vec, size, /, bound='f', rint=True, pixels=True):
                 np.place(vec[...,ii], (vec[...,ii]>= s), s-1)
             else:
                 np.place(vec[...,ii], (vec[...,ii]>=s), s-1e-10)
+                
         ## periodic - modulo works fine
         elif  b=='p':
             # modulo
             vec[...,ii] = vec[...,ii] % s
+            
         ## mirror - modulo with reversal in every other instance
         elif  b=='m': 
             # modulo at twice the size
             vec[...,ii] = vec[...,ii] % (2*s)
             # enlarged modulo runs backwards
             np.putmask(vec[...,ii], vec[...,ii]>=s, (2*s-1)-vec[...,ii])
+            
         else:
             raise ValueError(
                 "apply_boundary: boundaries are 'f', 't', 'e', 'p', or 'm'.")
@@ -156,7 +161,7 @@ def apply_boundary(vec, size, /, bound='f', rint=True, pixels=True):
         
     return vec
             
-def sampleND(source, /, 
+def sampleND(source, 
              index=None, 
              chunk=None, 
              bound='f', 
@@ -178,14 +183,16 @@ def sampleND(source, /,
     rounding of the vector).  In the default case, a single value is returned
     at each location (zero-dimensional).  
     
-    Optionally you can use the "chunk" 
-    keyword to return a chunk of values from the source array, at each index 
-    location. If present, "chunk" must be either a scalar or an array matching
-    the size of the index parameter.  Each element gives the size of a subarray
-    of values to be extracted from each indexed location in source.  Zero 
-    values cause the corresponding dimension to be omitted.
+    Optionally the "chunk" keyword extracts a complete neighborhood of values 
+    from the source array, around each index location. If present, "chunk" must 
+    be either a scalar or an array matching the size of the index parameter.  
+    Each element gives the size of the corresponding axis of a subarray of 
+    values to be extracted from each indexed location in source.  A chunk 
+    element value of 0 causes the corresponding dimension to be omitted from
+    the neighborhood.  The index value is the low-index corner of the extracted
+    neighborhood (a "chunk" of the source array).
     
-    The current implementation uses NumPy's explicit array indexing scheme.  
+    This implementation uses NumPy's explicit array indexing scheme.  
     It assembles a direct, boundary-conditioned index into the source array
     for every point to be output (including chunks if called for), then 
     carries out the indexing operation  -- and subsequently makes another pass 
@@ -350,7 +357,7 @@ def sampleND(source, /,
     return retval
     
 
-def interpND(source, /, 
+def interpND(source, 
              index=None, 
              method='n', 
              bound='t', 
@@ -589,7 +596,7 @@ def interpND(source, /,
     ## explicitly evaluate them at the provided points.
     ## 
     ## Collapsing this type of interpolation one dimension at a time would be 
-    ## inefficient, it is broken out into its own thang.
+    ## inefficient, do it is broken out into its own thang.
     elif(meth=='f'):
 
         if(oblur is not None):
@@ -1125,11 +1132,11 @@ def jacobian(index,
     Jacobian of the implied transform (delta(grid-vec) / delta(pixel-loc)).  
     The Jacobian is assembled from the enumerated difference between adjacent 
     vectors, in each possible direction.  The Jacobian is estimated at 
-    gridpoints, using the simple_jacobian as a starting point.  If the 
-    jump_detect flag is set, then jumps are detected and eliminated, yielding
-    a value that is not strictly a numeric Jacobian but an estimate of the 
-    underlying Jacobian (ignoring jumps). The jump detection happens *before*
-    the averaging over each neighborhood to grid-center the Jacobian.
+    gridpoints, using the simple_jacobian as a starting point.  Unless the 
+    jump_detect flag is explicitly cleared, jumps are detected and eliminated,
+    yielding an estimate of the underlying Jacobian (ignoring jumps). The jump 
+    detection happens *before* the averaging over each neighborhood to 
+    grid-center the Jacobian.
     
     This routine is a great candidate for being dropped into C: the memory
     accesses break cache in a bad way.
@@ -1266,18 +1273,18 @@ def jacobian(index,
 
         
 
-def interpND_grid(source, /, 
-             index=None, 
-             method='l', 
-             bound='t', 
-             antialias=True, aa=True,
-             fillvalue=0, 
-             oblur=1.0,
-             iblur=1.0,
-             pad_pow=8,
-             sv_limit=0.25,
-             jump_detect=4.0,
-             strict=False):
+def interpND_grid(source, 
+                  index=None, 
+                  method='l', 
+                  bound='t', 
+                  antialias=True, aa=True,
+                  fillvalue=0, 
+                  oblur=1.0,
+                  iblur=1.0,
+                  pad_pow=8,
+                  sv_limit=0.25,
+                  jump_detect=4.0,
+                  strict=False):
     '''
     interpND_grid - a better N-D interpolator for grids (with anti-aliasing)
     
@@ -1452,6 +1459,7 @@ def interpND_grid(source, /,
                         bound=bound,
                         fillvalue=fillvalue,
                         strict=strict)
+    
     if not isinstance(index, np.ndarray):
         index = np.array(index)
     
@@ -1483,7 +1491,18 @@ def interpND_grid(source, /,
                       sv_limit=sv_limit
                       )
                       
-
+def interpND_jacobian(source,
+                      index,
+                      jacobian,
+                      method,
+                      bound,
+                      fillvalue,
+                      oblur,
+                      iblur,
+                      pad_pow,
+                      sv_limit
+                      ):
+    raise AssertionError("interND_jacobian is not implemented")
 
 
     
