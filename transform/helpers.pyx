@@ -6,8 +6,43 @@ These are mainly to do with interpolation: several interpolators exist
 in numpy but they don't have clean treatments of boundary conditions, 
 or an orthogonal interface for the various common interpolation methods.
 
+
 """
+
+#############################################
+# In addition to the LICENSE file, which applies to the code as a whole,
+# the following applies to sections of this code marked "RDV":
+#
+# Copyright (c) 2014, Ruben De Visscher All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted proided that the following conditions are met:
+# 
+# * Redistributions of source code must retain the above copyright notice, 
+#   this list of conditions and the following disclaimer.
+#
+# * Redistribution in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+# POSSIBILITY OF SUCH DAMAGE.
+#
+
 import numpy as np
+cimport numpy as np
+cimport cython
+from libc.math cimport sin, cos, atan2, sqrt, floor, ceil, round, exp, fabs
+import sys
 import copy
 from itertools import repeat
 import itertools
@@ -1490,6 +1525,24 @@ def interpND_grid(source,
                       pad_pow=pad_pow,
                       sv_limit=sv_limit
                       )
+
+
+
+########################################################
+# Everything below here is about the DeForest (2004) anti-aliasing
+# algorithm.  The 2-D case follows Ruben De Visscher's 
+# implementation, which may be found in the "reproject" module
+# of the SunPy distribution. 
+
+  
+# Python interface to svd2x2_decompose
+def svd2x2(M,U,s,V):
+    
+    svd2x2_decompose(M.astype(np.float),
+                     U.astype(np.float),
+                     s.astype(np.float),
+                     V.astype(np.float)
+                     )
                       
 def interpND_jacobian(source,
                       index,
@@ -1502,8 +1555,47 @@ def interpND_jacobian(source,
                       pad_pow,
                       sv_limit
                       ):
-    raise AssertionError("interND_jacobian is not implemented")
+    raise AssertionError("interpND_jacobian is not implemented FOO")
 
+
+###############
+# RDV from here to "EORDV" below
+cdef double pi = np.pi
+cdef double nan = np.nan
+
+cdef extern from "math.h":
+    int isnan(double x) nogil
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+@cython.cdivision(True)
+
+### Ruben's cool svd2x2_decompose is faster than iteration for this specific
+### case.  Handles exactly one matrix, but doesn't need the GIL:
+cdef void svd2x2_decompose(double[:,:] M, double[:,:] U, double[:] s, 
+                           double[:,:] V) nogil:
+    cdef double E = (M[0,0] + M[1,1]) / 2
+    cdef double F = (M[0,0] - M[1,1]) / 2
+    cdef double G = (M[1,0] + M[0,1]) / 2
+    cdef double H = (M[1,0] - M[0,1]) / 2
+    cdef double Q = sqrt(E*E + H*H)
+    cdef double R = sqrt(F*F + G*G)
+    s[0] = Q+R
+    s[1] = Q-R
+    cdef double a1 = atan2(G,F)
+    cdef double a2 = atan2(H,E)
+    cdef double theta = (a2 - a1) / 2
+    cdef double phi = (a2+a1) / 2
+    U[0,0] = cos(phi)
+    U[0,1] = -sin(phi)
+    U[1,0] = sin(phi)
+    U[1,1] = cos(phi)
+    V[0,0] = cos(theta)
+    V[0,1] = sin(theta)
+    V[1,0] = -sin(theta)
+    V[1,1] = cos(theta)
+  
 
     
     

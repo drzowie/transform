@@ -7,6 +7,7 @@
 import io
 import os
 import sys
+from numpy import get_include as np_get_include
 from shutil import rmtree
 
 from setuptools import find_packages, setup, Command
@@ -26,6 +27,7 @@ VERSION = '0.0.1'
 REQUIRED = [
     'pytest',     # testing
     'numpy',      # basic numerics
+    'cython',     # static compilation and C objects
     'astropy',    # FITS handling; WCS object
 ]
 
@@ -103,6 +105,7 @@ class UploadCommand(Command):
 extensions = [
     Extension("Transform.helpers",
               ["Transform/helpers.pyx"],
+              include_dirs = [np_get_include()],
               )
     ]
 

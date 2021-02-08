@@ -664,8 +664,13 @@ def test_010_jump_detect():
                )
     
     
-        
-    
+def test_011_svd2x2_decompose():
+    # Test on the identity matrix
+    M = np.array(((1,0),(0,1)))
+    U = np.zeros((2,2))
+    V = np.zeros((2,2))
+    S = np.zeros(2)
+    t.svd2x2(M,U,S,V)
                        
         
 
