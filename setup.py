@@ -62,49 +62,11 @@ if not VERSION:
 else:
     about['__version__'] = VERSION
 
-
-class UploadCommand(Command):
-    """Support setup.py upload."""
-
-    description = 'Build and publish the package.'
-    user_options = []
-
-    @staticmethod
-    def status(s):
-        """Prints things in bold."""
-        print('\033[1m{0}\033[0m'.format(s))
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        try:
-            self.status('Removing previous builds…')
-            rmtree(os.path.join(here, 'dist'))
-        except OSError:
-            pass
-
-        self.status('Building Source and Wheel (universal) distribution…')
-        os.system('{0} setup.py sdist bdist_wheel --universal'.format(sys.executable))
-
-        self.status('Uploading the package to PyPI via Twine…')
-        os.system('twine upload dist/*')
-
-        self.status('Pushing git tags…')
-        os.system('git tag v{0}'.format(about['__version__']))
-        os.system('git push --tags')
-
-        sys.exit()
-
-
-# Set up extensions - trivial with just chelpers, but 
+# Set up extensions - trivial with just helpers, but 
 # useful later if we have to link in C libraries etc.
 extensions = [
-    Extension("Transform.helpers",
-              ["Transform/helpers.pyx"],
+    Extension("transform.helpers",
+              [here+"/transform/helpers.pyx"],
               include_dirs = [np_get_include()],
               )
     ]
@@ -140,10 +102,6 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: Implementation :: CPython',
     ],
-    # $ setup.py publish support.
-    cmdclass={
-        'upload': UploadCommand,
-    },
     ext_modules = cythonize(extensions),
     zip_safe = False
 )

@@ -1,5 +1,6 @@
 include README.md
 recursive-include transform *.py
+recursive-include transform *.pyx
 recursive-include tests *.py
 include *.txt
 include *.rst
