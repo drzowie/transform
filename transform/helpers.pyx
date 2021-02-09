@@ -1538,10 +1538,10 @@ def interpND_grid(source,
 # Python interface to svd2x2_decompose
 def svd2x2(M,U,s,V):
     
-    svd2x2_decompose(M.astype(np.float),
-                     U.astype(np.float),
-                     s.astype(np.float),
-                     V.astype(np.float)
+    svd2x2_decompose(M.astype(np.float64),
+                     U.astype(np.float64),
+                     s.astype(np.float64),
+                     V.astype(np.float64)
                      )
                       
 def interpND_jacobian(source,
