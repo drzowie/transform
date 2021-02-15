@@ -40,7 +40,7 @@ Transforms can be used on vector data to manipulate them.  An example
 usage is::
       
     a = t.Scale(3, dim=2)
-    b = np.array( [[1,2],[4,5],[5,6]] )
+    b = np.array( [[1,2],[3,4],[5,6]] )
     c = a.apply(b)
     print(c)
 
