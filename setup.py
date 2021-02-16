@@ -82,13 +82,14 @@ setup(
     author_email=EMAIL,
     python_requires=REQUIRES_PYTHON,
     url=URL,
-    packages=find_packages(where='src'),
+    packages=find_packages(where='transform'),
     # If your package is a single module, use this instead of 'packages':
     # py_modules=['mypackage'],
 
     # entry_points={
     #     'console_scripts': ['mycli=mymodule:cli'],
     # },
+    requires=REQUIRED,
     install_requires=REQUIRED,
     extras_require=EXTRAS,
     include_package_data=True,
@@ -102,6 +103,6 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: Implementation :: CPython',
     ],
+    zip_safe = False,
     ext_modules = cythonize(extensions),
-    zip_safe = False
 )
