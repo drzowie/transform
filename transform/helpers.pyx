@@ -39,9 +39,13 @@ or an orthogonal interface for the various common interpolation methods.
 #
 
 import numpy as np
+import numpy as np2
+import scipy as scipy
+
 cimport numpy as np
 cimport cython
 from libc.math cimport sin, cos, atan2, sqrt, floor, ceil, round, exp, fabs
+from libc.stdio cimport printf
 import sys
 import copy
 from itertools import repeat
@@ -1535,15 +1539,8 @@ def interpND_grid(source,
 # of the SunPy distribution. 
 
   
-# Python interface to svd2x2_decompose
-def svd2x2(M,U,s,V):
-    
-    svd2x2_decompose(M.astype(np.float64),
-                     U.astype(np.float64),
-                     s.astype(np.float64),
-                     V.astype(np.float64)
-                     )
-                      
+
+
 def interpND_jacobian(source,
                       index,
                       jacobian,
@@ -1557,68 +1554,213 @@ def interpND_jacobian(source,
                       ):
     raise AssertionError("interpND_jacobian is not implemented FOO")
 
+# Python interface to svd2x2_decompose
+def svd2x2(M,U,s,V):
+
+    cdef double[:,:] Mi = np.zeros(M.shape)
+    cdef double[:,:] Vi = np.zeros(V.shape)
+    cdef double[:,:] Ui = np.zeros(U.shape)
+    cdef double[:] si = np.zeros(s.shape)
+
+    Mi=M
+    Vi=V
+    Ui=U
+    si=s
+
+    return svd2x2_decompose(Mi, Ui, si, Vi)
+
+from scipy.linalg import lapack
+def svdLapac(M,U,s,V):
+    return lapack.dgesvd(M)
+
+def svdNumpy(M,U,s,V):
+    return np.linalg.svd(M)
+
+
+
+
 
 ###############
-# RDV from here to "EORDV" below
+# RDV (augmented) from here to "EORDV" below
 cdef double pi = np.pi
 cdef double nan = np.nan
 
 cdef extern from "math.h":
     int isnan(double x) nogil
 
+
+### Ruben's cool svd2x2_decompose is faster than iteration for this specific
+### case.  Handles exactly one matrix, but doesn't need the GIL - now using :
+#https://lucidar.me/en/mathematics/singular-value-decomposition-of-a-2x2-matrix/
+#soln as avoids negative singular values
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.cdivision(True)
+cdef void svd2x2_decompose(double[:,:] M, double[:,:] U, double[:] s, double[:,:] V) nogil:
+    cdef double a=M[0,0]
+    cdef double b=M[0,1]
+    cdef double c=M[1,0]
+    cdef double d=M[1,1]
 
-### Ruben's cool svd2x2_decompose is faster than iteration for this specific
-### case.  Handles exactly one matrix, but doesn't need the GIL:
-cdef void svd2x2_decompose(double[:,:] M, double[:,:] U, double[:] s, 
-                           double[:,:] V) nogil:
-    cdef double E = (M[0,0] + M[1,1]) / 2
-    cdef double F = (M[0,0] - M[1,1]) / 2
-    cdef double G = (M[1,0] + M[0,1]) / 2
-    cdef double H = (M[1,0] - M[0,1]) / 2
-    cdef double Q = sqrt(E*E + H*H)
-    cdef double R = sqrt(F*F + G*G)
-    s[0] = Q+R
-    s[1] = Q-R
-    cdef double a1 = atan2(G,F)
-    cdef double a2 = atan2(H,E)
-    cdef double theta = (a2 - a1) / 2
-    cdef double phi = (a2+a1) / 2
-    U[0,0] = cos(phi)
-    U[0,1] = -sin(phi)
-    U[1,0] = sin(phi)
-    U[1,1] = cos(phi)
-    V[0,0] = cos(theta)
-    V[0,1] = sin(theta)
-    V[1,0] = -sin(theta)
-    V[1,1] = cos(theta)
-  
+    cdef double theta = 0.5*atan2((2*a*c + 2*b*d),(a*a + b*b - c*c - d*d))
+    U[0,0] = cos(theta)
+    U[0,1] = -sin(theta)
+    U[1,0] = sin(theta)
+    U[1,1] = cos(theta)
+    cdef double s1 = a*a + b*b + c*c + d*d
+    cdef double s2 = sqrt((a*a+b*b-c*c-d*d)*(a*a+b*b-c*c-d*d)+4*(a*c+b*d)*(a*c+b*d))
 
+    s[0] = sqrt(0.5*(s1+s2))
+    s[1] = sqrt(0.5*(s1-s2)) 
+
+    cdef double phi = 0.5*atan2((2*a*b + 2*c*d),(a*a - b*b + c*c - d*d))
     
-    
-            
-        
+    cdef double cphi = cos(phi)
+    cdef double sphi = sin(phi)
+    cdef double ctheta = cos(theta)
+    cdef double stheta = sin(theta)
+
+    cdef double s11 = ((a*ctheta)+(c*stheta))*cphi+(b*ctheta+d*stheta)*sphi
+    cdef double s22 = ((a*stheta)-(c*ctheta))*sphi+(-b*stheta+d*ctheta)*cphi
+
+    V[0,0] = cphi*s11/sqrt(s11*s11)
+    V[0,1] = -sphi*s22/sqrt(s22*s22)
+    V[1,0] = sphi*s11/sqrt(s11*s11)
+    V[1,1] = cphi*s22/sqrt(s22*s22)
 
 
-        
-    
-    
-    
-    
-            
-            
-        
-            
 
-            
-        
-            
-            
+# Python interface to svdmxn_decompose
+#from libc.stdlib cimport malloc, free
+def svdmxn(M,U,s,V):
+    '''
+        lapack.DGESVD computes the singular value decomposition (SVD) of a real
+ M-by-N matrix A, optionally computing the left and/or right singular
+ vectors. The SVD is written
+
+      A = U * SIGMA * transpose(V)
+
+ where SIGMA is an M-by-N matrix which is zero except for its
+ min(m,n) diagonal elements, U is an M-by-M orthogonal matrix, and
+ V is an N-by-N orthogonal matrix.  The diagonal elements of SIGMA
+ are the singular values of A; they are real and non-negative, and
+ are returned in descending order.  The first min(m,n) columns of
+ U and V are the left and right singular vectors of A.
+
+ Note that the routine returns V**T, not V.
+
+        input rank-2 array(‘d’) with bounds (m,n)
+        Returns
+        urank-2 array(‘d’) with bounds (u0,u1)
+        srank-1 array(‘d’) with bounds (minmn)
+        vtrank-2 array(‘d’) with bounds (vt0,vt1)
+        infoint
+    '''
+    #cdef double[:,:] Mi = np.zeros(M.shape)
+    #cdef double[:,:] Vi = np.zeros(V.shape)
+    #cdef double[:,:] Ui = np.zeros(U.shape)
+    #cdef double[:] si = np.zeros(s.shape)
+
+    Mi=M
+    Vi=V
+    Ui=U
+    si=s
+
+    # Check the dimensions are suitable
+    #if(Mi.shape[0] < Mi.shape[1]):
+    #    raise ValueError("svdmxn requires input arrays to have m >= n (you have m=%f and n=%f). Try inputting the transpose.  See the docs for svd.",Mi.shape[0], Mi.shape[1])
     
-                
+    from scipy.linalg import lapack
+    VSU = lapack.dgesvd(Mi)
+    Vi=VSU[0]
+    Ui=VSU[1]
+    si=VSU[2]
+
+    print("here")
+    print(VSU)
+    print("Still trucking 2")
+
+#    svdmxn_decompose(Mi, Ui, si, Vi)
+
+#from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
+
+#@cython.boundscheck(False)
+#@cython.wraparound(False)
+#@cython.nonecheck(False)
+#@cython.cdivision(True)
+#cdef void svdmxn_decompose(double[:,:] M, double[:,:] U, double[:] s, double[:,:] V):
+#    cdef double a=M[0,0]
+#    cdef double b=M[0,1]
+#    cdef double c=M[1,0]
+#    cdef double d=M[1,1]
+#    cdef np.ndarray[np.float64_t, ndim=2] test = np.zeros((M.shape[0], M.shape[1]))
+
+
+    #cdef int disp[2][4] = {
+    #    {10, 11, 12, 13},
+    #    {14, 15, 16, 17}
+    #};
+    #cdef double[:,:] test = M#np.ones((5, 4))
+    #cdef long sm = test.shape[1]
+    #cdef long sn = test.shape[0]
+
+#    cdef int sn = np.size(test);
+    #cdef int sm = sizeof(test);
     
-    
-    
+#    cdef size_t sm = sizeof(test) #/ sizeof(M[0]); 
+    #cdef int sm = sizeof(M)#/sizeof(M[0]); 
+    #cdef int sn = sizeof(M[0])/sizeof(M[0][0]);
+    #printf("M:\n%f\n", test[0])
+
+#    printf("M1:\n%f , %f\n", sm, sn)
+
+#    cdef int sm = $SIZE (m), 
+#    cdef int sn = $SIZE (n), 
+
+
+##    #"svd",
+##    HandleBad => 0,
+##    Pars => 'a(n,m); 
+##             [o]u(n,m); [o,phys]z(n); [o]v(n,n);',
+##       GenericTypes => ['D'],
+##       Code => '
+
+##              extern void SVD( double *W, double *Z, int nRow, int nCol );
+    #int sm = 1;#sizeof(M[0]); 
+    #int sn = 2;#sizeof(M[1]);
+##              int i;
+
+##              if (sm<sn) {
+##          barf("svd requires input piddles to have m >= n (you have m=%d and n=%d). Try inputting the transpose.  See the docs for svd.",sm,sn);
+##              }
+
+              #double *w, *t, zv;
+              #t = w = (double *) malloc(sn*(sm+sn)*sizeof(double));
+
+#              loop (m) %{
+#                loop(n) %{
+#                  *t++ = $a ();
+#                %}
+#              %}
+
+#              SVD(w, $P (z), sm, sn);
+
+#              t = w;
+#              loop (n) %{
+#                zv = sqrt($z ());
+#                $z () = zv;
+#              %}
+#              loop (m) %{
+#                loop (n) %{
+#                  $u () = *t++/$z ();
+#                %}
+#              %}
+#              loop (n) %{
+#                for (i=0;i<sn;i++) {
+#                  $v (n0=>i, n1=>n) = *t++;
+#                }
+#              %}
+#              free(w);
+#',

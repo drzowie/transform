@@ -663,24 +663,96 @@ def test_010_jump_detect():
                        )
                )
     
-    
 def test_011_svd2x2_decompose():
-    # Test on the identity matrix
-    M = np.array(((1,0),(0,1)))
-    U = np.zeros((2,2))
-    V = np.zeros((2,2))
-    S = np.zeros(2)
-    t.svd2x2(M,U,S,V)
-                       
-        
+    from scipy.linalg import lapack
+    M = np.array(((-1,0),(16,-4))).astype(np.float64)
+    U = np.zeros((2,2)).astype(np.float64)
+    V = np.zeros((2,2)).astype(np.float64)
+    s = np.zeros(2).astype(np.float64)
+    t.svd2x2(M,U,s,V)
+    
+    assert( np.allclose(np.abs(U), np.abs(U), atol=1e-08) )
+    
+    print(U,s,V)
+
+
+    M = np.array(((-1,0),(16,-4))).astype(np.float64)
+    U = np.zeros((2,2)).astype(np.float64)
+    V = np.zeros((2,2)).astype(np.float64)
+    s = np.zeros(2).astype(np.float64)
+    print(t.svdLapac(M,U,s,V))
+
+    M = np.array(((-1,0),(16,-4))).astype(np.float64)
+    U = np.zeros((2,2)).astype(np.float64)
+    V = np.zeros((2,2)).astype(np.float64)
+    s = np.zeros(2).astype(np.float64)
+    print(t.svdNumpy(M,U,s,V))
+
+
 
     
-        
+    import time
+    print("Numpy SVD2x2 Speed:")
+    tic = time.perf_counter()
+    i = 1
+    while i < 10:
+        M1 = np.array(((-1,0),(16,-4))).astype(np.float64)
+        U1 = np.zeros((2,2)).astype(np.float64)
+        V1 = np.zeros((2,2)).astype(np.float64)
+        s1 = np.zeros(2).astype(np.float64)
+        t.svdNumpy(M1,U1,s1,V1)
+        i += 1
+    toc = time.perf_counter()
+    print(t.svdNumpy(M1,U1,s1,V1))
 
+    print(f"NumpySVD in {toc - tic:0.4f} seconds")
+
+    print("Lapack SVD2x2 Speed:")
+    tic = time.perf_counter()
+    i = 1
+    while i < 10:
+        M2 = np.array(((-1,0),(16,-4))).astype(np.float64)
+        U2 = np.zeros((2,2)).astype(np.float64)
+        V2 = np.zeros((2,2)).astype(np.float64)
+        s2 = np.zeros(2).astype(np.float64)
+        t.svdLapac(M2,U2,s2,V2)
+        i += 1
+    toc = time.perf_counter()
+    print(t.svdLapac(M2,U2,s2,V2))
+    print(f"LapackSVD in {toc - tic:0.4f} seconds")
+
+    print("Matt SVD2x2 Speed:")
+    tic = time.perf_counter()
+    i = 1
+    while i < 10:
+        M3 = np.array(((-1,0),(16,-4))).astype(np.float64)
+        U3 = np.zeros((2,2)).astype(np.float64)
+        V3 = np.zeros((2,2)).astype(np.float64)
+        s3 = np.zeros(2).astype(np.float64)
+        t.svd2x2(M3,U3,s3,V3)
+        i += 1
+    toc = time.perf_counter()
+    print(U3,s3,V3)
+
+    print(f"MattSVD in {toc - tic:0.4f} seconds")
     
-    
-     
-   
-    
-    
-    
+    M = np.array(((-1,0),(16,-4))).astype(np.float64)
+    U = np.zeros((2,2)).astype(np.float64)
+    V = np.zeros((2,2)).astype(np.float64)
+    s = np.zeros(2).astype(np.float64)
+
+
+#def test_012_svdmxn_decompose():
+#    try:
+#        U = np.zeros((2,2)).astype(np.float64)
+#        V = np.zeros((2,2)).astype(np.float64)
+#        s = np.zeros(2).astype(np.float64)
+#        #M = np.array(((-1,0,3),(-4,5,4))).astype(np.float64)
+#        M = np.array(((-1,0),(-4,5),(2,3))).astype(np.float64)
+#        print("m:", M.shape[0])
+#        print("n:", M.shape[1])
+#        v1 = t.svdmxn(M,U,s,V)    
+#        raise AssertionError("Mxn should have thrown an exception due to M<N")
+#    except:
+#        pass
+
