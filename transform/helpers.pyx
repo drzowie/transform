@@ -1549,12 +1549,14 @@ def interpND_jacobian(source,
                       pad_pow,
                       sv_limit
                       ):
-        
+    
     #raise AssertionError("interpND_jacobian is not implemented FOO")
         if len(source.shape) == 2 and source.shape[0] == 2 and source.shape[1]==2:
             print("running 2x2")
+        elif len(source.shape) == 2 and source.shape[0] == source.shape[1]:
+            print("OtherSize")
         else:
-            print("Other")
+            raise ValueError("svdmxn expects input arrays to have m == n (you have m=%f and n=%f)."%(source.shape[0], source.shape[1]))
 
 
 
