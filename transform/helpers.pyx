@@ -50,6 +50,7 @@ import sys
 import copy
 from itertools import repeat
 import itertools
+from scipy.linalg import lapack
 
 def apply_boundary(vec, size, bound='f', rint=True, pixels=True):
     '''
@@ -1530,15 +1531,11 @@ def interpND_grid(source,
                       sv_limit=sv_limit
                       )
 
-
-
 ########################################################
 # Everything below here is about the DeForest (2004) anti-aliasing
 # algorithm.  The 2-D case follows Ruben De Visscher's 
 # implementation, which may be found in the "reproject" module
 # of the SunPy distribution. 
-
-  
 
 
 def interpND_jacobian(source,
@@ -1552,10 +1549,23 @@ def interpND_jacobian(source,
                       pad_pow,
                       sv_limit
                       ):
-    raise AssertionError("interpND_jacobian is not implemented FOO")
+        
+    #raise AssertionError("interpND_jacobian is not implemented FOO")
+        if len(source.shape) == 2 and source.shape[0] == source.shape[1]:
+            print("running 2x2")
+        else:
+            print("Other")
+
+
+
+#def interpND_regrid()
 
 # Python interface to svd2x2_decompose
-def svd2x2(M,U,s,V):
+def svd2x2(M):
+
+    U = np.zeros((2,2)).astype(np.float64)
+    V = np.zeros((2,2)).astype(np.float64)
+    s = np.zeros(2).astype(np.float64)
 
     cdef double[:,:] Mi = np.zeros(M.shape)
     cdef double[:,:] Vi = np.zeros(V.shape)
@@ -1566,31 +1576,21 @@ def svd2x2(M,U,s,V):
     Vi=V
     Ui=U
     si=s
+    svd2x2_decompose(Mi, Ui, si, Vi)
 
-    return svd2x2_decompose(Mi, Ui, si, Vi)
-
-from scipy.linalg import lapack
-def svdLapac(M,U,s,V):
-    return lapack.dgesvd(M)
-
-def svdNumpy(M,U,s,V):
-    return np.linalg.svd(M)
-
-
-
-
+    Uo=np.asarray(Ui)
+    so=np.asarray(si)
+    Vo=np.asarray(Vi)
+    return (Uo, so, Vo)
 
 ###############
 # RDV (augmented) from here to "EORDV" below
 cdef double pi = np.pi
 cdef double nan = np.nan
-
 cdef extern from "math.h":
     int isnan(double x) nogil
 
-
-### Ruben's cool svd2x2_decompose is faster than iteration for this specific
-### case.  Handles exactly one matrix, but doesn't need the GIL - now using :
+###  Handles exactly one 2x2 matrix, but doesn't need the GIL - now using :
 #https://lucidar.me/en/mathematics/singular-value-decomposition-of-a-2x2-matrix/
 #soln as avoids negative singular values
 
@@ -1631,32 +1631,29 @@ cdef void svd2x2_decompose(double[:,:] M, double[:,:] U, double[:] s, double[:,:
     V[1,1] = cphi*s22/sqrt(s22*s22)
 
 
-
-# Python interface to svdmxn_decompose
-#from libc.stdlib cimport malloc, free
-def svdmxn(M,U,s,V):
+def svdmxn(M):
     '''
-        lapack.DGESVD computes the singular value decomposition (SVD) of a real
- M-by-N matrix A, optionally computing the left and/or right singular
- vectors. The SVD is written
+    lapack.DGESVD computes the singular value decomposition (SVD) of a real
+    M-by-N matrix A, optionally computing the left and/or right singular
+    vectors. The SVD is written
 
       A = U * SIGMA * transpose(V)
 
- where SIGMA is an M-by-N matrix which is zero except for its
- min(m,n) diagonal elements, U is an M-by-M orthogonal matrix, and
- V is an N-by-N orthogonal matrix.  The diagonal elements of SIGMA
- are the singular values of A; they are real and non-negative, and
- are returned in descending order.  The first min(m,n) columns of
- U and V are the left and right singular vectors of A.
+    where SIGMA is an M-by-N matrix which is zero except for its
+    min(m,n) diagonal elements, U is an M-by-M orthogonal matrix, and
+    V is an N-by-N orthogonal matrix.  The diagonal elements of SIGMA
+    are the singular values of A; they are real and non-negative, and
+    are returned in descending order.  The first min(m,n) columns of
+    U and V are the left and right singular vectors of A.
 
- Note that the routine returns V**T, not V.
+    Note that the routine returns V**T, not V.
 
-        input rank-2 array(‘d’) with bounds (m,n)
-        Returns
-        urank-2 array(‘d’) with bounds (u0,u1)
-        srank-1 array(‘d’) with bounds (minmn)
-        vtrank-2 array(‘d’) with bounds (vt0,vt1)
-        infoint
+    input rank-2 array(‘d’) with bounds (m,n)
+    Returns
+    urank-2 array(‘d’) with bounds (u0,u1)
+    srank-1 array(‘d’) with bounds (minmn)
+    vtrank-2 array(‘d’) with bounds (vt0,vt1)
+    infoint
     '''
     #cdef double[:,:] Mi = np.zeros(M.shape)
     #cdef double[:,:] Vi = np.zeros(V.shape)
@@ -1664,103 +1661,15 @@ def svdmxn(M,U,s,V):
     #cdef double[:] si = np.zeros(s.shape)
 
     Mi=M
-    Vi=V
-    Ui=U
-    si=s
+
 
     # Check the dimensions are suitable
-    #if(Mi.shape[0] < Mi.shape[1]):
-    #    raise ValueError("svdmxn requires input arrays to have m >= n (you have m=%f and n=%f). Try inputting the transpose.  See the docs for svd.",Mi.shape[0], Mi.shape[1])
+    if(Mi.shape[0] != Mi.shape[1]):
+        raise ValueError("svdmxn expects input arrays to have m == n (you have m=%f and n=%f). Try inputting the transpose.  See the docs for svd.",Mi.shape[0], Mi.shape[1])
     
     from scipy.linalg import lapack
     VSU = lapack.dgesvd(Mi)
-    Vi=VSU[0]
-    Ui=VSU[1]
-    si=VSU[2]
-
-    print("here")
-    print(VSU)
-    print("Still trucking 2")
-
-#    svdmxn_decompose(Mi, Ui, si, Vi)
-
-#from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-
-#@cython.boundscheck(False)
-#@cython.wraparound(False)
-#@cython.nonecheck(False)
-#@cython.cdivision(True)
-#cdef void svdmxn_decompose(double[:,:] M, double[:,:] U, double[:] s, double[:,:] V):
-#    cdef double a=M[0,0]
-#    cdef double b=M[0,1]
-#    cdef double c=M[1,0]
-#    cdef double d=M[1,1]
-#    cdef np.ndarray[np.float64_t, ndim=2] test = np.zeros((M.shape[0], M.shape[1]))
-
-
-    #cdef int disp[2][4] = {
-    #    {10, 11, 12, 13},
-    #    {14, 15, 16, 17}
-    #};
-    #cdef double[:,:] test = M#np.ones((5, 4))
-    #cdef long sm = test.shape[1]
-    #cdef long sn = test.shape[0]
-
-#    cdef int sn = np.size(test);
-    #cdef int sm = sizeof(test);
-    
-#    cdef size_t sm = sizeof(test) #/ sizeof(M[0]); 
-    #cdef int sm = sizeof(M)#/sizeof(M[0]); 
-    #cdef int sn = sizeof(M[0])/sizeof(M[0][0]);
-    #printf("M:\n%f\n", test[0])
-
-#    printf("M1:\n%f , %f\n", sm, sn)
-
-#    cdef int sm = $SIZE (m), 
-#    cdef int sn = $SIZE (n), 
-
-
-##    #"svd",
-##    HandleBad => 0,
-##    Pars => 'a(n,m); 
-##             [o]u(n,m); [o,phys]z(n); [o]v(n,n);',
-##       GenericTypes => ['D'],
-##       Code => '
-
-##              extern void SVD( double *W, double *Z, int nRow, int nCol );
-    #int sm = 1;#sizeof(M[0]); 
-    #int sn = 2;#sizeof(M[1]);
-##              int i;
-
-##              if (sm<sn) {
-##          barf("svd requires input piddles to have m >= n (you have m=%d and n=%d). Try inputting the transpose.  See the docs for svd.",sm,sn);
-##              }
-
-              #double *w, *t, zv;
-              #t = w = (double *) malloc(sn*(sm+sn)*sizeof(double));
-
-#              loop (m) %{
-#                loop(n) %{
-#                  *t++ = $a ();
-#                %}
-#              %}
-
-#              SVD(w, $P (z), sm, sn);
-
-#              t = w;
-#              loop (n) %{
-#                zv = sqrt($z ());
-#                $z () = zv;
-#              %}
-#              loop (m) %{
-#                loop (n) %{
-#                  $u () = *t++/$z ();
-#                %}
-#              %}
-#              loop (n) %{
-#                for (i=0;i<sn;i++) {
-#                  $v (n0=>i, n1=>n) = *t++;
-#                }
-#              %}
-#              free(w);
-#',
+    Uo=VSU[0]
+    so=VSU[1]
+    Vo=VSU[2]
+    return Uo, so, Vo
