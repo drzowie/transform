@@ -1551,7 +1551,7 @@ def interpND_jacobian(source,
                       ):
         
     #raise AssertionError("interpND_jacobian is not implemented FOO")
-        if len(source.shape) == 2 and source.shape[0] == source.shape[1]:
+        if len(source.shape) == 2 and source.shape[0] == 2 and source.shape[1]==2:
             print("running 2x2")
         else:
             print("Other")
