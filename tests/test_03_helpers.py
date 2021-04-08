@@ -706,6 +706,6 @@ def test_013_interpND_jacobian():
     datasource = (np.mgrid[0:5,0:50:10].transpose()).sum(axis=-1)
     
     # Test basic sampling
-    a = interpND_jacobian(datasource, index=[3,4])
+    a = interpND_jacobian(datasource, index=[3,4],1,2,3,4,5,6,7,8)
     assert(a==43)
 
