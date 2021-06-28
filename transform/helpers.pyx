@@ -1678,7 +1678,7 @@ cdef interpND_jacobian(double[:,:] source,
             a = exp( log( s[0] ) * pad_pow )
             s[0] = exp( - log(iblur + exp( log( s[0] ) * pad_pow ) ) / pad_pow )
             s[1] = exp( - log(iblur + exp( log( s[1] ) * pad_pow ) ) / pad_pow )
-            scr2x2_fast(V,s,U,J)
+            svc2x2_fast(V,s,U,J)
             
             reg_size = <int>( 2 * ceil( oblur * max(s) ))
 
@@ -1702,7 +1702,7 @@ cdef interpND_jacobian(double[:,:] source,
                     
                     if(method==1):
                         a = 1 - abs(xyf)
-                        filt = a if(a)
+                        filt = a if (a>=0) else 0
                     
             
             
