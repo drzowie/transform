@@ -1630,8 +1630,10 @@ cdef interpND_jacobian(double[:,:] source,
     cdef long xs
     cdef long yr                       # indices in local pixel region
     cdef long xr
-    cdef double a                         # scratchpad
-    cdef long reg_siz                     # size of region to sample with filter
+    cdef double a                      # scratchpad
+    cdef long reg_siz                  # size of region to sample with filter
+    cdef double filt                   # Stash for value of filter function 
+    cdef double wgt                    # weight accumulation for filter
     
     # Jacobian and singular-values
     cdef np.ndarray[RDTYPE_t,ndim=2] M    # generic matrix holding tank
@@ -1644,6 +1646,7 @@ cdef interpND_jacobian(double[:,:] source,
     cdef np.ndarray[RDTYPE_t,ndim=1] xyf  # filter function offset
 
     Ji = np.empty([2,2])
+    J = np.empty([2,2])
     V = np.empty([2,2])
     U = np.empty([2,2])
     s = np.empty([2])
@@ -1666,14 +1669,16 @@ cdef interpND_jacobian(double[:,:] source,
             Ji[1,0] = jacobian[yd,xd,1,0]
             Ji[1,1] = jacobian[yd,xd,1,1]
             
-            # Singular-value padding
+            # Singular-value padding and Ji inversion
             # The pad_pow algo is *probably* not the hottest spot but could 
-            # maybe use benchmarking.
+            # maybe use benchmarking.  s[i] gets the reciprocal of the 
+            # padded former value; then we reconstitute with V and U in 
+            # inverse order, to make J the inverse of padded-Ji.
             svd2x2_fast(Ji,U,s,V)
             a = exp( log( s[0] ) * pad_pow )
-            s[0] = exp( log(iblur + exp( log( s[0] ) * pad_pow ) ) / pad_pow )
-            s[1] = exp( log(iblur + exp( log( s[1] ) * pad_pow ) ) / pad_pow )
-            
+            s[0] = exp( - log(iblur + exp( log( s[0] ) * pad_pow ) ) / pad_pow )
+            s[1] = exp( - log(iblur + exp( log( s[1] ) * pad_pow ) ) / pad_pow )
+            scr2x2_fast(V,s,U,J)
             
             reg_size = <int>( 2 * ceil( oblur * max(s) ))
 
@@ -1682,6 +1687,7 @@ cdef interpND_jacobian(double[:,:] source,
             xf_of = xys[0]-xs
             yf_of = xys[1]-ys
             
+            wgt = 0.0 # zero accumulated weight for this region
             
             for yr in range(-reg_size/2, reg_size/2 + 1):
                 for xx in range(-reg_size/2,reg_size/2+1):
@@ -1689,6 +1695,14 @@ cdef interpND_jacobian(double[:,:] source,
                     # Figure offset of input pixel center relative to filter center
                     xyr[0] = xr + xf_of
                     xyr[1] = yr + yf_of
+                    
+                    # Propagate forward to find filter-equivalent offset
+                    xyf[0] = J[0,0] * xyr[0] + J[0,1] * xyr[1]
+                    xyf[1] = J[1,0] * xyr[0] + J[1,1] * xyr[1]
+                    
+                    if(method==1):
+                        a = 1 - abs(xyf)
+                        filt = a if(a)
                     
             
             
