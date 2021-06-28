@@ -1630,10 +1630,27 @@ cdef interpND_jacobian(double[:,:] source,
     cdef long xs
     cdef long yr                       # indices in local pixel region
     cdef long xr
+    cdef long yrs
+    cdef long xrs
+    cdef long tflag
     cdef double a                      # scratchpad
+    cdef double b                      # scratchpad
+    cdef long ia
     cdef long reg_siz                  # size of region to sample with filter
     cdef double filt                   # Stash for value of filter function 
     cdef double wgt                    # weight accumulation for filter
+    cdef double val                    # value accumulation for each pixel
+    cdef double padval                 # pixel extent of neighborhood in input space (depends on method)
+    cdef long s_ysiz = source.shape[0]
+    cdef long s_xsiz = source.shape[1]
+
+    if(method==1 or method==3 or method==4): # linear or Hanning or Tukey
+        padval = 1
+    elif(method==2 or method==5): # Lanczos or Gaussian
+        padval = 3
+    else:
+        raise ValueError('interpND_jacobian: invalid interpolation method')
+
     
     # Jacobian and singular-values
     cdef np.ndarray[RDTYPE_t,ndim=2] M    # generic matrix holding tank
@@ -1676,39 +1693,150 @@ cdef interpND_jacobian(double[:,:] source,
             # inverse order, to make J the inverse of padded-Ji.
             svd2x2_fast(Ji,U,s,V)
             a = exp( log( s[0] ) * pad_pow )
-            s[0] = exp( - log(iblur + exp( log( s[0] ) * pad_pow ) ) / pad_pow )
-            s[1] = exp( - log(iblur + exp( log( s[1] ) * pad_pow ) ) / pad_pow )
+            s[0] = exp( - log(padval + exp( log( s[0] ) * pad_pow ) ) / pad_pow )
+            s[1] = exp( - log(padval + exp( log( s[1] ) * pad_pow ) ) / pad_pow )
             svc2x2_fast(V,s,U,J)
-            
-            reg_size = <int>( 2 * ceil( oblur * max(s) ))
-
+             
+            # Pick size based on Ji max singular value (J min singular value)
+            reg_size = <int>( 2 * ceil( oblur / min(s) ) )
+          
             xs = <int>floor(xys[0])
             ys = <int>floor(xys[1])
             xf_of = xys[0]-xs
             yf_of = xys[1]-ys
             
+            val = 0.0 # zero pixel value for this region
             wgt = 0.0 # zero accumulated weight for this region
+            
+            tflag = 0
             
             for yr in range(-reg_size/2, reg_size/2 + 1):
                 for xx in range(-reg_size/2,reg_size/2+1):
+                    
+                    ###########
+                    ### Figure the filter value to apply to the current input pixel
                     
                     # Figure offset of input pixel center relative to filter center
                     xyr[0] = xr + xf_of
                     xyr[1] = yr + yf_of
                     
                     # Propagate forward to find filter-equivalent offset
-                    xyf[0] = J[0,0] * xyr[0] + J[0,1] * xyr[1]
-                    xyf[1] = J[1,0] * xyr[0] + J[1,1] * xyr[1]
+                    xyf[0] = fabs(J[0,0] * xyr[0] + J[0,1] * xyr[1]) / oblur
+                    xyf[1] = fabs(J[1,0] * xyr[0] + J[1,1] * xyr[1]) / oblur
                     
-                    if(method==1):
-                        a = 1 - abs(xyf)
-                        filt = a if (a>=0) else 0
+
+                    if(method==1):       # Linear interpolation - tent function
+                        filt  = 1-xyf[0] if(xyf[0]<1) else 0
+                        filt *= 1-xyf[1] if(xyf[1]<1) else 0
+                        
+                    elif(method==2):     # Lanczos filter - Lanczos function
+                        if( xyf[0] > 3 or xyf[1] > 3):
+                            filt = 0
+                        else:
+                            a = pi * xyf[0] 
+                            b = a/3.0
+                            filt = (sin(a)/a * sin(b)/b)
+                            a = pi * xyf[1]
+                            b = a/3.0
+                            filt *= (sin(a)/a * sin(b)/b)
                     
+                    elif(method==3):     # hanning filter - cos^2 rolloff
+                        if( xyf[0] > 1 or xyf[1] > 1):
+                            filt = 0
+                        else:
+                            a = pi * xyf[0]
+                            b = cos(a)
+                            filt = b*b
+                            a = pi * xyf[1]
+                            b = cos(a)
+                            filt *= b*b
+                    
+                    elif(method==4):      # Tukey filter
+                        if( xyf[0] > 1 or xyf[1] > 1):
+                            filt= 0
+                        else:
+                            if(xyf[0]>0.5):
+                                a=pi*2*(xyf[0]-0.5)
+                                b = cos(a)
+                                filt = b*b
+                            else:
+                                filt=1
+                            if(xyf[1]>0.5):
+                                a=pi*2*(xyf[1]-0.5)
+                                b=cos(a)
+                                filt *= b*b
+                    
+                    elif(method==5):      # Gaussian filter
+                        filt = exp( - (xyf[0]*xyf[0] + xyf[1]*xyf[1]) )
+                    
+                    else:
+                        assert(0,"This can't happen")
+                    
+                    wgt += filt
+                    
+                    ###########
+                    ### End of filter value calc.  Now figure which pixel we're on
+                    yrs = ys + yr
+                    xrs = xs + xr
+                    
+                    # Apply boundaries if necessary
+                    
+                    # Y boundaries
+                    if(yrs<0 or yrs>=s_ysiz):
+                        if(bound[1]==1):       # forbid
+                            raise ValueError("Y value out of bounds with Forbid boundary in effect")
+                            
+                        elif(bound[1]==2):     # truncate
+                            tflag = 1
+                        elif(bound[1]==3):     # extend
+                            yrs = 0 if(yrs<0) else s_ysiz-1
+                        elif(bound[1]==4):     # periodic
+                            ia = yrs/s_ysiz
+                            yrs -= ia * s_ysiz
+                            if( yrs<0 ) : 
+                                yrs += s_ysiz 
+                        elif(bound[1]==5):     # mirror
+                            ia = yrs/(s_ysiz*2)
+                            yrs -= ia * s_ysiz*2
+                            if(yrs<0):
+                                yrs += s_ysiz*2
+                            if(yrs>=s_ysiz):
+                                yrs = s_ysiz-1-yrs
+                                
+                    # X boundaries
+                    if(xrs<0 or xrs>=s_xsiz):
+                        if(bound[0]==1):       # forbid
+                            raise ValueError("X value out of bounds with Forbid boundary in effect")
+                            
+                        elif(bound[0]==2):     # truncate
+                            tflag = 1
+                        elif(bound[0]==3):     # extend
+                            xrs = 0 if(xrs<0) else s_xsiz-1
+                        elif(bound[0]==4):     # periodic
+                            ia = xrs/s_xsiz
+                            xrs -= ia * s_xsiz
+                            if( xrs<0 ) : 
+                                xrs += s_xsiz 
+                        elif(bound[0]==5):     # mirror
+                            ia = xrs/(s_xsiz*2)
+                            xrs -= ia * s_xsiz*2
+                            if(xrs<0):
+                                xrs += s_xsiz*2
+                            if(xrs>=s_xsiz):
+                                xrs = s_xsiz-1-xrs
+                                
+                    # Add the current pixel value!
+                    if(tflag):
+                        tflag = 0
+                    else:
+                        val += source[yrs,xrs] * filt
+                # end of X loop
+            #end of Y loop
             
-            
-            
-            
-    
+            dest[yd,xd] = val/wgt if(wgt >0) else 0
+        # end of xd loop
+    # end of yd loop
+    return dest
     
 
 # Some interfaces for regression testing of inner-loop code
