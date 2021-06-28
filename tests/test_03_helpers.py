@@ -664,18 +664,32 @@ def test_010_jump_detect():
                )
     
     
-def test_011_svd2x2_decompose():
-    # Test on the identity matrix
-    M = np.array(((1,0),(0,1)))
-    U = np.zeros((2,2))
-    V = np.zeros((2,2))
-    S = np.zeros(2)
-    t.svd2x2(M,U,S,V)
-                       
-        
-
+def test_011_matrix_goodies():
+    # Test decompose/recompose on the identity matrix
+    M = np.array(((1.0,0.0),(0,1)))
+    M2 = M + 0.0
+    U = np.zeros((2,2))+0.0
+    V = np.zeros((2,2))+0.0
+    s = np.zeros(2)+0.0
+    t.svd2x2(M,U,s,V)
+    assert(np.all(np.isclose(U,M,1e-8)))
+    assert(np.all(np.isclose(V,M,1e-8)))
+    assert(np.all(np.isclose(s,1.0,1e-8)))
+    t.svc2x2(U,s,V,M2)
+    assert(np.all(np.isclose(M2,M,1e-8)))
     
-        
+    # Check a sort-of-nontrivial case
+    M = np.array(((0,2.0),(0.333,0)))
+    t.svd2x2(M,U,s,V)
+    print(f"s is {s}")
+    ## Both SVs should be positive; one is 2.0, one is 0.333
+    assert( np.isclose(s[0],2,1e-8))
+    assert( np.isclose(s[1],0.333,1e-8))
+    t.svc2x2(U,s,V,M2)
+    print("M is {M}; M2 is {M2}")
+    assert( np.all(np.isclose(M2,M,1e-8)))
+    
+    
 
     
     

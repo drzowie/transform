@@ -41,11 +41,24 @@ or an orthogonal interface for the various common interpolation methods.
 import numpy as np
 cimport numpy as np
 cimport cython
-from libc.math cimport sin, cos, atan2, sqrt, floor, ceil, round, exp, fabs
+from libc.math cimport sin, cos, atan2, sqrt, floor, ceil, round, exp, log, fabs
 import sys
 import copy
 from itertools import repeat
 import itertools
+
+# Set the compile-time type of the working arrays for noise_gate_batch.
+# (This is a Cython optimization - types are used below)
+CDTYPE = np.complex128
+ctypedef np.complex128_t CDTYPE_t
+
+RDTYPE = np.float64
+ctypedef np.float64_t RDTYPE_t
+
+IDTYPE = np.int64
+ctypedef np.int64_t IDTYPE_t
+
+
 
 def apply_boundary(vec, size, bound='f', rint=True, pixels=True):
     '''
@@ -1509,12 +1522,34 @@ def interpND_grid(source,
             raise ValueError("interpND_grid: source shape must match index vector length")
         if len(source.shape) != len(index.shape)-1:
             raise ValueError("interpND_grid: index broadcast dims must match source dims")
+            
+    if(index.shape[-1] != 2):
+        raise ValueError("interpND_grid: only 2-D interpolation is implemented so far")
 
     
     J = jacobian(index, jump_detect=jump_detect)
     
-    # Now drop into Cython for the actual work
-    interpND_jacobian(source,
+    # Condition method into numeric value for better Cython.
+    mlookup = { "l":1, "z":2, "h":3, "t":4, "g":5 }
+    try:
+        method = mlookup[method[0]]
+    except:
+        raise ValueError("interpND_grid: method must be 'l','z','h','t', or 'g'")
+        
+    # Condition boundary condition into numeric value for better Cython
+    if not( isinstance(bound,(list,tuple)) ):
+        a = bound
+        bound = [ a for i in range(index.shape[-1]) ]
+    blookup = { "f":1, "t":2, "e":3, "p":4, "m":5 }
+    for i in range(len(bound)):
+        try:
+            bound[i] = blookup[bound[i][0]]
+        except:
+            raise ValueError("interpND_grid: each bound must be 'f','t','e','p', or 'm'")
+    bound = np.array(bound)    
+    
+    # Now drop into fully compiled Cython for the actual work 
+    interpND_jacobian(source.astype(RDTYPE),
                       index=index,
                       jacobian=J,
                       method=method,
@@ -1525,8 +1560,7 @@ def interpND_grid(source,
                       pad_pow=pad_pow,
                       sv_limit=sv_limit
                       )
-
-
+    
 
 ########################################################
 # Everything below here is about the DeForest (2004) anti-aliasing
@@ -1535,90 +1569,246 @@ def interpND_grid(source,
 # of the SunPy distribution. 
 
   
-# Python interface to svd2x2_decompose
-def svd2x2(M,U,s,V):
-    
-    svd2x2_decompose(M.astype(np.float64),
-                     U.astype(np.float64),
-                     s.astype(np.float64),
-                     V.astype(np.float64)
-                     )
-                      
-def interpND_jacobian(source,
-                      index,
-                      jacobian,
-                      method,
-                      bound,
-                      fillvalue,
-                      oblur,
-                      iblur,
-                      pad_pow,
-                      sv_limit
+                  
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+@cython.cdivision(True)    
+cdef interpND_jacobian(double[:,:] source,
+                      double[:,:,:] index,
+                      double[:,:,:,:] jacobian,
+                      int method,
+                      int[:] bound,
+                      double fillvalue,
+                      double oblur,
+                      double iblur,
+                      double pad_pow,
+                      double sv_limit
                       ):
-    raise AssertionError("interpND_jacobian is not implemented FOO")
+    '''
+    interpND_jacobian: use the DeForest 2004 algorithm to interpolate
+    on a regular grid, given an ancillary Jacobian array.
 
+    Parameters
+    ----------
+    source : numpy.ndarray 
+        the source data from which to interpolate.
+    index : TYPE
+        DESCRIPTION.
+    jacobian : TYPE
+        DESCRIPTION.
+    method : TYPE
+        DESCRIPTION.
+    bound : TYPE
+        DESCRIPTION.
+    fillvalue : TYPE
+        DESCRIPTION.
+    oblur : TYPE
+        DESCRIPTION.
+    iblur : TYPE
+        DESCRIPTION.
+    pad_pow : TYPE
+        DESCRIPTION.
+    sv_limit : TYPE
+        DESCRIPTION.
 
-###############
-# RDV from here to "EORDV" below
+    Returns
+    -------
+    The resampled output.
+
+    '''
+    
+    # First - create the output array
+    cdef np.ndarray[RDTYPE_t,ndim=2] dest 
+    dest = np.empty((index.shape[0],index.shape[1]))
+    
+    cdef long yd                       # indices in dest array   
+    cdef long xd
+    cdef double xf_of                  # subpixel offset in filter function
+    cdef double yf_of 
+    cdef long ys                       # indices in source array
+    cdef long xs
+    cdef long yr                       # indices in local pixel region
+    cdef long xr
+    cdef double a                         # scratchpad
+    cdef long reg_siz                     # size of region to sample with filter
+    
+    # Jacobian and singular-values
+    cdef np.ndarray[RDTYPE_t,ndim=2] M    # generic matrix holding tank
+    cdef np.ndarray[RDTYPE_t,ndim=2] V    # rotation matrix 1 for svd
+    cdef np.ndarray[RDTYPE_t,ndim=2] U    # rotation matrix 2 for svd
+    cdef np.ndarray[RDTYPE_t,ndim=1] s    # singular value vector
+    cdef np.ndarray[RDTYPE_t,ndim=1] si   # inverse singular values
+    cdef np.ndarray[RDTYPE_t,ndim=1] xys  # calculated centerpoint in source array
+    cdef np.ndarray[RDTYPE_t,ndim=1] xyr  # calculated offset in region from filter center
+    cdef np.ndarray[RDTYPE_t,ndim=1] xyf  # filter function offset
+
+    Ji = np.empty([2,2])
+    V = np.empty([2,2])
+    U = np.empty([2,2])
+    s = np.empty([2])
+    si = np.empty([2])
+    xys = np.empty([2])
+    xyr = np.empty([2])
+    xyf = np.empty([2])
+    
+    assert(0)
+    
+    # Outer loop: run across output pixels
+    for yd in range(index.shape[0]):
+        for xd in range(index.shape[1]):
+            
+            xys[0] = index[yd,xd,0]
+            xys[1] = index[yd,xd,1]
+            
+            Ji[0,0] = jacobian[yd,xd,0,0]
+            Ji[0,1] = jacobian[yd,xd,0,1]
+            Ji[1,0] = jacobian[yd,xd,1,0]
+            Ji[1,1] = jacobian[yd,xd,1,1]
+            
+            # Singular-value padding
+            # The pad_pow algo is *probably* not the hottest spot but could 
+            # maybe use benchmarking.
+            svd2x2_fast(Ji,U,s,V)
+            a = exp( log( s[0] ) * pad_pow )
+            s[0] = exp( log(iblur + exp( log( s[0] ) * pad_pow ) ) / pad_pow )
+            s[1] = exp( log(iblur + exp( log( s[1] ) * pad_pow ) ) / pad_pow )
+            
+            
+            reg_size = <int>( 2 * ceil( oblur * max(s) ))
+
+            xs = <int>floor(xys[0])
+            ys = <int>floor(xys[1])
+            xf_of = xys[0]-xs
+            yf_of = xys[1]-ys
+            
+            
+            for yr in range(-reg_size/2, reg_size/2 + 1):
+                for xx in range(-reg_size/2,reg_size/2+1):
+                    
+                    # Figure offset of input pixel center relative to filter center
+                    xyr[0] = xr + xf_of
+                    xyr[1] = yr + yf_of
+                    
+            
+            
+            
+            
+    
+    
+
+# Some interfaces for regression testing of inner-loop code
+def svd2x2(M, U, s, V):
+    svd2x2_fast(M,U,s,V) 
+def svc2x2(U,s,V,M):
+    svc2x2_fast(U,s,V,M)
+    
+    
 cdef double pi = np.pi
 cdef double nan = np.nan
 
 cdef extern from "math.h":
     int isnan(double x) nogil
 
+###################3
+# svd2x2_fast
+# singular-value decomposition:  M = U s VT; calculate U, s, and V
+# This is fast because it's in closed form in 2-D.
+# The values of s are positive definite as God intended.
+# The values are stuffed directly into U, s, and V -- which should
+# already exist (of course).
+#
+# This is cribbed from Randy Ellis' nice treatment, here:
+#   https://lucidar.me/en/mathematics/files/svd_ellis.pdf
+#
+# There's probably a faster way to do this, by (a) trading the atan2's 
+# and subsequent sin/cos operations for some hypotenuse calculations, and
+# (b) avoiding the horrible matrix-multiply-to-find-sign at the end.
+#
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.cdivision(True)
-
-### Ruben's cool svd2x2_decompose is faster than iteration for this specific
-### case.  Handles exactly one matrix, but doesn't need the GIL:
-cdef void svd2x2_decompose(double[:,:] M, double[:,:] U, double[:] s, 
-                           double[:,:] V) nogil:
-    cdef double E = (M[0,0] + M[1,1]) / 2
-    cdef double F = (M[0,0] - M[1,1]) / 2
-    cdef double G = (M[1,0] + M[0,1]) / 2
-    cdef double H = (M[1,0] - M[0,1]) / 2
-    cdef double Q = sqrt(E*E + H*H)
-    cdef double R = sqrt(F*F + G*G)
-    s[0] = Q+R
-    s[1] = Q-R
-    cdef double a1 = atan2(G,F)
-    cdef double a2 = atan2(H,E)
-    cdef double theta = (a2 - a1) / 2
-    cdef double phi = (a2+a1) / 2
-    U[0,0] = cos(phi)
-    U[0,1] = -sin(phi)
-    U[1,0] = sin(phi)
-    U[1,1] = cos(phi)
-    V[0,0] = cos(theta)
-    V[0,1] = sin(theta)
-    V[1,0] = -sin(theta)
-    V[1,1] = cos(theta)
-  
-
-    
-    
-            
+cdef void svd2x2_fast(double[:,:] M, 
+                      double[:,:] U, double[:] s, double[:,:] V) nogil:
+    cdef double a = M[0,0]
+    cdef double b = M[0,1]
+    cdef double c = M[1,0]
+    cdef double d = M[1,1]
+    cdef double acpbd = 2 * (a*c + b*d)
+    cdef double a2 = a*a
+    cdef double b2 = b*b
+    cdef double c2 = c*c
+    cdef double d2 = d*d
+    cdef double S1 = a2 + b2+c2 + d2
+    cdef double scr = a2+b2-c2-d2
+    cdef double S2 = sqrt( scr*scr + acpbd * acpbd )
         
+    s[0] = sqrt((S1+S2)/2)
+    s[1] = sqrt((S1-S2)/2)
+    
+    cdef double theta = 0.5 * atan2( acpbd, a2+b2-c2-d2 )
+    cdef double Stheta = sin(theta)
+    cdef double Ctheta = cos(theta)
+    U[0,0] = Ctheta
+    U[0,1] = - Stheta
+    U[1,0] = Stheta
+    U[1,1] = Ctheta
+ 
+    
+    cdef double phi = 0.5 * atan2( 2*(a*b+c*d), a2-b2+c2-d2)
+    cdef double Sphi = sin(phi)
+    cdef double Cphi = cos(phi)
+    
+    cdef double s11sgn = 1 if (( (a * Ctheta + c * Stheta) * Cphi +
+                        (b * Ctheta + d * Stheta) * Sphi
+                        ) >= 0.0) else  -1.0
+    cdef double s22sgn = 1 if (( (a * Stheta - c * Ctheta) * Sphi +
+                        (-b * Stheta + d * Ctheta) * Cphi
+                        ) >= 0.0) else  -1.0
+    
+    V[0,0] = s11sgn * Cphi
+    V[0,1] = -s22sgn * Sphi
+    V[1,0] = s11sgn * Sphi
+    V[1,1] = s22sgn * Cphi
+    
+# Singular value Compose -- undeo SVD above
+# M = U x s x VT
+
+cdef void svc2x2_fast(double[:,:] U,
+                      double[:] s,
+                      double[:,:] V,
+                      double[:,:] M
+                             ):
+    # ab top row; cd bot row.  Right-mult by VT, not V
+    cdef double a = s[0] * V[0,0]
+    cdef double b = s[0] * V[1,0]
+    cdef double c = s[1] * V[0,1]
+    cdef double d = s[1] * V[1,1]
+    M[0,0] = U[0,0]*a + U[0,1] * c
+    M[0,1] = U[0,0]*b + U[0,1] * d
+    M[1,0] = U[1,0]*a + U[1,1] * c
+    M[1,1] = U[1,0]*c + U[1,1] * d
+    
+    
 
 
-        
     
-    
-    
-    
-            
-            
-        
-            
 
-            
-        
-            
-            
-    
-                
-    
-    
-    
+###############
+# RDV from here to "EORDV" below - some basic matrix operations
+
+### Stoopid 2x2 determinant
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+@cython.cdivision(True)
+cdef double det2x2(double[:,:] M) nogil:
+    return M[0,0]*M[1,1] - M[0,1]*M[1,0]
+
+
+
+
+
+######################
+# EORDV
