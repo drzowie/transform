@@ -72,7 +72,9 @@ That snippet should output::
 
 as the transform "a" represents multiplication of all dimensions by 3.
 
-Other transform instances can represent arbitrarily complex operations.
+Other transform instances can represent arbitrarily complex operations, both
+by composing and inverting many simple operations together and by subclassing
+transform to define particular mathematical operations.
 
 Image manipulation
 ------------------
