@@ -24,6 +24,26 @@ data standard; and also, once they are released, the
 "transform.cartography" and "transform.color" modules which define 
 more specific groups of transformations for specific applications
 
+
+Why Transform?
+==============
+
+Many objects implement coordinate systems and reprojection between
+them. For example, astropy.nddata and sunpy.map and NDCube all support
+several well-known WCS coordinates. These treatments generally handle 
+coordinate system transformation implicitly, requiring the object 
+classes to store hidden knowledge about how the coordinate systems 
+relate -- often through a simple resolver which may or may not allow 
+new coordinate systems, and which may be inefficient in routing 
+transformations through its implicit transformation graph.
+
+By representing coordinate transformations directly and explicitly, 
+Transform allows direct manipulation of transformation graphs, and also
+ad-hoc transformations (such as distortion correction in scientific images)
+that are not easily available within a framework that represents only
+coordinate systems directly.
+
+
 Typical usage
 =============
 
@@ -62,10 +82,9 @@ intrinsic pixel coordinate system and/or resample the image to a new
 coordinate system.  To aid scientific usage, Transform can also interpret and 
 manipulate the World Coordinate System (WCS) tags present in many scientific
 image FITS headers.  This interpretation is managed through the 
-Transform.WCS object that is included with the package.  This is useful,
-e.g., for aligning images of the same subject collected with different 
-instruments provided that they have WCS tags attached.
-
+astropy.WCS formalism.  It is useful, e.g., for aligning images of the same 
+subject collected with different instruments, provided that they have WCS 
+tags attached.
 
 An example usage is::
 
@@ -74,11 +93,13 @@ An example usage is::
      b = trans.remap(a,method='lin')
 
 which loads 'myfile.fits' into a, and returns it rotated 45 degrees about
-its scientific origin, in b.  The remap() method includes autoscaling and 
+its scientific origin, in b. The remap() method includes autoscaling and 
 autoplacement to fit the remapped data onto a specified pixel grid (which
 defaults to the same size as the original image), so the example above 
 yields a rotated image even if the scientific origin is outside the original
-pixel grid.
+pixel grid.  The WCS information, if present, is unchanged, so the data are 
+rotated within the scientific coordinate system with the same pixel 
+representation as the original data.
 
 The two methods used for image resampling this way are remap(), which
 includes WCS interpretation and autoscaling; and resample(), which uses
@@ -90,6 +111,7 @@ History
 
 This package was ported and adapted from a Perl Data Language module 
 (PDL::Transform) first written in 2001. 
+
 
 Contributors
 ============
