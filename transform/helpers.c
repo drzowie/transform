@@ -20951,7 +20951,7 @@ static PyObject *__pyx_pf_9transform_7helpers_16svc2x2(CYTHON_UNUSED PyObject *_
  * @cython.nonecheck(False)
  * @cython.cdivision(True)
  * cdef void svd2x2_fast(double[:,:] M,             # <<<<<<<<<<<<<<
- *                       double[:,:] U, double[:] s, double[:,:] V) :
+ *                       double[:,:] U, double[:] s, double[:,:] V) nogil:
  *     cdef double a = M[0,0]
  */
 
@@ -20978,15 +20978,13 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
   double __pyx_v_sL11;
   double __pyx_v_s00;
   double __pyx_v_s11;
-  __Pyx_RefNannyDeclarations
   Py_ssize_t __pyx_t_1;
   Py_ssize_t __pyx_t_2;
   double __pyx_t_3;
-  __Pyx_RefNannySetupContext("svd2x2_fast", 0);
 
   /* "transform/helpers.pyx":1882
  * cdef void svd2x2_fast(double[:,:] M,
- *                       double[:,:] U, double[:] s, double[:,:] V) :
+ *                       double[:,:] U, double[:] s, double[:,:] V) nogil:
  *     cdef double a = M[0,0]             # <<<<<<<<<<<<<<
  *     cdef double b = M[0,1]
  *     cdef double c = M[1,0]
@@ -20996,7 +20994,7 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
   __pyx_v_a = (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_1 * __pyx_v_M.strides[0]) ) + __pyx_t_2 * __pyx_v_M.strides[1]) )));
 
   /* "transform/helpers.pyx":1883
- *                       double[:,:] U, double[:] s, double[:,:] V) :
+ *                       double[:,:] U, double[:] s, double[:,:] V) nogil:
  *     cdef double a = M[0,0]
  *     cdef double b = M[0,1]             # <<<<<<<<<<<<<<
  *     cdef double c = M[1,0]
@@ -21330,12 +21328,11 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
  * @cython.nonecheck(False)
  * @cython.cdivision(True)
  * cdef void svd2x2_fast(double[:,:] M,             # <<<<<<<<<<<<<<
- *                       double[:,:] U, double[:] s, double[:,:] V) :
+ *                       double[:,:] U, double[:] s, double[:,:] V) nogil:
  *     cdef double a = M[0,0]
  */
 
   /* function exit code */
-  __Pyx_RefNannyFinishContext();
 }
 
 /* "transform/helpers.pyx":1935
@@ -21348,8 +21345,8 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
 
 static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U, __Pyx_memviewslice __pyx_v_s, __Pyx_memviewslice __pyx_v_V, __Pyx_memviewslice __pyx_v_M) {
   double __pyx_v_U00S0;
-  double __pyx_v_U01S1;
   double __pyx_v_U10S0;
+  double __pyx_v_U01S1;
   double __pyx_v_U11S1;
   __Pyx_RefNannyDeclarations
   Py_ssize_t __pyx_t_1;
@@ -21368,8 +21365,8 @@ static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U
  *                              ):
  *     # UxS
  *     cdef double U00S0 = U[0,0] * s[0]             # <<<<<<<<<<<<<<
- *     cdef double U01S1 = U[0,1] * s[1]
  *     cdef double U10S0 = U[1,0] * s[0]
+ *     cdef double U01S1 = U[0,1] * s[1]
  */
   __pyx_t_1 = 0;
   __pyx_t_2 = 0;
@@ -21401,12 +21398,12 @@ static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U
   /* "transform/helpers.pyx":1942
  *     # UxS
  *     cdef double U00S0 = U[0,0] * s[0]
- *     cdef double U01S1 = U[0,1] * s[1]             # <<<<<<<<<<<<<<
- *     cdef double U10S0 = U[1,0] * s[0]
+ *     cdef double U10S0 = U[1,0] * s[0]             # <<<<<<<<<<<<<<
+ *     cdef double U01S1 = U[0,1] * s[1]
  *     cdef double U11S1 = U[1,1] * s[1]
  */
-  __pyx_t_4 = 0;
-  __pyx_t_2 = 1;
+  __pyx_t_4 = 1;
+  __pyx_t_2 = 0;
   __pyx_t_3 = -1;
   if (__pyx_t_4 < 0) {
     __pyx_t_4 += __pyx_v_U.shape[0];
@@ -21420,7 +21417,7 @@ static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U
     __Pyx_RaiseBufferIndexError(__pyx_t_3);
     __PYX_ERR(0, 1942, __pyx_L1_error)
   }
-  __pyx_t_1 = 1;
+  __pyx_t_1 = 0;
   __pyx_t_3 = -1;
   if (__pyx_t_1 < 0) {
     __pyx_t_1 += __pyx_v_s.shape[0];
@@ -21430,17 +21427,17 @@ static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U
     __Pyx_RaiseBufferIndexError(__pyx_t_3);
     __PYX_ERR(0, 1942, __pyx_L1_error)
   }
-  __pyx_v_U01S1 = ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_4 * __pyx_v_U.strides[0]) ) + __pyx_t_2 * __pyx_v_U.strides[1]) ))) * (*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) ))));
+  __pyx_v_U10S0 = ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_4 * __pyx_v_U.strides[0]) ) + __pyx_t_2 * __pyx_v_U.strides[1]) ))) * (*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) ))));
 
   /* "transform/helpers.pyx":1943
  *     cdef double U00S0 = U[0,0] * s[0]
- *     cdef double U01S1 = U[0,1] * s[1]
- *     cdef double U10S0 = U[1,0] * s[0]             # <<<<<<<<<<<<<<
+ *     cdef double U10S0 = U[1,0] * s[0]
+ *     cdef double U01S1 = U[0,1] * s[1]             # <<<<<<<<<<<<<<
  *     cdef double U11S1 = U[1,1] * s[1]
  * 
  */
-  __pyx_t_1 = 1;
-  __pyx_t_2 = 0;
+  __pyx_t_1 = 0;
+  __pyx_t_2 = 1;
   __pyx_t_3 = -1;
   if (__pyx_t_1 < 0) {
     __pyx_t_1 += __pyx_v_U.shape[0];
@@ -21454,7 +21451,7 @@ static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U
     __Pyx_RaiseBufferIndexError(__pyx_t_3);
     __PYX_ERR(0, 1943, __pyx_L1_error)
   }
-  __pyx_t_4 = 0;
+  __pyx_t_4 = 1;
   __pyx_t_3 = -1;
   if (__pyx_t_4 < 0) {
     __pyx_t_4 += __pyx_v_s.shape[0];
@@ -21464,11 +21461,11 @@ static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U
     __Pyx_RaiseBufferIndexError(__pyx_t_3);
     __PYX_ERR(0, 1943, __pyx_L1_error)
   }
-  __pyx_v_U10S0 = ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_1 * __pyx_v_U.strides[0]) ) + __pyx_t_2 * __pyx_v_U.strides[1]) ))) * (*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_4 * __pyx_v_s.strides[0]) ))));
+  __pyx_v_U01S1 = ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_1 * __pyx_v_U.strides[0]) ) + __pyx_t_2 * __pyx_v_U.strides[1]) ))) * (*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_4 * __pyx_v_s.strides[0]) ))));
 
   /* "transform/helpers.pyx":1944
- *     cdef double U01S1 = U[0,1] * s[1]
  *     cdef double U10S0 = U[1,0] * s[0]
+ *     cdef double U01S1 = U[0,1] * s[1]
  *     cdef double U11S1 = U[1,1] * s[1]             # <<<<<<<<<<<<<<
  * 
  *     # (UxS) x VT

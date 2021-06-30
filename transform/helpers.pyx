@@ -1878,7 +1878,7 @@ cdef extern from "math.h":
 @cython.nonecheck(False)
 @cython.cdivision(True)
 cdef void svd2x2_fast(double[:,:] M, 
-                      double[:,:] U, double[:] s, double[:,:] V) :
+                      double[:,:] U, double[:] s, double[:,:] V) nogil:
     cdef double a = M[0,0]
     cdef double b = M[0,1]
     cdef double c = M[1,0]
@@ -1939,10 +1939,10 @@ cdef void svc2x2_fast(double[:,:] U,
                              ):
     # UxS
     cdef double U00S0 = U[0,0] * s[0]
-    cdef double U01S1 = U[0,1] * s[1]
     cdef double U10S0 = U[1,0] * s[0]
+    cdef double U01S1 = U[0,1] * s[1]
     cdef double U11S1 = U[1,1] * s[1]
-
+    
     # (UxS) x VT
     M[0,0] = U00S0 * V[0,0] + U01S1 * V[0,1]
     M[0,1] = U00S0 * V[1,0] + U01S1 * V[1,1]
