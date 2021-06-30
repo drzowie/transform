@@ -1676,7 +1676,7 @@ cdef interpND_jacobian(double[:,:] source,
             tflag = 0
             
             for yr in range(-reg_size/2, reg_size/2 + 1):
-                for xx in range(-reg_size/2,reg_size/2+1):
+                for xr in range(-reg_size/2,reg_size/2+1):
                     
                     ###########
                     ### Figure the filter value to apply to the current input pixel
