@@ -9,35 +9,6 @@ or an orthogonal interface for the various common interpolation methods.
 
 """
 
-#############################################
-# In addition to the LICENSE file, which applies to the code as a whole,
-# the following applies to sections of this code marked "RDV":
-#
-# Copyright (c) 2014, Ruben De Visscher All rights reserved.
-# 
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted proided that the following conditions are met:
-# 
-# * Redistributions of source code must retain the above copyright notice, 
-#   this list of conditions and the following disclaimer.
-#
-# * Redistribution in binary form must reproduce the above copyright notice,
-#   this list of conditions and the following disclaimer in the documentation
-#   and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
-# POSSIBILITY OF SUCH DAMAGE.
-#
-
 import numpy as np
 cimport numpy as np
 cimport cython
@@ -1319,8 +1290,6 @@ def jacobian(index,
                 )
                 
 
-        
-
 def interpND_grid(source, 
                   index=None, 
                   method='l', 
@@ -1360,9 +1329,9 @@ def interpND_grid(source,
     Local filter calculation uses a variant of the singular-value padding 
     described by DeForest (2004, Sol. Phys. 219, 3):  singular values of the 
     Jacobian matrix are used to find the "footprint" of the grid in the 
-    input plane.  These singular values are padded to unity (using either 
-    the min function or quadrature addition), and used to modify the filter
-    function used for weighted interpolation of nearby points.                                                        
+    input plane.  These singular values are padded to unity (using a smooth
+    analytic transition), and used to modify the filter function for weighted 
+    interpolation of nearby points.                                                        
     
     Parameters
     ----------
@@ -1524,9 +1493,8 @@ def interpND_grid(source,
             raise ValueError("interpND_grid: index broadcast dims must match source dims")
             
     if(index.shape[-1] != 2):
-        raise ValueError("interpND_grid: only 2-D interpolation is implemented so far")
-
-    
+        raise ValueError("interpND_grid: anti-aliasing is only implemented for 2-D at present.")
+        
     J = jacobian(index, jump_detect=jump_detect)
     
     # Condition method into numeric value for better Cython.
@@ -1563,12 +1531,9 @@ def interpND_grid(source,
     
 
 ########################################################
-# Everything below here is about the DeForest (2004) anti-aliasing
-# algorithm.  The 2-D case follows Ruben De Visscher's 
-# implementation, which may be found in the "reproject" module
-# of the SunPy distribution. 
+# Everything below here is about the anti-aliasing
+# algorithm, which is implemented in 2-D only at present.
 
-  
                   
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -1779,13 +1744,13 @@ cdef interpND_jacobian(double[:,:] source,
                     yrs = ys + yr
                     xrs = xs + xr
                     
-                    # Apply boundaries if necessary
+                    # Apply boundaries if necessary.  Hate to dup the apply_boundary
+                    # code above but also hate to jump out of compiled code.
                     
                     # Y boundaries
                     if(yrs<0 or yrs>=s_ysiz):
                         if(bound[1]==1):       # forbid
-                            raise ValueError("Y value out of bounds with Forbid boundary in effect")
-                            
+                            raise ValueError("Y value out of bounds with Forbid boundary in effect") 
                         elif(bound[1]==2):     # truncate
                             tflag = 1
                         elif(bound[1]==3):     # extend
@@ -1806,8 +1771,7 @@ cdef interpND_jacobian(double[:,:] source,
                     # X boundaries
                     if(xrs<0 or xrs>=s_xsiz):
                         if(bound[0]==1):       # forbid
-                            raise ValueError("X value out of bounds with Forbid boundary in effect")
-                            
+                            raise ValueError("X value out of bounds with Forbid boundary in effect")                            
                         elif(bound[0]==2):     # truncate
                             tflag = 1
                         elif(bound[0]==3):     # extend
@@ -1860,12 +1824,13 @@ cdef extern from "math.h":
 # The values are stuffed directly into U, s, and V -- which should
 # already exist (of course).
 #
-# Derivation uses M x MT to get the U matrix; and MT x M to get the 
-# W matrix.  U and W are *a* decomposition and are both rotation matrices.
-# To keep s positive-definite we migrate the sign terms into W to make 
-# a V matrix that allows the s's to be positive.
+# The derivation uses M x MT to get the U matrix; and MT x M to get the 
+# W matrix.  U and W are both rotation matrices. To keep s positive-definite 
+# we migrate the sign terms (C matrix) into W to create a V matrix satisfying
+# the decomposition with positive-definite singular values: we return 
+# V = CW.
 #
-# The tan(theta) stuff aruses from the double-angle trig identities.
+# The tan(theta) stuff arises from the double-angle trig identities.
 # Once U and W are calculated, we use the formula UT M W = C S
 # (with S being the diagonal positive-definite singular value matrix and
 # C being a diagonal sign (plus/minus 1) matrix)
@@ -1885,6 +1850,7 @@ cdef void svd2x2_fast(double[:,:] M,
     cdef double d = M[1,1]
     
     # First: figure the U matrix.  (A AT) is  ((au, bu),(bu,du))
+    # The angle comes from trig identities on au-du and 2bu
     cdef double au = a*a + b*b
     cdef double bu = a*c + b*d
     cdef double du = c*c + d*d
@@ -1892,12 +1858,13 @@ cdef void svd2x2_fast(double[:,:] M,
     cdef double Stheta = sin(theta)
     cdef double Ctheta = cos(theta)
 
-    U[0,0] =   Ctheta    
-    U[0,1] = - Stheta  
-    U[1,0] =   Stheta    
-    U[1,1] =   Ctheta   
+    U[0,0] =   Ctheta
+    U[0,1] = - Stheta
+    U[1,0] =   Stheta
+    U[1,1] =   Ctheta
     
-    # Next: figure the W matrix (AT A) is  ((aw, bw),(bw,dw))
+    # Next: figure the W matrix. (AT A) is  ((aw, bw),(bw,dw))
+    # The angle comes from trig identities on aw-dw and 2bw.
     cdef double aw = a*a + c*c
     cdef double bw = a*b + c*d
     cdef double dw = b*b + d*d
@@ -1906,26 +1873,25 @@ cdef void svd2x2_fast(double[:,:] M,
     cdef double Sphi = sin(phi)
     cdef double Cphi = cos(phi)
     
-    # (C S) = UT x A x W -- sign of (C S) lets us correct W -> V
-    # first: sL gets UT x A; then calculate just the diagonal elements of (C s).
-    cdef double sL00 =  Ctheta * a  +  Stheta * c
-    cdef double sL01 =  Ctheta * b  +  Stheta * d
-    cdef double sL10 = -Stheta * a  +  Ctheta * c
-    cdef double sL11 = -Stheta * b  +  Ctheta * d
-    
+    # (C S) = UT x A x W.  We only need the diagonal terms of (C S)
+    # since they contain the singular values.  The off-diagonals 
+    # should be 0, so don't bother calculating them.
     # sgn00 and sgn11 get +/- the singular values.  We want the 
     # positive branch for s, but to keep the sign to set V = C W.
-    cdef double s00 = sL00 *  Cphi  +  sL01 * Sphi
-    cdef double s11 = sL10 * -Sphi  +  sL11 * Cphi 
-    s[0] = fabs(s00)   
-    s[1] = fabs(s11)
-    s00 = 1 if(s00>=0) else -1
-    s11 = 1 if(s11>=0) else -1
+    cdef double cs00 = (  ( Ctheta * a + Stheta * c ) *  Cphi 
+                        + ( Ctheta * b + Stheta * d ) *  Sphi  )
+    cdef double cs11 = (  ( Stheta * a - Ctheta * c ) *  Sphi
+                        - ( Stheta * b - Ctheta * d ) *  Cphi  )
+    
+    s[0] = fabs(cs00)
+    s[1] = fabs(cs11)
+    cdef double c00 = 1.0 if(cs00>=0) else -1.0
+    cdef double c11 = 1.0 if(cs11>=0) else -1.0
 
-    V[0,0] =   Cphi * s00
-    V[0,1] = - Sphi * s11
-    V[1,0] =   Sphi * s00
-    V[1,1] =   Cphi * s11
+    V[0,0] =   Cphi * c00
+    V[0,1] = - Sphi * c11
+    V[1,0] =   Sphi * c00
+    V[1,1] =   Cphi * c11
     
 
     
@@ -1953,21 +1919,12 @@ cdef void svc2x2_fast(double[:,:] U,
 
 
     
-
-###############
-# RDV from here to "EORDV" below - some basic matrix operations
-
 ### Stoopid 2x2 determinant
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.cdivision(True)
-cdef double det2x2(double[:,:] M) nogil:
+cdef double det2x2_fast(double[:,:] M) nogil:
     return M[0,0]*M[1,1] - M[0,1]*M[1,0]
 
 
-
-
-
-######################
-# EORDV
