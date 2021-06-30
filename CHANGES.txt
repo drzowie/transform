@@ -1,3 +1,10 @@
 v0.0.1, 29-Oct-2020 -- initial setup
  (Initial development captured in git log)
  
+30-Jun-2021 -- objects are more or less complete;  nearing release  
+ - Full functionality is present for transform manipulation
+ - Vector transformation works 
+ - Resampling with non-anti-aliasing works
+ - Anti-aliasing code is implemented and has rudimentary testing in place
+ - DataWrapper object carts around metadata; needs to be adapted to work with NDCube and/or sunpy maps
+
