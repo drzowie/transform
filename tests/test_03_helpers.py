@@ -678,7 +678,7 @@ def test_011_matrix_goodies():
     t.svc2x2(U,s,V,M2)
     assert(np.all(np.isclose(M2,M,1e-8)))
     
-    # Check a sort-of-nontrivial case
+    # Check a slightly-less-trivial case
     M = np.array(((0,2.0),(0.333,0)))
     t.svd2x2(M,U,s,V)
     print(f"s is {s}")
@@ -686,10 +686,29 @@ def test_011_matrix_goodies():
     assert( np.isclose(s[0],2,1e-8))
     assert( np.isclose(s[1],0.333,1e-8))
     t.svc2x2(U,s,V,M2)
-    print("M is {M}; M2 is {M2}")
+    print(f"M is {M}; M2 is {M2}")
+    print(f"U is {U}")
+    print(f"s is {s}")
+    print(f"V is {V}")
     assert( np.all(np.isclose(M2,M,1e-8)))
     
+    # Check inverse of a typical case
+    M = np.array(((1.0,2.0),(4,3)))
+    t.svd2x2(M,U,s,V)
+    t.svc2x2(U,s,V,M2)
+    print(f"equivalence: M={M}")
+    print(f"equivalence: U={U}")
+    print(f"equivalence: s={s}")
+    print(f"equivalence: V={V}")
+    print(f"equivalence: M2={M2}")
+    assert( np.all(np.isclose(M2,M,1e-8)))
     
+    t.svc2x2(V,1.0/s,U,M2)
+    M3 = np.matmul( M, M2 )
+    print(f"M2 is {M2}")
+    print(f"M3 is {M3}")
+    identity = np.array(((1.0,0.0),(0,1)))
+    assert(np.all(np.isclose(M3,identity,1e-8)))
 
     
     

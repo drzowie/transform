@@ -20947,11 +20947,11 @@ static PyObject *__pyx_pf_9transform_7helpers_16svc2x2(CYTHON_UNUSED PyObject *_
   return __pyx_r;
 }
 
-/* "transform/helpers.pyx":1874
+/* "transform/helpers.pyx":1880
  * @cython.nonecheck(False)
  * @cython.cdivision(True)
  * cdef void svd2x2_fast(double[:,:] M,             # <<<<<<<<<<<<<<
- *                       double[:,:] U, double[:] s, double[:,:] V) nogil:
+ *                       double[:,:] U, double[:] s, double[:,:] V) :
  *     cdef double a = M[0,0]
  */
 
@@ -20960,29 +20960,33 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
   double __pyx_v_b;
   double __pyx_v_c;
   double __pyx_v_d;
-  double __pyx_v_acpbd;
-  double __pyx_v_a2;
-  double __pyx_v_b2;
-  double __pyx_v_c2;
-  double __pyx_v_d2;
-  double __pyx_v_S1;
-  double __pyx_v_scr;
-  double __pyx_v_S2;
+  double __pyx_v_au;
+  double __pyx_v_bu;
+  double __pyx_v_du;
   double __pyx_v_theta;
   double __pyx_v_Stheta;
   double __pyx_v_Ctheta;
+  double __pyx_v_aw;
+  double __pyx_v_bw;
+  double __pyx_v_dw;
   double __pyx_v_phi;
   double __pyx_v_Sphi;
   double __pyx_v_Cphi;
-  double __pyx_v_s11sgn;
-  double __pyx_v_s22sgn;
+  double __pyx_v_sL00;
+  double __pyx_v_sL01;
+  double __pyx_v_sL10;
+  double __pyx_v_sL11;
+  double __pyx_v_s00;
+  double __pyx_v_s11;
+  __Pyx_RefNannyDeclarations
   Py_ssize_t __pyx_t_1;
   Py_ssize_t __pyx_t_2;
   double __pyx_t_3;
+  __Pyx_RefNannySetupContext("svd2x2_fast", 0);
 
-  /* "transform/helpers.pyx":1876
+  /* "transform/helpers.pyx":1882
  * cdef void svd2x2_fast(double[:,:] M,
- *                       double[:,:] U, double[:] s, double[:,:] V) nogil:
+ *                       double[:,:] U, double[:] s, double[:,:] V) :
  *     cdef double a = M[0,0]             # <<<<<<<<<<<<<<
  *     cdef double b = M[0,1]
  *     cdef double c = M[1,0]
@@ -20991,8 +20995,8 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
   __pyx_t_2 = 0;
   __pyx_v_a = (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_1 * __pyx_v_M.strides[0]) ) + __pyx_t_2 * __pyx_v_M.strides[1]) )));
 
-  /* "transform/helpers.pyx":1877
- *                       double[:,:] U, double[:] s, double[:,:] V) nogil:
+  /* "transform/helpers.pyx":1883
+ *                       double[:,:] U, double[:] s, double[:,:] V) :
  *     cdef double a = M[0,0]
  *     cdef double b = M[0,1]             # <<<<<<<<<<<<<<
  *     cdef double c = M[1,0]
@@ -21002,174 +21006,109 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
   __pyx_t_1 = 1;
   __pyx_v_b = (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_2 * __pyx_v_M.strides[0]) ) + __pyx_t_1 * __pyx_v_M.strides[1]) )));
 
-  /* "transform/helpers.pyx":1878
+  /* "transform/helpers.pyx":1884
  *     cdef double a = M[0,0]
  *     cdef double b = M[0,1]
  *     cdef double c = M[1,0]             # <<<<<<<<<<<<<<
  *     cdef double d = M[1,1]
- *     cdef double acpbd = 2 * (a*c + b*d)
+ * 
  */
   __pyx_t_1 = 1;
   __pyx_t_2 = 0;
   __pyx_v_c = (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_1 * __pyx_v_M.strides[0]) ) + __pyx_t_2 * __pyx_v_M.strides[1]) )));
 
-  /* "transform/helpers.pyx":1879
+  /* "transform/helpers.pyx":1885
  *     cdef double b = M[0,1]
  *     cdef double c = M[1,0]
  *     cdef double d = M[1,1]             # <<<<<<<<<<<<<<
- *     cdef double acpbd = 2 * (a*c + b*d)
- *     cdef double a2 = a*a
+ * 
+ *     # First: figure the U matrix.  (A AT) is  ((au, bu),(bu,du))
  */
   __pyx_t_2 = 1;
   __pyx_t_1 = 1;
   __pyx_v_d = (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_2 * __pyx_v_M.strides[0]) ) + __pyx_t_1 * __pyx_v_M.strides[1]) )));
 
-  /* "transform/helpers.pyx":1880
- *     cdef double c = M[1,0]
- *     cdef double d = M[1,1]
- *     cdef double acpbd = 2 * (a*c + b*d)             # <<<<<<<<<<<<<<
- *     cdef double a2 = a*a
- *     cdef double b2 = b*b
- */
-  __pyx_v_acpbd = (2.0 * ((__pyx_v_a * __pyx_v_c) + (__pyx_v_b * __pyx_v_d)));
-
-  /* "transform/helpers.pyx":1881
- *     cdef double d = M[1,1]
- *     cdef double acpbd = 2 * (a*c + b*d)
- *     cdef double a2 = a*a             # <<<<<<<<<<<<<<
- *     cdef double b2 = b*b
- *     cdef double c2 = c*c
- */
-  __pyx_v_a2 = (__pyx_v_a * __pyx_v_a);
-
-  /* "transform/helpers.pyx":1882
- *     cdef double acpbd = 2 * (a*c + b*d)
- *     cdef double a2 = a*a
- *     cdef double b2 = b*b             # <<<<<<<<<<<<<<
- *     cdef double c2 = c*c
- *     cdef double d2 = d*d
- */
-  __pyx_v_b2 = (__pyx_v_b * __pyx_v_b);
-
-  /* "transform/helpers.pyx":1883
- *     cdef double a2 = a*a
- *     cdef double b2 = b*b
- *     cdef double c2 = c*c             # <<<<<<<<<<<<<<
- *     cdef double d2 = d*d
- *     cdef double S1 = a2 + b2+c2 + d2
- */
-  __pyx_v_c2 = (__pyx_v_c * __pyx_v_c);
-
-  /* "transform/helpers.pyx":1884
- *     cdef double b2 = b*b
- *     cdef double c2 = c*c
- *     cdef double d2 = d*d             # <<<<<<<<<<<<<<
- *     cdef double S1 = a2 + b2+c2 + d2
- *     cdef double scr = a2+b2-c2-d2
- */
-  __pyx_v_d2 = (__pyx_v_d * __pyx_v_d);
-
-  /* "transform/helpers.pyx":1885
- *     cdef double c2 = c*c
- *     cdef double d2 = d*d
- *     cdef double S1 = a2 + b2+c2 + d2             # <<<<<<<<<<<<<<
- *     cdef double scr = a2+b2-c2-d2
- *     cdef double S2 = sqrt( scr*scr + acpbd * acpbd )
- */
-  __pyx_v_S1 = (((__pyx_v_a2 + __pyx_v_b2) + __pyx_v_c2) + __pyx_v_d2);
-
-  /* "transform/helpers.pyx":1886
- *     cdef double d2 = d*d
- *     cdef double S1 = a2 + b2+c2 + d2
- *     cdef double scr = a2+b2-c2-d2             # <<<<<<<<<<<<<<
- *     cdef double S2 = sqrt( scr*scr + acpbd * acpbd )
+  /* "transform/helpers.pyx":1888
  * 
+ *     # First: figure the U matrix.  (A AT) is  ((au, bu),(bu,du))
+ *     cdef double au = a*a + b*b             # <<<<<<<<<<<<<<
+ *     cdef double bu = a*c + b*d
+ *     cdef double du = c*c + d*d
  */
-  __pyx_v_scr = (((__pyx_v_a2 + __pyx_v_b2) - __pyx_v_c2) - __pyx_v_d2);
-
-  /* "transform/helpers.pyx":1887
- *     cdef double S1 = a2 + b2+c2 + d2
- *     cdef double scr = a2+b2-c2-d2
- *     cdef double S2 = sqrt( scr*scr + acpbd * acpbd )             # <<<<<<<<<<<<<<
- * 
- *     s[0] = sqrt((S1+S2)/2)
- */
-  __pyx_v_S2 = sqrt(((__pyx_v_scr * __pyx_v_scr) + (__pyx_v_acpbd * __pyx_v_acpbd)));
+  __pyx_v_au = ((__pyx_v_a * __pyx_v_a) + (__pyx_v_b * __pyx_v_b));
 
   /* "transform/helpers.pyx":1889
- *     cdef double S2 = sqrt( scr*scr + acpbd * acpbd )
- * 
- *     s[0] = sqrt((S1+S2)/2)             # <<<<<<<<<<<<<<
- *     s[1] = sqrt((S1-S2)/2)
- * 
+ *     # First: figure the U matrix.  (A AT) is  ((au, bu),(bu,du))
+ *     cdef double au = a*a + b*b
+ *     cdef double bu = a*c + b*d             # <<<<<<<<<<<<<<
+ *     cdef double du = c*c + d*d
+ *     cdef double theta = 0.5 * atan2( 2*bu, au - du )
  */
-  __pyx_t_1 = 0;
-  *((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) )) = sqrt(((__pyx_v_S1 + __pyx_v_S2) / 2.0));
+  __pyx_v_bu = ((__pyx_v_a * __pyx_v_c) + (__pyx_v_b * __pyx_v_d));
 
   /* "transform/helpers.pyx":1890
- * 
- *     s[0] = sqrt((S1+S2)/2)
- *     s[1] = sqrt((S1-S2)/2)             # <<<<<<<<<<<<<<
- * 
- *     cdef double theta = 0.5 * atan2( acpbd, a2+b2-c2-d2 )
+ *     cdef double au = a*a + b*b
+ *     cdef double bu = a*c + b*d
+ *     cdef double du = c*c + d*d             # <<<<<<<<<<<<<<
+ *     cdef double theta = 0.5 * atan2( 2*bu, au - du )
+ *     cdef double Stheta = sin(theta)
  */
-  __pyx_t_1 = 1;
-  *((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) )) = sqrt(((__pyx_v_S1 - __pyx_v_S2) / 2.0));
+  __pyx_v_du = ((__pyx_v_c * __pyx_v_c) + (__pyx_v_d * __pyx_v_d));
 
-  /* "transform/helpers.pyx":1892
- *     s[1] = sqrt((S1-S2)/2)
- * 
- *     cdef double theta = 0.5 * atan2( acpbd, a2+b2-c2-d2 )             # <<<<<<<<<<<<<<
+  /* "transform/helpers.pyx":1891
+ *     cdef double bu = a*c + b*d
+ *     cdef double du = c*c + d*d
+ *     cdef double theta = 0.5 * atan2( 2*bu, au - du )             # <<<<<<<<<<<<<<
  *     cdef double Stheta = sin(theta)
  *     cdef double Ctheta = cos(theta)
  */
-  __pyx_v_theta = (0.5 * atan2(__pyx_v_acpbd, (((__pyx_v_a2 + __pyx_v_b2) - __pyx_v_c2) - __pyx_v_d2)));
+  __pyx_v_theta = (0.5 * atan2((2.0 * __pyx_v_bu), (__pyx_v_au - __pyx_v_du)));
 
-  /* "transform/helpers.pyx":1893
- * 
- *     cdef double theta = 0.5 * atan2( acpbd, a2+b2-c2-d2 )
+  /* "transform/helpers.pyx":1892
+ *     cdef double du = c*c + d*d
+ *     cdef double theta = 0.5 * atan2( 2*bu, au - du )
  *     cdef double Stheta = sin(theta)             # <<<<<<<<<<<<<<
  *     cdef double Ctheta = cos(theta)
- *     U[0,0] = Ctheta
+ * 
  */
   __pyx_v_Stheta = sin(__pyx_v_theta);
 
-  /* "transform/helpers.pyx":1894
- *     cdef double theta = 0.5 * atan2( acpbd, a2+b2-c2-d2 )
+  /* "transform/helpers.pyx":1893
+ *     cdef double theta = 0.5 * atan2( 2*bu, au - du )
  *     cdef double Stheta = sin(theta)
  *     cdef double Ctheta = cos(theta)             # <<<<<<<<<<<<<<
- *     U[0,0] = Ctheta
- *     U[0,1] = - Stheta
+ * 
+ *     U[0,0] =   Ctheta
  */
   __pyx_v_Ctheta = cos(__pyx_v_theta);
 
   /* "transform/helpers.pyx":1895
- *     cdef double Stheta = sin(theta)
  *     cdef double Ctheta = cos(theta)
- *     U[0,0] = Ctheta             # <<<<<<<<<<<<<<
+ * 
+ *     U[0,0] =   Ctheta             # <<<<<<<<<<<<<<
  *     U[0,1] = - Stheta
- *     U[1,0] = Stheta
+ *     U[1,0] =   Stheta
  */
   __pyx_t_1 = 0;
   __pyx_t_2 = 0;
   *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_1 * __pyx_v_U.strides[0]) ) + __pyx_t_2 * __pyx_v_U.strides[1]) )) = __pyx_v_Ctheta;
 
   /* "transform/helpers.pyx":1896
- *     cdef double Ctheta = cos(theta)
- *     U[0,0] = Ctheta
+ * 
+ *     U[0,0] =   Ctheta
  *     U[0,1] = - Stheta             # <<<<<<<<<<<<<<
- *     U[1,0] = Stheta
- *     U[1,1] = Ctheta
+ *     U[1,0] =   Stheta
+ *     U[1,1] =   Ctheta
  */
   __pyx_t_2 = 0;
   __pyx_t_1 = 1;
   *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_2 * __pyx_v_U.strides[0]) ) + __pyx_t_1 * __pyx_v_U.strides[1]) )) = (-__pyx_v_Stheta);
 
   /* "transform/helpers.pyx":1897
- *     U[0,0] = Ctheta
+ *     U[0,0] =   Ctheta
  *     U[0,1] = - Stheta
- *     U[1,0] = Stheta             # <<<<<<<<<<<<<<
- *     U[1,1] = Ctheta
+ *     U[1,0] =   Stheta             # <<<<<<<<<<<<<<
+ *     U[1,1] =   Ctheta
  * 
  */
   __pyx_t_1 = 1;
@@ -21178,10 +21117,10 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
 
   /* "transform/helpers.pyx":1898
  *     U[0,1] = - Stheta
- *     U[1,0] = Stheta
- *     U[1,1] = Ctheta             # <<<<<<<<<<<<<<
+ *     U[1,0] =   Stheta
+ *     U[1,1] =   Ctheta             # <<<<<<<<<<<<<<
  * 
- * 
+ *     # Next: figure the W matrix (AT A) is  ((aw, bw),(bw,dw))
  */
   __pyx_t_2 = 1;
   __pyx_t_1 = 1;
@@ -21189,115 +21128,217 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
 
   /* "transform/helpers.pyx":1901
  * 
+ *     # Next: figure the W matrix (AT A) is  ((aw, bw),(bw,dw))
+ *     cdef double aw = a*a + c*c             # <<<<<<<<<<<<<<
+ *     cdef double bw = a*b + c*d
+ *     cdef double dw = b*b + d*d
+ */
+  __pyx_v_aw = ((__pyx_v_a * __pyx_v_a) + (__pyx_v_c * __pyx_v_c));
+
+  /* "transform/helpers.pyx":1902
+ *     # Next: figure the W matrix (AT A) is  ((aw, bw),(bw,dw))
+ *     cdef double aw = a*a + c*c
+ *     cdef double bw = a*b + c*d             # <<<<<<<<<<<<<<
+ *     cdef double dw = b*b + d*d
  * 
- *     cdef double phi = 0.5 * atan2( 2*(a*b+c*d), a2-b2+c2-d2)             # <<<<<<<<<<<<<<
+ */
+  __pyx_v_bw = ((__pyx_v_a * __pyx_v_b) + (__pyx_v_c * __pyx_v_d));
+
+  /* "transform/helpers.pyx":1903
+ *     cdef double aw = a*a + c*c
+ *     cdef double bw = a*b + c*d
+ *     cdef double dw = b*b + d*d             # <<<<<<<<<<<<<<
+ * 
+ *     cdef double phi = 0.5 * atan2( 2*bw, aw - dw )
+ */
+  __pyx_v_dw = ((__pyx_v_b * __pyx_v_b) + (__pyx_v_d * __pyx_v_d));
+
+  /* "transform/helpers.pyx":1905
+ *     cdef double dw = b*b + d*d
+ * 
+ *     cdef double phi = 0.5 * atan2( 2*bw, aw - dw )             # <<<<<<<<<<<<<<
  *     cdef double Sphi = sin(phi)
  *     cdef double Cphi = cos(phi)
  */
-  __pyx_v_phi = (0.5 * atan2((2.0 * ((__pyx_v_a * __pyx_v_b) + (__pyx_v_c * __pyx_v_d))), (((__pyx_v_a2 - __pyx_v_b2) + __pyx_v_c2) - __pyx_v_d2)));
+  __pyx_v_phi = (0.5 * atan2((2.0 * __pyx_v_bw), (__pyx_v_aw - __pyx_v_dw)));
 
-  /* "transform/helpers.pyx":1902
+  /* "transform/helpers.pyx":1906
  * 
- *     cdef double phi = 0.5 * atan2( 2*(a*b+c*d), a2-b2+c2-d2)
+ *     cdef double phi = 0.5 * atan2( 2*bw, aw - dw )
  *     cdef double Sphi = sin(phi)             # <<<<<<<<<<<<<<
  *     cdef double Cphi = cos(phi)
  * 
  */
   __pyx_v_Sphi = sin(__pyx_v_phi);
 
-  /* "transform/helpers.pyx":1903
- *     cdef double phi = 0.5 * atan2( 2*(a*b+c*d), a2-b2+c2-d2)
+  /* "transform/helpers.pyx":1907
+ *     cdef double phi = 0.5 * atan2( 2*bw, aw - dw )
  *     cdef double Sphi = sin(phi)
  *     cdef double Cphi = cos(phi)             # <<<<<<<<<<<<<<
  * 
- *     cdef double s11sgn = 1 if (( (a * Ctheta + c * Stheta) * Cphi +
+ *     # (C S) = UT x A x W -- sign of (C S) lets us correct W -> V
  */
   __pyx_v_Cphi = cos(__pyx_v_phi);
 
-  /* "transform/helpers.pyx":1907
- *     cdef double s11sgn = 1 if (( (a * Ctheta + c * Stheta) * Cphi +
- *                         (b * Ctheta + d * Stheta) * Sphi
- *                         ) >= 0.0) else  -1.0             # <<<<<<<<<<<<<<
- *     cdef double s22sgn = 1 if (( (a * Stheta - c * Ctheta) * Sphi +
- *                         (-b * Stheta + d * Ctheta) * Cphi
+  /* "transform/helpers.pyx":1911
+ *     # (C S) = UT x A x W -- sign of (C S) lets us correct W -> V
+ *     # first: sL gets UT x A; then calculate just the diagonal elements of (C s).
+ *     cdef double sL00 =  Ctheta * a  +  Stheta * c             # <<<<<<<<<<<<<<
+ *     cdef double sL01 =  Ctheta * b  +  Stheta * d
+ *     cdef double sL10 = -Stheta * a  +  Ctheta * c
  */
-  if (((((((__pyx_v_a * __pyx_v_Ctheta) + (__pyx_v_c * __pyx_v_Stheta)) * __pyx_v_Cphi) + (((__pyx_v_b * __pyx_v_Ctheta) + (__pyx_v_d * __pyx_v_Stheta)) * __pyx_v_Sphi)) >= 0.0) != 0)) {
-    __pyx_t_3 = 1.0;
-  } else {
-    __pyx_t_3 = -1.0;
-  }
-  __pyx_v_s11sgn = __pyx_t_3;
-
-  /* "transform/helpers.pyx":1910
- *     cdef double s22sgn = 1 if (( (a * Stheta - c * Ctheta) * Sphi +
- *                         (-b * Stheta + d * Ctheta) * Cphi
- *                         ) >= 0.0) else  -1.0             # <<<<<<<<<<<<<<
- * 
- *     V[0,0] = s11sgn * Cphi
- */
-  if (((((((__pyx_v_a * __pyx_v_Stheta) - (__pyx_v_c * __pyx_v_Ctheta)) * __pyx_v_Sphi) + ((((-__pyx_v_b) * __pyx_v_Stheta) + (__pyx_v_d * __pyx_v_Ctheta)) * __pyx_v_Cphi)) >= 0.0) != 0)) {
-    __pyx_t_3 = 1.0;
-  } else {
-    __pyx_t_3 = -1.0;
-  }
-  __pyx_v_s22sgn = __pyx_t_3;
+  __pyx_v_sL00 = ((__pyx_v_Ctheta * __pyx_v_a) + (__pyx_v_Stheta * __pyx_v_c));
 
   /* "transform/helpers.pyx":1912
- *                         ) >= 0.0) else  -1.0
+ *     # first: sL gets UT x A; then calculate just the diagonal elements of (C s).
+ *     cdef double sL00 =  Ctheta * a  +  Stheta * c
+ *     cdef double sL01 =  Ctheta * b  +  Stheta * d             # <<<<<<<<<<<<<<
+ *     cdef double sL10 = -Stheta * a  +  Ctheta * c
+ *     cdef double sL11 = -Stheta * b  +  Ctheta * d
+ */
+  __pyx_v_sL01 = ((__pyx_v_Ctheta * __pyx_v_b) + (__pyx_v_Stheta * __pyx_v_d));
+
+  /* "transform/helpers.pyx":1913
+ *     cdef double sL00 =  Ctheta * a  +  Stheta * c
+ *     cdef double sL01 =  Ctheta * b  +  Stheta * d
+ *     cdef double sL10 = -Stheta * a  +  Ctheta * c             # <<<<<<<<<<<<<<
+ *     cdef double sL11 = -Stheta * b  +  Ctheta * d
  * 
- *     V[0,0] = s11sgn * Cphi             # <<<<<<<<<<<<<<
- *     V[0,1] = -s22sgn * Sphi
- *     V[1,0] = s11sgn * Sphi
+ */
+  __pyx_v_sL10 = (((-__pyx_v_Stheta) * __pyx_v_a) + (__pyx_v_Ctheta * __pyx_v_c));
+
+  /* "transform/helpers.pyx":1914
+ *     cdef double sL01 =  Ctheta * b  +  Stheta * d
+ *     cdef double sL10 = -Stheta * a  +  Ctheta * c
+ *     cdef double sL11 = -Stheta * b  +  Ctheta * d             # <<<<<<<<<<<<<<
+ * 
+ *     # sgn00 and sgn11 get +/- the singular values.  We want the
+ */
+  __pyx_v_sL11 = (((-__pyx_v_Stheta) * __pyx_v_b) + (__pyx_v_Ctheta * __pyx_v_d));
+
+  /* "transform/helpers.pyx":1918
+ *     # sgn00 and sgn11 get +/- the singular values.  We want the
+ *     # positive branch for s, but to keep the sign to set V = C W.
+ *     cdef double s00 = sL00 *  Cphi  +  sL01 * Sphi             # <<<<<<<<<<<<<<
+ *     cdef double s11 = sL10 * -Sphi  +  sL11 * Cphi
+ *     s[0] = fabs(s00)
+ */
+  __pyx_v_s00 = ((__pyx_v_sL00 * __pyx_v_Cphi) + (__pyx_v_sL01 * __pyx_v_Sphi));
+
+  /* "transform/helpers.pyx":1919
+ *     # positive branch for s, but to keep the sign to set V = C W.
+ *     cdef double s00 = sL00 *  Cphi  +  sL01 * Sphi
+ *     cdef double s11 = sL10 * -Sphi  +  sL11 * Cphi             # <<<<<<<<<<<<<<
+ *     s[0] = fabs(s00)
+ *     s[1] = fabs(s11)
+ */
+  __pyx_v_s11 = ((__pyx_v_sL10 * (-__pyx_v_Sphi)) + (__pyx_v_sL11 * __pyx_v_Cphi));
+
+  /* "transform/helpers.pyx":1920
+ *     cdef double s00 = sL00 *  Cphi  +  sL01 * Sphi
+ *     cdef double s11 = sL10 * -Sphi  +  sL11 * Cphi
+ *     s[0] = fabs(s00)             # <<<<<<<<<<<<<<
+ *     s[1] = fabs(s11)
+ *     s00 = 1 if(s00>=0) else -1
+ */
+  __pyx_t_1 = 0;
+  *((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) )) = fabs(__pyx_v_s00);
+
+  /* "transform/helpers.pyx":1921
+ *     cdef double s11 = sL10 * -Sphi  +  sL11 * Cphi
+ *     s[0] = fabs(s00)
+ *     s[1] = fabs(s11)             # <<<<<<<<<<<<<<
+ *     s00 = 1 if(s00>=0) else -1
+ *     s11 = 1 if(s11>=0) else -1
+ */
+  __pyx_t_1 = 1;
+  *((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) )) = fabs(__pyx_v_s11);
+
+  /* "transform/helpers.pyx":1922
+ *     s[0] = fabs(s00)
+ *     s[1] = fabs(s11)
+ *     s00 = 1 if(s00>=0) else -1             # <<<<<<<<<<<<<<
+ *     s11 = 1 if(s11>=0) else -1
+ * 
+ */
+  if (((__pyx_v_s00 >= 0.0) != 0)) {
+    __pyx_t_3 = 1.0;
+  } else {
+    __pyx_t_3 = -1.0;
+  }
+  __pyx_v_s00 = __pyx_t_3;
+
+  /* "transform/helpers.pyx":1923
+ *     s[1] = fabs(s11)
+ *     s00 = 1 if(s00>=0) else -1
+ *     s11 = 1 if(s11>=0) else -1             # <<<<<<<<<<<<<<
+ * 
+ *     V[0,0] =   Cphi * s00
+ */
+  if (((__pyx_v_s11 >= 0.0) != 0)) {
+    __pyx_t_3 = 1.0;
+  } else {
+    __pyx_t_3 = -1.0;
+  }
+  __pyx_v_s11 = __pyx_t_3;
+
+  /* "transform/helpers.pyx":1925
+ *     s11 = 1 if(s11>=0) else -1
+ * 
+ *     V[0,0] =   Cphi * s00             # <<<<<<<<<<<<<<
+ *     V[0,1] = - Sphi * s11
+ *     V[1,0] =   Sphi * s00
  */
   __pyx_t_1 = 0;
   __pyx_t_2 = 0;
-  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_1 * __pyx_v_V.strides[0]) ) + __pyx_t_2 * __pyx_v_V.strides[1]) )) = (__pyx_v_s11sgn * __pyx_v_Cphi);
+  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_1 * __pyx_v_V.strides[0]) ) + __pyx_t_2 * __pyx_v_V.strides[1]) )) = (__pyx_v_Cphi * __pyx_v_s00);
 
-  /* "transform/helpers.pyx":1913
+  /* "transform/helpers.pyx":1926
  * 
- *     V[0,0] = s11sgn * Cphi
- *     V[0,1] = -s22sgn * Sphi             # <<<<<<<<<<<<<<
- *     V[1,0] = s11sgn * Sphi
- *     V[1,1] = s22sgn * Cphi
+ *     V[0,0] =   Cphi * s00
+ *     V[0,1] = - Sphi * s11             # <<<<<<<<<<<<<<
+ *     V[1,0] =   Sphi * s00
+ *     V[1,1] =   Cphi * s11
  */
   __pyx_t_2 = 0;
   __pyx_t_1 = 1;
-  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_2 * __pyx_v_V.strides[0]) ) + __pyx_t_1 * __pyx_v_V.strides[1]) )) = ((-__pyx_v_s22sgn) * __pyx_v_Sphi);
+  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_2 * __pyx_v_V.strides[0]) ) + __pyx_t_1 * __pyx_v_V.strides[1]) )) = ((-__pyx_v_Sphi) * __pyx_v_s11);
 
-  /* "transform/helpers.pyx":1914
- *     V[0,0] = s11sgn * Cphi
- *     V[0,1] = -s22sgn * Sphi
- *     V[1,0] = s11sgn * Sphi             # <<<<<<<<<<<<<<
- *     V[1,1] = s22sgn * Cphi
+  /* "transform/helpers.pyx":1927
+ *     V[0,0] =   Cphi * s00
+ *     V[0,1] = - Sphi * s11
+ *     V[1,0] =   Sphi * s00             # <<<<<<<<<<<<<<
+ *     V[1,1] =   Cphi * s11
  * 
  */
   __pyx_t_1 = 1;
   __pyx_t_2 = 0;
-  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_1 * __pyx_v_V.strides[0]) ) + __pyx_t_2 * __pyx_v_V.strides[1]) )) = (__pyx_v_s11sgn * __pyx_v_Sphi);
+  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_1 * __pyx_v_V.strides[0]) ) + __pyx_t_2 * __pyx_v_V.strides[1]) )) = (__pyx_v_Sphi * __pyx_v_s00);
 
-  /* "transform/helpers.pyx":1915
- *     V[0,1] = -s22sgn * Sphi
- *     V[1,0] = s11sgn * Sphi
- *     V[1,1] = s22sgn * Cphi             # <<<<<<<<<<<<<<
+  /* "transform/helpers.pyx":1928
+ *     V[0,1] = - Sphi * s11
+ *     V[1,0] =   Sphi * s00
+ *     V[1,1] =   Cphi * s11             # <<<<<<<<<<<<<<
  * 
- * # Singular value Compose -- undeo SVD above
+ * 
  */
   __pyx_t_2 = 1;
   __pyx_t_1 = 1;
-  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_2 * __pyx_v_V.strides[0]) ) + __pyx_t_1 * __pyx_v_V.strides[1]) )) = (__pyx_v_s22sgn * __pyx_v_Cphi);
+  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_2 * __pyx_v_V.strides[0]) ) + __pyx_t_1 * __pyx_v_V.strides[1]) )) = (__pyx_v_Cphi * __pyx_v_s11);
 
-  /* "transform/helpers.pyx":1874
+  /* "transform/helpers.pyx":1880
  * @cython.nonecheck(False)
  * @cython.cdivision(True)
  * cdef void svd2x2_fast(double[:,:] M,             # <<<<<<<<<<<<<<
- *                       double[:,:] U, double[:] s, double[:,:] V) nogil:
+ *                       double[:,:] U, double[:] s, double[:,:] V) :
  *     cdef double a = M[0,0]
  */
 
   /* function exit code */
+  __Pyx_RefNannyFinishContext();
 }
 
-/* "transform/helpers.pyx":1920
+/* "transform/helpers.pyx":1935
  * # M = U x s x VT
  * 
  * cdef void svc2x2_fast(double[:,:] U,             # <<<<<<<<<<<<<<
@@ -21306,14 +21347,14 @@ static void __pyx_f_9transform_7helpers_svd2x2_fast(__Pyx_memviewslice __pyx_v_M
  */
 
 static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U, __Pyx_memviewslice __pyx_v_s, __Pyx_memviewslice __pyx_v_V, __Pyx_memviewslice __pyx_v_M) {
-  double __pyx_v_a;
-  double __pyx_v_b;
-  double __pyx_v_c;
-  double __pyx_v_d;
+  double __pyx_v_U00S0;
+  double __pyx_v_U01S1;
+  double __pyx_v_U10S0;
+  double __pyx_v_U11S1;
   __Pyx_RefNannyDeclarations
   Py_ssize_t __pyx_t_1;
-  int __pyx_t_2;
-  Py_ssize_t __pyx_t_3;
+  Py_ssize_t __pyx_t_2;
+  int __pyx_t_3;
   Py_ssize_t __pyx_t_4;
   Py_ssize_t __pyx_t_5;
   Py_ssize_t __pyx_t_6;
@@ -21323,359 +21364,359 @@ static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("svc2x2_fast", 0);
 
-  /* "transform/helpers.pyx":1926
+  /* "transform/helpers.pyx":1941
  *                              ):
- *     # ab top row; cd bot row.  Right-mult by VT, not V
- *     cdef double a = s[0] * V[0,0]             # <<<<<<<<<<<<<<
- *     cdef double b = s[0] * V[1,0]
- *     cdef double c = s[1] * V[0,1]
+ *     # UxS
+ *     cdef double U00S0 = U[0,0] * s[0]             # <<<<<<<<<<<<<<
+ *     cdef double U01S1 = U[0,1] * s[1]
+ *     cdef double U10S0 = U[1,0] * s[0]
  */
   __pyx_t_1 = 0;
-  __pyx_t_2 = -1;
-  if (__pyx_t_1 < 0) {
-    __pyx_t_1 += __pyx_v_s.shape[0];
-    if (unlikely(__pyx_t_1 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_1 >= __pyx_v_s.shape[0])) __pyx_t_2 = 0;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1926, __pyx_L1_error)
-  }
-  __pyx_t_3 = 0;
-  __pyx_t_4 = 0;
-  __pyx_t_2 = -1;
-  if (__pyx_t_3 < 0) {
-    __pyx_t_3 += __pyx_v_V.shape[0];
-    if (unlikely(__pyx_t_3 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_3 >= __pyx_v_V.shape[0])) __pyx_t_2 = 0;
-  if (__pyx_t_4 < 0) {
-    __pyx_t_4 += __pyx_v_V.shape[1];
-    if (unlikely(__pyx_t_4 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_4 >= __pyx_v_V.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1926, __pyx_L1_error)
-  }
-  __pyx_v_a = ((*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) ))) * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_3 * __pyx_v_V.strides[0]) ) + __pyx_t_4 * __pyx_v_V.strides[1]) ))));
-
-  /* "transform/helpers.pyx":1927
- *     # ab top row; cd bot row.  Right-mult by VT, not V
- *     cdef double a = s[0] * V[0,0]
- *     cdef double b = s[0] * V[1,0]             # <<<<<<<<<<<<<<
- *     cdef double c = s[1] * V[0,1]
- *     cdef double d = s[1] * V[1,1]
- */
-  __pyx_t_4 = 0;
-  __pyx_t_2 = -1;
-  if (__pyx_t_4 < 0) {
-    __pyx_t_4 += __pyx_v_s.shape[0];
-    if (unlikely(__pyx_t_4 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_4 >= __pyx_v_s.shape[0])) __pyx_t_2 = 0;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1927, __pyx_L1_error)
-  }
-  __pyx_t_3 = 1;
-  __pyx_t_1 = 0;
-  __pyx_t_2 = -1;
-  if (__pyx_t_3 < 0) {
-    __pyx_t_3 += __pyx_v_V.shape[0];
-    if (unlikely(__pyx_t_3 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_3 >= __pyx_v_V.shape[0])) __pyx_t_2 = 0;
-  if (__pyx_t_1 < 0) {
-    __pyx_t_1 += __pyx_v_V.shape[1];
-    if (unlikely(__pyx_t_1 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_1 >= __pyx_v_V.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1927, __pyx_L1_error)
-  }
-  __pyx_v_b = ((*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_4 * __pyx_v_s.strides[0]) ))) * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_3 * __pyx_v_V.strides[0]) ) + __pyx_t_1 * __pyx_v_V.strides[1]) ))));
-
-  /* "transform/helpers.pyx":1928
- *     cdef double a = s[0] * V[0,0]
- *     cdef double b = s[0] * V[1,0]
- *     cdef double c = s[1] * V[0,1]             # <<<<<<<<<<<<<<
- *     cdef double d = s[1] * V[1,1]
- *     M[0,0] = U[0,0]*a + U[0,1] * c
- */
-  __pyx_t_1 = 1;
-  __pyx_t_2 = -1;
-  if (__pyx_t_1 < 0) {
-    __pyx_t_1 += __pyx_v_s.shape[0];
-    if (unlikely(__pyx_t_1 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_1 >= __pyx_v_s.shape[0])) __pyx_t_2 = 0;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1928, __pyx_L1_error)
-  }
-  __pyx_t_3 = 0;
-  __pyx_t_4 = 1;
-  __pyx_t_2 = -1;
-  if (__pyx_t_3 < 0) {
-    __pyx_t_3 += __pyx_v_V.shape[0];
-    if (unlikely(__pyx_t_3 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_3 >= __pyx_v_V.shape[0])) __pyx_t_2 = 0;
-  if (__pyx_t_4 < 0) {
-    __pyx_t_4 += __pyx_v_V.shape[1];
-    if (unlikely(__pyx_t_4 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_4 >= __pyx_v_V.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1928, __pyx_L1_error)
-  }
-  __pyx_v_c = ((*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) ))) * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_3 * __pyx_v_V.strides[0]) ) + __pyx_t_4 * __pyx_v_V.strides[1]) ))));
-
-  /* "transform/helpers.pyx":1929
- *     cdef double b = s[0] * V[1,0]
- *     cdef double c = s[1] * V[0,1]
- *     cdef double d = s[1] * V[1,1]             # <<<<<<<<<<<<<<
- *     M[0,0] = U[0,0]*a + U[0,1] * c
- *     M[0,1] = U[0,0]*b + U[0,1] * d
- */
-  __pyx_t_4 = 1;
-  __pyx_t_2 = -1;
-  if (__pyx_t_4 < 0) {
-    __pyx_t_4 += __pyx_v_s.shape[0];
-    if (unlikely(__pyx_t_4 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_4 >= __pyx_v_s.shape[0])) __pyx_t_2 = 0;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1929, __pyx_L1_error)
-  }
-  __pyx_t_3 = 1;
-  __pyx_t_1 = 1;
-  __pyx_t_2 = -1;
-  if (__pyx_t_3 < 0) {
-    __pyx_t_3 += __pyx_v_V.shape[0];
-    if (unlikely(__pyx_t_3 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_3 >= __pyx_v_V.shape[0])) __pyx_t_2 = 0;
-  if (__pyx_t_1 < 0) {
-    __pyx_t_1 += __pyx_v_V.shape[1];
-    if (unlikely(__pyx_t_1 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_1 >= __pyx_v_V.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1929, __pyx_L1_error)
-  }
-  __pyx_v_d = ((*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_4 * __pyx_v_s.strides[0]) ))) * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_3 * __pyx_v_V.strides[0]) ) + __pyx_t_1 * __pyx_v_V.strides[1]) ))));
-
-  /* "transform/helpers.pyx":1930
- *     cdef double c = s[1] * V[0,1]
- *     cdef double d = s[1] * V[1,1]
- *     M[0,0] = U[0,0]*a + U[0,1] * c             # <<<<<<<<<<<<<<
- *     M[0,1] = U[0,0]*b + U[0,1] * d
- *     M[1,0] = U[1,0]*a + U[1,1] * c
- */
-  __pyx_t_1 = 0;
-  __pyx_t_3 = 0;
-  __pyx_t_2 = -1;
+  __pyx_t_2 = 0;
+  __pyx_t_3 = -1;
   if (__pyx_t_1 < 0) {
     __pyx_t_1 += __pyx_v_U.shape[0];
-    if (unlikely(__pyx_t_1 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_1 >= __pyx_v_U.shape[0])) __pyx_t_2 = 0;
-  if (__pyx_t_3 < 0) {
-    __pyx_t_3 += __pyx_v_U.shape[1];
-    if (unlikely(__pyx_t_3 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_3 >= __pyx_v_U.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1930, __pyx_L1_error)
+    if (unlikely(__pyx_t_1 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_1 >= __pyx_v_U.shape[0])) __pyx_t_3 = 0;
+  if (__pyx_t_2 < 0) {
+    __pyx_t_2 += __pyx_v_U.shape[1];
+    if (unlikely(__pyx_t_2 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_2 >= __pyx_v_U.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1941, __pyx_L1_error)
+  }
+  __pyx_t_4 = 0;
+  __pyx_t_3 = -1;
+  if (__pyx_t_4 < 0) {
+    __pyx_t_4 += __pyx_v_s.shape[0];
+    if (unlikely(__pyx_t_4 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_4 >= __pyx_v_s.shape[0])) __pyx_t_3 = 0;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1941, __pyx_L1_error)
+  }
+  __pyx_v_U00S0 = ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_1 * __pyx_v_U.strides[0]) ) + __pyx_t_2 * __pyx_v_U.strides[1]) ))) * (*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_4 * __pyx_v_s.strides[0]) ))));
+
+  /* "transform/helpers.pyx":1942
+ *     # UxS
+ *     cdef double U00S0 = U[0,0] * s[0]
+ *     cdef double U01S1 = U[0,1] * s[1]             # <<<<<<<<<<<<<<
+ *     cdef double U10S0 = U[1,0] * s[0]
+ *     cdef double U11S1 = U[1,1] * s[1]
+ */
+  __pyx_t_4 = 0;
+  __pyx_t_2 = 1;
+  __pyx_t_3 = -1;
+  if (__pyx_t_4 < 0) {
+    __pyx_t_4 += __pyx_v_U.shape[0];
+    if (unlikely(__pyx_t_4 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_4 >= __pyx_v_U.shape[0])) __pyx_t_3 = 0;
+  if (__pyx_t_2 < 0) {
+    __pyx_t_2 += __pyx_v_U.shape[1];
+    if (unlikely(__pyx_t_2 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_2 >= __pyx_v_U.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1942, __pyx_L1_error)
+  }
+  __pyx_t_1 = 1;
+  __pyx_t_3 = -1;
+  if (__pyx_t_1 < 0) {
+    __pyx_t_1 += __pyx_v_s.shape[0];
+    if (unlikely(__pyx_t_1 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_1 >= __pyx_v_s.shape[0])) __pyx_t_3 = 0;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1942, __pyx_L1_error)
+  }
+  __pyx_v_U01S1 = ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_4 * __pyx_v_U.strides[0]) ) + __pyx_t_2 * __pyx_v_U.strides[1]) ))) * (*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) ))));
+
+  /* "transform/helpers.pyx":1943
+ *     cdef double U00S0 = U[0,0] * s[0]
+ *     cdef double U01S1 = U[0,1] * s[1]
+ *     cdef double U10S0 = U[1,0] * s[0]             # <<<<<<<<<<<<<<
+ *     cdef double U11S1 = U[1,1] * s[1]
+ * 
+ */
+  __pyx_t_1 = 1;
+  __pyx_t_2 = 0;
+  __pyx_t_3 = -1;
+  if (__pyx_t_1 < 0) {
+    __pyx_t_1 += __pyx_v_U.shape[0];
+    if (unlikely(__pyx_t_1 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_1 >= __pyx_v_U.shape[0])) __pyx_t_3 = 0;
+  if (__pyx_t_2 < 0) {
+    __pyx_t_2 += __pyx_v_U.shape[1];
+    if (unlikely(__pyx_t_2 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_2 >= __pyx_v_U.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1943, __pyx_L1_error)
+  }
+  __pyx_t_4 = 0;
+  __pyx_t_3 = -1;
+  if (__pyx_t_4 < 0) {
+    __pyx_t_4 += __pyx_v_s.shape[0];
+    if (unlikely(__pyx_t_4 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_4 >= __pyx_v_s.shape[0])) __pyx_t_3 = 0;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1943, __pyx_L1_error)
+  }
+  __pyx_v_U10S0 = ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_1 * __pyx_v_U.strides[0]) ) + __pyx_t_2 * __pyx_v_U.strides[1]) ))) * (*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_4 * __pyx_v_s.strides[0]) ))));
+
+  /* "transform/helpers.pyx":1944
+ *     cdef double U01S1 = U[0,1] * s[1]
+ *     cdef double U10S0 = U[1,0] * s[0]
+ *     cdef double U11S1 = U[1,1] * s[1]             # <<<<<<<<<<<<<<
+ * 
+ *     # (UxS) x VT
+ */
+  __pyx_t_4 = 1;
+  __pyx_t_2 = 1;
+  __pyx_t_3 = -1;
+  if (__pyx_t_4 < 0) {
+    __pyx_t_4 += __pyx_v_U.shape[0];
+    if (unlikely(__pyx_t_4 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_4 >= __pyx_v_U.shape[0])) __pyx_t_3 = 0;
+  if (__pyx_t_2 < 0) {
+    __pyx_t_2 += __pyx_v_U.shape[1];
+    if (unlikely(__pyx_t_2 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_2 >= __pyx_v_U.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1944, __pyx_L1_error)
+  }
+  __pyx_t_1 = 1;
+  __pyx_t_3 = -1;
+  if (__pyx_t_1 < 0) {
+    __pyx_t_1 += __pyx_v_s.shape[0];
+    if (unlikely(__pyx_t_1 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_1 >= __pyx_v_s.shape[0])) __pyx_t_3 = 0;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1944, __pyx_L1_error)
+  }
+  __pyx_v_U11S1 = ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_4 * __pyx_v_U.strides[0]) ) + __pyx_t_2 * __pyx_v_U.strides[1]) ))) * (*((double *) ( /* dim=0 */ (__pyx_v_s.data + __pyx_t_1 * __pyx_v_s.strides[0]) ))));
+
+  /* "transform/helpers.pyx":1947
+ * 
+ *     # (UxS) x VT
+ *     M[0,0] = U00S0 * V[0,0] + U01S1 * V[0,1]             # <<<<<<<<<<<<<<
+ *     M[0,1] = U00S0 * V[1,0] + U01S1 * V[1,1]
+ *     M[1,0] = U10S0 * V[0,0] + U11S1 * V[0,1]
+ */
+  __pyx_t_1 = 0;
+  __pyx_t_2 = 0;
+  __pyx_t_3 = -1;
+  if (__pyx_t_1 < 0) {
+    __pyx_t_1 += __pyx_v_V.shape[0];
+    if (unlikely(__pyx_t_1 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_1 >= __pyx_v_V.shape[0])) __pyx_t_3 = 0;
+  if (__pyx_t_2 < 0) {
+    __pyx_t_2 += __pyx_v_V.shape[1];
+    if (unlikely(__pyx_t_2 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_2 >= __pyx_v_V.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1947, __pyx_L1_error)
   }
   __pyx_t_4 = 0;
   __pyx_t_5 = 1;
-  __pyx_t_2 = -1;
+  __pyx_t_3 = -1;
   if (__pyx_t_4 < 0) {
-    __pyx_t_4 += __pyx_v_U.shape[0];
-    if (unlikely(__pyx_t_4 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_4 >= __pyx_v_U.shape[0])) __pyx_t_2 = 0;
+    __pyx_t_4 += __pyx_v_V.shape[0];
+    if (unlikely(__pyx_t_4 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_4 >= __pyx_v_V.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_5 < 0) {
-    __pyx_t_5 += __pyx_v_U.shape[1];
-    if (unlikely(__pyx_t_5 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_5 >= __pyx_v_U.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1930, __pyx_L1_error)
+    __pyx_t_5 += __pyx_v_V.shape[1];
+    if (unlikely(__pyx_t_5 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_5 >= __pyx_v_V.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1947, __pyx_L1_error)
   }
   __pyx_t_6 = 0;
   __pyx_t_7 = 0;
-  __pyx_t_2 = -1;
+  __pyx_t_3 = -1;
   if (__pyx_t_6 < 0) {
     __pyx_t_6 += __pyx_v_M.shape[0];
-    if (unlikely(__pyx_t_6 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_6 >= __pyx_v_M.shape[0])) __pyx_t_2 = 0;
+    if (unlikely(__pyx_t_6 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_6 >= __pyx_v_M.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_7 < 0) {
     __pyx_t_7 += __pyx_v_M.shape[1];
-    if (unlikely(__pyx_t_7 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_7 >= __pyx_v_M.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1930, __pyx_L1_error)
+    if (unlikely(__pyx_t_7 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_7 >= __pyx_v_M.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1947, __pyx_L1_error)
   }
-  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_6 * __pyx_v_M.strides[0]) ) + __pyx_t_7 * __pyx_v_M.strides[1]) )) = (((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_1 * __pyx_v_U.strides[0]) ) + __pyx_t_3 * __pyx_v_U.strides[1]) ))) * __pyx_v_a) + ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_4 * __pyx_v_U.strides[0]) ) + __pyx_t_5 * __pyx_v_U.strides[1]) ))) * __pyx_v_c));
+  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_6 * __pyx_v_M.strides[0]) ) + __pyx_t_7 * __pyx_v_M.strides[1]) )) = ((__pyx_v_U00S0 * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_1 * __pyx_v_V.strides[0]) ) + __pyx_t_2 * __pyx_v_V.strides[1]) )))) + (__pyx_v_U01S1 * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_4 * __pyx_v_V.strides[0]) ) + __pyx_t_5 * __pyx_v_V.strides[1]) )))));
 
-  /* "transform/helpers.pyx":1931
- *     cdef double d = s[1] * V[1,1]
- *     M[0,0] = U[0,0]*a + U[0,1] * c
- *     M[0,1] = U[0,0]*b + U[0,1] * d             # <<<<<<<<<<<<<<
- *     M[1,0] = U[1,0]*a + U[1,1] * c
- *     M[1,1] = U[1,0]*c + U[1,1] * d
+  /* "transform/helpers.pyx":1948
+ *     # (UxS) x VT
+ *     M[0,0] = U00S0 * V[0,0] + U01S1 * V[0,1]
+ *     M[0,1] = U00S0 * V[1,0] + U01S1 * V[1,1]             # <<<<<<<<<<<<<<
+ *     M[1,0] = U10S0 * V[0,0] + U11S1 * V[0,1]
+ *     M[1,1] = U10S0 * V[1,0] + U11S1 * V[1,1]
  */
-  __pyx_t_5 = 0;
+  __pyx_t_5 = 1;
   __pyx_t_4 = 0;
-  __pyx_t_2 = -1;
+  __pyx_t_3 = -1;
   if (__pyx_t_5 < 0) {
-    __pyx_t_5 += __pyx_v_U.shape[0];
-    if (unlikely(__pyx_t_5 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_5 >= __pyx_v_U.shape[0])) __pyx_t_2 = 0;
+    __pyx_t_5 += __pyx_v_V.shape[0];
+    if (unlikely(__pyx_t_5 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_5 >= __pyx_v_V.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_4 < 0) {
-    __pyx_t_4 += __pyx_v_U.shape[1];
-    if (unlikely(__pyx_t_4 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_4 >= __pyx_v_U.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1931, __pyx_L1_error)
+    __pyx_t_4 += __pyx_v_V.shape[1];
+    if (unlikely(__pyx_t_4 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_4 >= __pyx_v_V.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1948, __pyx_L1_error)
   }
-  __pyx_t_3 = 0;
+  __pyx_t_2 = 1;
   __pyx_t_1 = 1;
-  __pyx_t_2 = -1;
-  if (__pyx_t_3 < 0) {
-    __pyx_t_3 += __pyx_v_U.shape[0];
-    if (unlikely(__pyx_t_3 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_3 >= __pyx_v_U.shape[0])) __pyx_t_2 = 0;
+  __pyx_t_3 = -1;
+  if (__pyx_t_2 < 0) {
+    __pyx_t_2 += __pyx_v_V.shape[0];
+    if (unlikely(__pyx_t_2 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_2 >= __pyx_v_V.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_1 < 0) {
-    __pyx_t_1 += __pyx_v_U.shape[1];
-    if (unlikely(__pyx_t_1 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_1 >= __pyx_v_U.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1931, __pyx_L1_error)
+    __pyx_t_1 += __pyx_v_V.shape[1];
+    if (unlikely(__pyx_t_1 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_1 >= __pyx_v_V.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1948, __pyx_L1_error)
   }
   __pyx_t_7 = 0;
   __pyx_t_6 = 1;
-  __pyx_t_2 = -1;
+  __pyx_t_3 = -1;
   if (__pyx_t_7 < 0) {
     __pyx_t_7 += __pyx_v_M.shape[0];
-    if (unlikely(__pyx_t_7 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_7 >= __pyx_v_M.shape[0])) __pyx_t_2 = 0;
+    if (unlikely(__pyx_t_7 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_7 >= __pyx_v_M.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_6 < 0) {
     __pyx_t_6 += __pyx_v_M.shape[1];
-    if (unlikely(__pyx_t_6 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_6 >= __pyx_v_M.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1931, __pyx_L1_error)
+    if (unlikely(__pyx_t_6 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_6 >= __pyx_v_M.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1948, __pyx_L1_error)
   }
-  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_7 * __pyx_v_M.strides[0]) ) + __pyx_t_6 * __pyx_v_M.strides[1]) )) = (((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_5 * __pyx_v_U.strides[0]) ) + __pyx_t_4 * __pyx_v_U.strides[1]) ))) * __pyx_v_b) + ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_3 * __pyx_v_U.strides[0]) ) + __pyx_t_1 * __pyx_v_U.strides[1]) ))) * __pyx_v_d));
+  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_7 * __pyx_v_M.strides[0]) ) + __pyx_t_6 * __pyx_v_M.strides[1]) )) = ((__pyx_v_U00S0 * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_5 * __pyx_v_V.strides[0]) ) + __pyx_t_4 * __pyx_v_V.strides[1]) )))) + (__pyx_v_U01S1 * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_2 * __pyx_v_V.strides[0]) ) + __pyx_t_1 * __pyx_v_V.strides[1]) )))));
 
-  /* "transform/helpers.pyx":1932
- *     M[0,0] = U[0,0]*a + U[0,1] * c
- *     M[0,1] = U[0,0]*b + U[0,1] * d
- *     M[1,0] = U[1,0]*a + U[1,1] * c             # <<<<<<<<<<<<<<
- *     M[1,1] = U[1,0]*c + U[1,1] * d
+  /* "transform/helpers.pyx":1949
+ *     M[0,0] = U00S0 * V[0,0] + U01S1 * V[0,1]
+ *     M[0,1] = U00S0 * V[1,0] + U01S1 * V[1,1]
+ *     M[1,0] = U10S0 * V[0,0] + U11S1 * V[0,1]             # <<<<<<<<<<<<<<
+ *     M[1,1] = U10S0 * V[1,0] + U11S1 * V[1,1]
  * 
  */
-  __pyx_t_1 = 1;
-  __pyx_t_3 = 0;
-  __pyx_t_2 = -1;
+  __pyx_t_1 = 0;
+  __pyx_t_2 = 0;
+  __pyx_t_3 = -1;
   if (__pyx_t_1 < 0) {
-    __pyx_t_1 += __pyx_v_U.shape[0];
-    if (unlikely(__pyx_t_1 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_1 >= __pyx_v_U.shape[0])) __pyx_t_2 = 0;
-  if (__pyx_t_3 < 0) {
-    __pyx_t_3 += __pyx_v_U.shape[1];
-    if (unlikely(__pyx_t_3 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_3 >= __pyx_v_U.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1932, __pyx_L1_error)
+    __pyx_t_1 += __pyx_v_V.shape[0];
+    if (unlikely(__pyx_t_1 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_1 >= __pyx_v_V.shape[0])) __pyx_t_3 = 0;
+  if (__pyx_t_2 < 0) {
+    __pyx_t_2 += __pyx_v_V.shape[1];
+    if (unlikely(__pyx_t_2 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_2 >= __pyx_v_V.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1949, __pyx_L1_error)
   }
-  __pyx_t_4 = 1;
+  __pyx_t_4 = 0;
   __pyx_t_5 = 1;
-  __pyx_t_2 = -1;
+  __pyx_t_3 = -1;
   if (__pyx_t_4 < 0) {
-    __pyx_t_4 += __pyx_v_U.shape[0];
-    if (unlikely(__pyx_t_4 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_4 >= __pyx_v_U.shape[0])) __pyx_t_2 = 0;
+    __pyx_t_4 += __pyx_v_V.shape[0];
+    if (unlikely(__pyx_t_4 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_4 >= __pyx_v_V.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_5 < 0) {
-    __pyx_t_5 += __pyx_v_U.shape[1];
-    if (unlikely(__pyx_t_5 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_5 >= __pyx_v_U.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1932, __pyx_L1_error)
+    __pyx_t_5 += __pyx_v_V.shape[1];
+    if (unlikely(__pyx_t_5 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_5 >= __pyx_v_V.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1949, __pyx_L1_error)
   }
   __pyx_t_6 = 1;
   __pyx_t_7 = 0;
-  __pyx_t_2 = -1;
+  __pyx_t_3 = -1;
   if (__pyx_t_6 < 0) {
     __pyx_t_6 += __pyx_v_M.shape[0];
-    if (unlikely(__pyx_t_6 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_6 >= __pyx_v_M.shape[0])) __pyx_t_2 = 0;
+    if (unlikely(__pyx_t_6 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_6 >= __pyx_v_M.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_7 < 0) {
     __pyx_t_7 += __pyx_v_M.shape[1];
-    if (unlikely(__pyx_t_7 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_7 >= __pyx_v_M.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1932, __pyx_L1_error)
+    if (unlikely(__pyx_t_7 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_7 >= __pyx_v_M.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1949, __pyx_L1_error)
   }
-  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_6 * __pyx_v_M.strides[0]) ) + __pyx_t_7 * __pyx_v_M.strides[1]) )) = (((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_1 * __pyx_v_U.strides[0]) ) + __pyx_t_3 * __pyx_v_U.strides[1]) ))) * __pyx_v_a) + ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_4 * __pyx_v_U.strides[0]) ) + __pyx_t_5 * __pyx_v_U.strides[1]) ))) * __pyx_v_c));
+  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_6 * __pyx_v_M.strides[0]) ) + __pyx_t_7 * __pyx_v_M.strides[1]) )) = ((__pyx_v_U10S0 * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_1 * __pyx_v_V.strides[0]) ) + __pyx_t_2 * __pyx_v_V.strides[1]) )))) + (__pyx_v_U11S1 * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_4 * __pyx_v_V.strides[0]) ) + __pyx_t_5 * __pyx_v_V.strides[1]) )))));
 
-  /* "transform/helpers.pyx":1933
- *     M[0,1] = U[0,0]*b + U[0,1] * d
- *     M[1,0] = U[1,0]*a + U[1,1] * c
- *     M[1,1] = U[1,0]*c + U[1,1] * d             # <<<<<<<<<<<<<<
+  /* "transform/helpers.pyx":1950
+ *     M[0,1] = U00S0 * V[1,0] + U01S1 * V[1,1]
+ *     M[1,0] = U10S0 * V[0,0] + U11S1 * V[0,1]
+ *     M[1,1] = U10S0 * V[1,0] + U11S1 * V[1,1]             # <<<<<<<<<<<<<<
  * 
  * 
  */
   __pyx_t_5 = 1;
   __pyx_t_4 = 0;
-  __pyx_t_2 = -1;
+  __pyx_t_3 = -1;
   if (__pyx_t_5 < 0) {
-    __pyx_t_5 += __pyx_v_U.shape[0];
-    if (unlikely(__pyx_t_5 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_5 >= __pyx_v_U.shape[0])) __pyx_t_2 = 0;
+    __pyx_t_5 += __pyx_v_V.shape[0];
+    if (unlikely(__pyx_t_5 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_5 >= __pyx_v_V.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_4 < 0) {
-    __pyx_t_4 += __pyx_v_U.shape[1];
-    if (unlikely(__pyx_t_4 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_4 >= __pyx_v_U.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1933, __pyx_L1_error)
+    __pyx_t_4 += __pyx_v_V.shape[1];
+    if (unlikely(__pyx_t_4 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_4 >= __pyx_v_V.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1950, __pyx_L1_error)
   }
-  __pyx_t_3 = 1;
+  __pyx_t_2 = 1;
   __pyx_t_1 = 1;
-  __pyx_t_2 = -1;
-  if (__pyx_t_3 < 0) {
-    __pyx_t_3 += __pyx_v_U.shape[0];
-    if (unlikely(__pyx_t_3 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_3 >= __pyx_v_U.shape[0])) __pyx_t_2 = 0;
+  __pyx_t_3 = -1;
+  if (__pyx_t_2 < 0) {
+    __pyx_t_2 += __pyx_v_V.shape[0];
+    if (unlikely(__pyx_t_2 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_2 >= __pyx_v_V.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_1 < 0) {
-    __pyx_t_1 += __pyx_v_U.shape[1];
-    if (unlikely(__pyx_t_1 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_1 >= __pyx_v_U.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1933, __pyx_L1_error)
+    __pyx_t_1 += __pyx_v_V.shape[1];
+    if (unlikely(__pyx_t_1 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_1 >= __pyx_v_V.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1950, __pyx_L1_error)
   }
   __pyx_t_7 = 1;
   __pyx_t_6 = 1;
-  __pyx_t_2 = -1;
+  __pyx_t_3 = -1;
   if (__pyx_t_7 < 0) {
     __pyx_t_7 += __pyx_v_M.shape[0];
-    if (unlikely(__pyx_t_7 < 0)) __pyx_t_2 = 0;
-  } else if (unlikely(__pyx_t_7 >= __pyx_v_M.shape[0])) __pyx_t_2 = 0;
+    if (unlikely(__pyx_t_7 < 0)) __pyx_t_3 = 0;
+  } else if (unlikely(__pyx_t_7 >= __pyx_v_M.shape[0])) __pyx_t_3 = 0;
   if (__pyx_t_6 < 0) {
     __pyx_t_6 += __pyx_v_M.shape[1];
-    if (unlikely(__pyx_t_6 < 0)) __pyx_t_2 = 1;
-  } else if (unlikely(__pyx_t_6 >= __pyx_v_M.shape[1])) __pyx_t_2 = 1;
-  if (unlikely(__pyx_t_2 != -1)) {
-    __Pyx_RaiseBufferIndexError(__pyx_t_2);
-    __PYX_ERR(0, 1933, __pyx_L1_error)
+    if (unlikely(__pyx_t_6 < 0)) __pyx_t_3 = 1;
+  } else if (unlikely(__pyx_t_6 >= __pyx_v_M.shape[1])) __pyx_t_3 = 1;
+  if (unlikely(__pyx_t_3 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_3);
+    __PYX_ERR(0, 1950, __pyx_L1_error)
   }
-  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_7 * __pyx_v_M.strides[0]) ) + __pyx_t_6 * __pyx_v_M.strides[1]) )) = (((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_5 * __pyx_v_U.strides[0]) ) + __pyx_t_4 * __pyx_v_U.strides[1]) ))) * __pyx_v_c) + ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_U.data + __pyx_t_3 * __pyx_v_U.strides[0]) ) + __pyx_t_1 * __pyx_v_U.strides[1]) ))) * __pyx_v_d));
+  *((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_7 * __pyx_v_M.strides[0]) ) + __pyx_t_6 * __pyx_v_M.strides[1]) )) = ((__pyx_v_U10S0 * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_5 * __pyx_v_V.strides[0]) ) + __pyx_t_4 * __pyx_v_V.strides[1]) )))) + (__pyx_v_U11S1 * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_V.data + __pyx_t_2 * __pyx_v_V.strides[0]) ) + __pyx_t_1 * __pyx_v_V.strides[1]) )))));
 
-  /* "transform/helpers.pyx":1920
+  /* "transform/helpers.pyx":1935
  * # M = U x s x VT
  * 
  * cdef void svc2x2_fast(double[:,:] U,             # <<<<<<<<<<<<<<
@@ -21691,7 +21732,7 @@ static void __pyx_f_9transform_7helpers_svc2x2_fast(__Pyx_memviewslice __pyx_v_U
   __Pyx_RefNannyFinishContext();
 }
 
-/* "transform/helpers.pyx":1948
+/* "transform/helpers.pyx":1965
  * @cython.nonecheck(False)
  * @cython.cdivision(True)
  * cdef double det2x2(double[:,:] M) nogil:             # <<<<<<<<<<<<<<
@@ -21710,7 +21751,7 @@ static double __pyx_f_9transform_7helpers_det2x2(__Pyx_memviewslice __pyx_v_M) {
   Py_ssize_t __pyx_t_7;
   Py_ssize_t __pyx_t_8;
 
-  /* "transform/helpers.pyx":1949
+  /* "transform/helpers.pyx":1966
  * @cython.cdivision(True)
  * cdef double det2x2(double[:,:] M) nogil:
  *     return M[0,0]*M[1,1] - M[0,1]*M[1,0]             # <<<<<<<<<<<<<<
@@ -21728,7 +21769,7 @@ static double __pyx_f_9transform_7helpers_det2x2(__Pyx_memviewslice __pyx_v_M) {
   __pyx_r = (((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_1 * __pyx_v_M.strides[0]) ) + __pyx_t_2 * __pyx_v_M.strides[1]) ))) * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_3 * __pyx_v_M.strides[0]) ) + __pyx_t_4 * __pyx_v_M.strides[1]) )))) - ((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_5 * __pyx_v_M.strides[0]) ) + __pyx_t_6 * __pyx_v_M.strides[1]) ))) * (*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_M.data + __pyx_t_7 * __pyx_v_M.strides[0]) ) + __pyx_t_8 * __pyx_v_M.strides[1]) )))));
   goto __pyx_L0;
 
-  /* "transform/helpers.pyx":1948
+  /* "transform/helpers.pyx":1965
  * @cython.nonecheck(False)
  * @cython.cdivision(True)
  * cdef double det2x2(double[:,:] M) nogil:             # <<<<<<<<<<<<<<

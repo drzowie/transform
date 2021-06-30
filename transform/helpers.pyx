@@ -1860,61 +1860,76 @@ cdef extern from "math.h":
 # The values are stuffed directly into U, s, and V -- which should
 # already exist (of course).
 #
-# This is cribbed from Randy Ellis' nice treatment, here:
-#   https://lucidar.me/en/mathematics/files/svd_ellis.pdf
+# Derivation uses M x MT to get the U matrix; and MT x M to get the 
+# W matrix.  U and W are *a* decomposition and are both rotation matrices.
+# To keep s positive-definite we migrate the sign terms into W to make 
+# a V matrix that allows the s's to be positive.
 #
-# There's probably a faster way to do this, by (a) trading the atan2's 
-# and subsequent sin/cos operations for some hypotenuse calculations, and
-# (b) avoiding the horrible matrix-multiply-to-find-sign at the end.
+# The tan(theta) stuff aruses from the double-angle trig identities.
+# Once U and W are calculated, we use the formula UT M W = C S
+# (with S being the diagonal positive-definite singular value matrix and
+# C being a diagonal sign (plus/minus 1) matrix)
 #
+# This treatment is faster than iterating but only works in 2D.  To generalize,
+# grab the Numerical Recipes iterative method or something similar.
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.cdivision(True)
 cdef void svd2x2_fast(double[:,:] M, 
-                      double[:,:] U, double[:] s, double[:,:] V) nogil:
+                      double[:,:] U, double[:] s, double[:,:] V) :
     cdef double a = M[0,0]
     cdef double b = M[0,1]
     cdef double c = M[1,0]
     cdef double d = M[1,1]
-    cdef double acpbd = 2 * (a*c + b*d)
-    cdef double a2 = a*a
-    cdef double b2 = b*b
-    cdef double c2 = c*c
-    cdef double d2 = d*d
-    cdef double S1 = a2 + b2+c2 + d2
-    cdef double scr = a2+b2-c2-d2
-    cdef double S2 = sqrt( scr*scr + acpbd * acpbd )
-        
-    s[0] = sqrt((S1+S2)/2)
-    s[1] = sqrt((S1-S2)/2)
     
-    cdef double theta = 0.5 * atan2( acpbd, a2+b2-c2-d2 )
+    # First: figure the U matrix.  (A AT) is  ((au, bu),(bu,du))
+    cdef double au = a*a + b*b
+    cdef double bu = a*c + b*d
+    cdef double du = c*c + d*d
+    cdef double theta = 0.5 * atan2( 2*bu, au - du )
     cdef double Stheta = sin(theta)
     cdef double Ctheta = cos(theta)
-    U[0,0] = Ctheta
-    U[0,1] = - Stheta
-    U[1,0] = Stheta
-    U[1,1] = Ctheta
- 
+
+    U[0,0] =   Ctheta    
+    U[0,1] = - Stheta  
+    U[1,0] =   Stheta    
+    U[1,1] =   Ctheta   
     
-    cdef double phi = 0.5 * atan2( 2*(a*b+c*d), a2-b2+c2-d2)
+    # Next: figure the W matrix (AT A) is  ((aw, bw),(bw,dw))
+    cdef double aw = a*a + c*c
+    cdef double bw = a*b + c*d
+    cdef double dw = b*b + d*d
+    
+    cdef double phi = 0.5 * atan2( 2*bw, aw - dw )
     cdef double Sphi = sin(phi)
     cdef double Cphi = cos(phi)
     
-    cdef double s11sgn = 1 if (( (a * Ctheta + c * Stheta) * Cphi +
-                        (b * Ctheta + d * Stheta) * Sphi
-                        ) >= 0.0) else  -1.0
-    cdef double s22sgn = 1 if (( (a * Stheta - c * Ctheta) * Sphi +
-                        (-b * Stheta + d * Ctheta) * Cphi
-                        ) >= 0.0) else  -1.0
+    # (C S) = UT x A x W -- sign of (C S) lets us correct W -> V
+    # first: sL gets UT x A; then calculate just the diagonal elements of (C s).
+    cdef double sL00 =  Ctheta * a  +  Stheta * c
+    cdef double sL01 =  Ctheta * b  +  Stheta * d
+    cdef double sL10 = -Stheta * a  +  Ctheta * c
+    cdef double sL11 = -Stheta * b  +  Ctheta * d
     
-    V[0,0] = s11sgn * Cphi
-    V[0,1] = -s22sgn * Sphi
-    V[1,0] = s11sgn * Sphi
-    V[1,1] = s22sgn * Cphi
+    # sgn00 and sgn11 get +/- the singular values.  We want the 
+    # positive branch for s, but to keep the sign to set V = C W.
+    cdef double s00 = sL00 *  Cphi  +  sL01 * Sphi
+    cdef double s11 = sL10 * -Sphi  +  sL11 * Cphi 
+    s[0] = fabs(s00)   
+    s[1] = fabs(s11)
+    s00 = 1 if(s00>=0) else -1
+    s11 = 1 if(s11>=0) else -1
+
+    V[0,0] =   Cphi * s00
+    V[0,1] = - Sphi * s11
+    V[1,0] =   Sphi * s00
+    V[1,1] =   Cphi * s11
     
-# Singular value Compose -- undeo SVD above
+
+    
+# Singular value Compose -- undo SVD above
 # M = U x s x VT
 
 cdef void svc2x2_fast(double[:,:] U,
@@ -1922,15 +1937,17 @@ cdef void svc2x2_fast(double[:,:] U,
                       double[:,:] V,
                       double[:,:] M
                              ):
-    # ab top row; cd bot row.  Right-mult by VT, not V
-    cdef double a = s[0] * V[0,0]
-    cdef double b = s[0] * V[1,0]
-    cdef double c = s[1] * V[0,1]
-    cdef double d = s[1] * V[1,1]
-    M[0,0] = U[0,0]*a + U[0,1] * c
-    M[0,1] = U[0,0]*b + U[0,1] * d
-    M[1,0] = U[1,0]*a + U[1,1] * c
-    M[1,1] = U[1,0]*c + U[1,1] * d
+    # UxS
+    cdef double U00S0 = U[0,0] * s[0]
+    cdef double U01S1 = U[0,1] * s[1]
+    cdef double U10S0 = U[1,0] * s[0]
+    cdef double U11S1 = U[1,1] * s[1]
+
+    # (UxS) x VT
+    M[0,0] = U00S0 * V[0,0] + U01S1 * V[0,1]
+    M[0,1] = U00S0 * V[1,0] + U01S1 * V[1,1]
+    M[1,0] = U10S0 * V[0,0] + U11S1 * V[0,1]
+    M[1,1] = U10S0 * V[1,0] + U11S1 * V[1,1]
     
     
 
