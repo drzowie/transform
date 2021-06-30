@@ -1,10 +1,33 @@
 v0.0.1, 29-Oct-2020 -- initial setup
  (Initial development captured in git log)
+
+31-Oct-2020 -- implement Linear; implement tests
+ 1-Nov-2020 -- implement Scale; migrate pre/post parsing to a sub-function
+ 2-Nov-2020 --
+            - implement Wrap;
+            - fix docs;
+            - make Identity idempotent
+            - add PlusOne_ (non-idempotent test transform)
+            - add ArrayIndex (idempotent Transform)
+            - fix Composition to accept a list of Transforms
+            - fix Composition to serialize compositions of compositions
+            - tests for everyone!!
+- 12-Nov-2020 (CED) --
+            - Add helpers.py and tests
+              - apply_boundary: implements boundary conditions
+              - sampleND: implements PDL range() using python "advanced indexing"
+              - interpND: implements general-purpose ND interpolation
+                - Currently implemented:  sample, linear, cubic, Fourier, many filters
  
 30-Jun-2021 -- objects are more or less complete;  nearing release  
- - Full functionality is present for transform manipulation
- - Vector transformation works 
- - Resampling with non-anti-aliasing works
- - Anti-aliasing code is implemented and has rudimentary testing in place
- - DataWrapper object carts around metadata; needs to be adapted to work with NDCube and/or sunpy maps
+ 	- Full functionality is present for transform manipulation
+ 	- Vector transformation works 
+ 	- Resampling with non-anti-aliasing works
+ 	- Anti-aliasing code is implemented and has rudimentary testing in place
+ 	- DataWrapper object carts around metadata; needs to be adapted to work with NDCube and/or sunpy maps
+	- Migrate to Cython for helpers.pyx
+	- Jacobian manipulation functions in helpers.pyx
+	- implement interpND_grid for resampling engine
+	- implement interpND_jacobian for anti-aliased reampling engine
+		- only works for 2-D transformations for now
 
