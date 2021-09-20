@@ -6,6 +6,8 @@ pytest test suite for the core module of Transform
 import transform as t
 import numpy as np
 import astropy.io.fits
+import astropy.wcs
+from ndcube import NDCube
 #import sunpy
 #import sunpy.map
 
@@ -394,8 +396,21 @@ def test_013_remap():
     assert(np.isclose(b['header']['CDELT2'],1,atol=1e-10))
     
     
-    
-    
+def test_014_ndcube():
+    a = np.zeros([7,7])
+    a[1:5,3] = 1
+    a[3,0:5] = 1
+    ahdr = {
+        'SIMPLE':'T',       'NAXIS':2, 
+        'NAXIS1':7,         'NAXIS2':7,
+        'CRPIX1':4,         'CRPIX2':4,
+        'CRVAL1':0,         'CRVAL2':0,
+        'CDELT1':1,         'CDELT2':1,
+        'CUNIT1':'pixel',   'CUNIT2':'pixel',
+        'CTYPE1':'X',       'CTYPE2':'Y'
+    }
+    input_wcs = astropy.wcs.WCS(ahdr)
+    outcube=NDCube(a,wcs=input_wcs)
     
     
 

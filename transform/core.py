@@ -8,6 +8,8 @@ import astropy.io.fits
 import astropy.wcs
 import astropy.units
 import re
+import ndcube
+from ndcube import NDCube
 ap = astropy
 
 
@@ -785,6 +787,9 @@ class Transform:
         object, a tuple, or a dictionary depending on the form of the input data.
         '''
         
+
+        
+
         # Regularize the input data
         data = DataWrapper(data,template=wcs)
         
@@ -981,6 +986,10 @@ class DataWrapper():
         data = None
         header = None
         wcs = None
+
+        if isinstance(this, ndcube.ndcube.NDCube):
+            print("This is an NDCube")
+            return this
         
         # If it's already a DataWrapper, then return it
         if isinstance(this, DataWrapper):
