@@ -935,7 +935,16 @@ class Transform:
         return output
     
        
+def DataWrapper2(this, template=None):
+    data = None
+    header = None
+    wcs = None
 
+    if isinstance(this, ndcube.ndcube.NDCube):
+        print("This is an NDCube")
+        return this
+
+    pass
 ###################################
 ###################################
 ###
@@ -987,9 +996,6 @@ class DataWrapper():
         header = None
         wcs = None
 
-        if isinstance(this, ndcube.ndcube.NDCube):
-            print("This is an NDCube")
-            return this
         
         # If it's already a DataWrapper, then return it
         if isinstance(this, DataWrapper):

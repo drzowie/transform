@@ -410,11 +410,19 @@ def test_014_ndcube():
         'CTYPE1':'X',       'CTYPE2':'Y'
     }
     input_wcs = astropy.wcs.WCS(ahdr)
-    outcube=NDCube(a,wcs=input_wcs)
-    
+    testcube=NDCube(a,wcs=input_wcs)
+    outcube=t.DataWrapper2(testcube)
+
+
+    #assert(type(outcube)==ndcube.ndcube.NDCube)
+    #assert(isinstance(outcube, 'ndcube.ndcube.NDCube'))
+
+
+
+    #assert(type(outcube)==ndcube.ndcube.NDCube)
+    assert(type(outcube)==type(testcube))
     
 
-    
 
     
     
