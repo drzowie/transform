@@ -1083,7 +1083,7 @@ class DataWrapper():
                         header[f"NAXIS{len(data.shape)-ii}"] = data.shape[ii]
                 else:
                     # pixel_shape field is forward (X,Y,...)
-                    for ii in range(len(wcs.naxis)):
+                    for ii in range(wcs.naxis):
                         header[f"NAXIS{ii+1}"] = wcs.pixel_shape[ii]
                         
             # No header and no valid WCS object, but we have a data file:
