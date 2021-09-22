@@ -413,21 +413,49 @@ def test_014_ndcube():
     testcube=NDCube(a,wcs=input_wcs)
     outcube=t.DataWrapper2(testcube)
 
-
-    #assert(type(outcube)==ndcube.ndcube.NDCube)
-    #assert(isinstance(outcube, 'ndcube.ndcube.NDCube'))
-
-
-
-    #assert(type(outcube)==ndcube.ndcube.NDCube)
     assert(type(outcube)==type(testcube))
     
+    # FITS file should load okay
+    #a = t.DataWrapper2( astropy.io.fits.open('sample.fits'))
+    
+    assert( isinstance(outcube.data, np.ndarray))
+    assert( isinstance(outcube.wcs, astropy.wcs.wcs.WCS) )
+    #assert(a.header['NAXIS']==2)
+    #assert(a.header['NAXIS1'] == a.data.shape[1])
+    #assert(a.header['NAXIS2'] == a.data.shape[0])
+    #assert(a.wcs.wcs.naxis == 2)
+    #assert(a.wcs.pixel_shape[0] == a.header['NAXIS1'])
+    #assert(a.wcs.pixel_shape[1] == a.header['NAXIS2'])
+    
+    # Non-file string should fail
+    try:
+        a = t.DataWrapper2('blargle.notafitsfile.fits')
+        assert(False)
+    except:
+        pass
 
 
+    # open a fits and get the inners and test output
+    HDUList = astropy.io.fits.open('sample.fits')
+    input_data=HDUList[0].data
+    input_header=HDUList[0].header
+    input_wcs = astropy.wcs.WCS(input_header)
     
+    testcube2=NDCube(input_data,wcs=input_wcs,meta=input_header)
+    outcube2=t.DataWrapper2(testcube2)
+
+    assert( type(outcube2)==type(testcube2))
+    #assert( isinstance(outcube2, ndcube.ndcube.NDCube))
+    assert( isinstance(outcube2.data, np.ndarray))
+    assert( isinstance(outcube2.wcs, astropy.wcs.wcs.WCS)) 
+    assert( isinstance(outcube2.meta, astropy.io.fits.header.Header)) 
     
-    
-           
-    
-           
+    # tuple test
+    #outcube2tuple = t.DataWrapper2((HDUList[0].data,HDUList[0].header))
+
+    # HDU test
+    #outcubehdulist = t.DataWrapper2(HDUList)
+
+    # HEADER test
+    #outcubeHeader = t.DataWrapper2(HDUList[0].header)
     

@@ -940,11 +940,294 @@ def DataWrapper2(this, template=None):
     header = None
     wcs = None
 
+    # If it's already a DataWrapper, then return it
     if isinstance(this, ndcube.ndcube.NDCube):
-        print("This is an NDCube")
         return this
 
-    pass
+    # If it's an HDUList then grab the primary HDU - DWIMming for
+    # the results of opening a FITS file.
+    if isinstance(this, ap.io.fits.hdu.hdulist.HDUList):
+        this = this[0]
+
+    ## Parse:
+    # Try to get the desired and required fields out of the input object.
+    # Afterward, patch stuff up.  This means we look for data, header, and
+    # a WCS object.  At the end we have to sort out which ones we got and
+    # whether they're any good.
+
+    # Tuple - (data, header, wcs).  Be generous and take a list also
+    if (isinstance(this,tuple) or isinstance(this,list)):
+        try:
+            data = copy.copy(this[0])
+            header = copy.copy(this[1])
+        except:
+            raise ValueError("DataWrapper: tuple requies both data and header")
+        try:
+            wcs = copy.copy(this[2])
+        except:
+            pass
+
+    # If it's a PrimaryHDU then parse appropriately.
+    elif isinstance(this, ap.io.fits.hdu.image.PrimaryHDU):
+        data = copy.copy(this.data)
+        header = copy.copy(this.header)
+        wcs = ap.wcs.WCS(header)
+
+    # If it's just a FITS header, that is okay.
+    elif isinstance(this, ap.io.fits.header.Header):
+        header = copy.copy(this)
+
+    # If it's a WCS object, that is okay also.
+    elif( isinstance( this, ap.wcs.wcs.WCS ) ):
+        wcs = copy.copy(this)
+
+    # If it's a NumPy object, that is also okay.
+    elif( isinstance( this, np.ndarray ) ):
+        data = copy.copy(this)
+
+    # If it's a dict then it must either have data, header, or wcs 
+    # tags -- or else look like a FITS header
+    elif ( isinstance(this, dict) ):
+        if(   ('data' in this) or 
+              ('header' in this ) or
+              ('wcs' in this) ):
+            if('data' in this):
+                data = this['data']
+            if('header' in this):
+                header = this['header']
+            if('wcs' in this):
+                wcs = this['wcs']
+        # Doesn't have tags -- check if it looks like a FITS header
+        elif( ('NAXIS' in this) or ('SIMPLE' in this)):
+            header = copy.copy(this)
+        else:
+            raise ValueError(
+                "DataWrapper: dict requires either: FITS header tags; or "
+                "'data', 'header' and/or 'wcs'"
+            )      
+
+    # If it has data, header, or wcs attributes then pull those
+    elif( hasattr( this, 'data') or 
+          hasattr( this, 'header') or
+          hasattr( this, 'wcs') ):
+        if(hasattr(this, 'data')):
+            data = copy.copy(this.data)
+        if(hasattr(this, 'header')):
+            header = copy.copy(this.header)
+        if(hasattr(this, 'wcs')):
+            wcs = copy.copy(this.wcs)
+    
+    else:
+        raise ValueError("DataWrapper: couldn't parse meaningful data "
+                         f"from the supplied {this.__class__}.")
+
+    ############################
+    # Now we've gathered one or more of data, header, and wcs. 
+    # Make sense of what we've got:
+    if( header is None):
+
+        # No header but we got a valid WCS object
+        if( wcs is not None):
+            header = wcs.to_header()
+            header['NAXIS'] = wcs.naxis
+            if(wcs.pixel_shape is None and data is None):
+                raise ValueError("DataWrapper: couldn't determine "
+                                 "size of the pixel canvas (no header; "
+                                 "wcs object has no pixel_bound)")
+            if( data is not None ):
+                # array shape is reversed (...,Y,X)
+                for ii in range(len(data.shape)):
+                    header[f"NAXIS{len(data.shape)-ii}"] = data.shape[ii]
+            else:
+                # pixel_shape field is forward (X,Y,...)
+
+                for ii in range(wcs.naxis):
+                    header[f"NAXIS{ii+1}"] = wcs.pixel_shape[ii]
+
+        # No header and no valid WCS object, but we have a data file:
+        # make a basic FITS header describing pixel coordinates.
+        elif( data is not None ):
+            #print("MT: Got data building header")
+            if( not isinstance(data, np.ndarray)):
+                raise ValueError("DataWrapper: data must be a numpy array")
+            
+            h = {
+                'NAXIS':len(data.shape)
+                }
+            for ii in range(len(data.shape)):
+                axis = len(data.shape)-ii
+                h[f"NAXIS{axis}"]=data.shape[ii]
+                h[f"CDELT{axis}"]=1.0
+                h[f"CUNIT{axis}"]="Pixel"
+                if(axis==1):
+                    ctype='X axis'
+                elif(axis==2):
+                    ctype='Y axis'
+                elif(axis==3):
+                    ctype='Z axis'
+                else:
+                    ctype=f"axis {axis}"
+                h[f"CTYPE{axis}"]=ctype
+                h[f"CRPIX{axis}"]=1
+                h[f"CRVAL{axis}"]=0
+            h["COMMENT"]="Header autogenerated by transform.DataWrapper"
+            header = FITSHeaderFromDict(h)
+        
+        else:
+            raise ValueError("DataWrapper: requires ",
+                             "NDCube, data, header, and/or WCS object.")
+
+    # Got a header
+    else:
+        #print("MT: I recieved a header")
+        if( isinstance(header, dict) ):
+            header = FITSHeaderFromDict(header)
+        elif( not isinstance(header, ap.io.fits.header.Header) ):
+            # Needs further Testing
+            header = ap.io.fits.header.Header(header)
+        # We got and parsed a header.  Now, if necessary, make an
+        # astropy WCS object to match it. 
+        if(wcs is None):
+            wcs = ap.wcs.WCS(header)    
+            #print("MT: Got header building WCS")
+        # Got both a header and wcs -- assume the user knows what s/he is
+        # doing
+        else:
+            pass
+        
+    ### Parsed!  
+    ### Data can not be None; both header and wcs should now be populated.
+
+    if( wcs is None):
+        if( header is not None):
+            wcs = ap.wcs.WCS(header)    
+            #print("MT: Got header building WCS2")
+
+
+        # No header and no valid WCS object, but we have a data file:
+        # make a basic FITS header describing pixel coordinates.
+        elif( data is not None ):
+            #print("MT: Got data building wcs2")
+            if( not isinstance(data, np.ndarray)):
+                raise ValueError("DataWrapper: data must be a numpy array")
+            
+            h = {
+                'NAXIS':len(data.shape)
+                }
+            for ii in range(len(data.shape)):
+                axis = len(data.shape)-ii
+                h[f"NAXIS{axis}"]=data.shape[ii]
+                h[f"CDELT{axis}"]=1.0
+                h[f"CUNIT{axis}"]="Pixel"
+                if(axis==1):
+                    ctype='X axis'
+                elif(axis==2):
+                    ctype='Y axis'
+                elif(axis==3):
+                    ctype='Z axis'
+                else:
+                    ctype=f"axis {axis}"
+                h[f"CTYPE{axis}"]=ctype
+                h[f"CRPIX{axis}"]=1
+                h[f"CRVAL{axis}"]=0
+            h["COMMENT"]="Header autogenerated by transform.DataWrapper"
+            header = FITSHeaderFromDict(h)
+
+            wcs = ap.wcs.WCS(header)    
+            #print("MT: Got header building WCS2")
+        
+        else:
+            raise ValueError("DataWrapper: requires ",
+                             "NDCube, data, header, and/or WCS object.")
+
+
+
+    # Two choices here. Raise error Or add masked data
+    # do we want to use hader on meta?
+
+
+    ### Parsed!  
+    ### Data can not be None; both header and wcs should now be populated.
+
+    if (data is None):
+        print("MT: creating data")
+
+        if( header is not None):
+            if(wcs is None):
+                wcs = ap.wcs.WCS(header)  
+            
+        elif( wcs is not None):
+            if(header is None):
+                header = wcs.to_header()    
+
+        else:
+            raise ValueError("DataWrapper: requires ",
+                "NDCube, or data with a WCS object, and/or a header.",
+                "Tried to create placeholder data from header/WCS",
+                "but failed.")
+
+        arraydims=[]
+        for ii in range(wcs.naxis):
+            arraydims.append(header[f"NAXIS{wcs.naxis-ii}"])
+        data=np.empty(arraydims)
+        data[:] = np.NaN
+
+
+    return NDCube(data, wcs=wcs, meta=header)
+
+
+
+
+
+
+class WCStemplate():
+    def __init__( self, this, template=None ):
+        cube = None
+        data = None
+        header = None
+        wcs = None
+        _WCS_ = None       # cached WCS Transform object
+
+        if( isinstance(template, WCStemplate)):
+            template = WCStemplate
+
+        if(isinstance(template,ap.wcs.wcs.WCS)):
+            self.wcs = template
+            self.wcs2head()
+
+    def wcs2head(self):
+        header = self.header
+
+        if(header is None):
+            self.header = self.wcs.to_header()
+            header = self.header
+        else:
+            hdr = self.wcs.to_header()
+    
+            # Make sure that keys that might
+            # conflict with the WCS pointing info are deleted
+            for i in range(hdr['WCSAXES']):
+                if f"CDELT{i+1}" in header:
+                    del header[f"CDELT{i+1}"]
+                if f"CRPIX{i+1}" in header:
+                    del header[f"CRPIX{i+1}"]
+                if f"CRVAL{i+1}" in header:
+                    del header[f"CRVAL{i+1}"]
+                for j in range(hdr['WCSAXES']):
+                    if f"CD{i+1}_{j+1}" in header:
+                        del header[f"CD{i+1}_{j+1}"]
+                    if f"PC{i+1}_{j+1}" in header:
+                        del header[f"PC{i+1}_{j+1}"]
+            if "CROTA2" in header:
+                del header["CROTA2"]
+                
+            # TODO: Find nonlinear terms and remove them also
+    
+            # Copy keys from WCS header to the main FITS header
+            for ky in hdr.keys():
+                header.set(ky,hdr[ky])
+
+
 ###################################
 ###################################
 ###
@@ -1273,7 +1556,17 @@ class DataWrapper():
             return self.WCS
         else:
             raise IndexError(index)
-            
+
+
+
+
+
+
+
+
+
+
+
 def FITSHeaderFromDict(HeaderDict):
     '''
     FITSHeaderFromDict - internal routine to work around astropy bug
