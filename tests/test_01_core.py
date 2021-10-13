@@ -173,13 +173,13 @@ def test_010_WCS():
 def test_011_DataWrapper():
     # string should throw an error
     try:
-        a = t.DataWrapper2('sample.fits')
+        a = t.DataWrapper('sample.fits')
         assert(False)
     except: 
         pass
     
     # FITS file should load okay
-    a = t.DataWrapper2( astropy.io.fits.open('sample.fits'))
+    a = t.DataWrapper( astropy.io.fits.open('sample.fits'))
     assert( isinstance(a.data, np.ndarray))
     assert( isinstance(a.meta, astropy.io.fits.header.Header) )
     assert(a.meta['NAXIS']==2)
@@ -191,14 +191,14 @@ def test_011_DataWrapper():
     
     # Non-file string should fail
     try:
-        a = t.DataWrapper2('blargle.notafitsfile.fits')
+        a = t.DataWrapper('blargle.notafitsfile.fits')
         assert(False)
     except:
         pass
     
     # FITS object should work right  
     fits = astropy.io.fits.open('sample.fits')
-    a = t.DataWrapper2(fits[0])
+    a = t.DataWrapper(fits[0])
     assert(isinstance(a.data, np.ndarray))
     assert(isinstance(a.meta, astropy.io.fits.header.Header) )
     assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
@@ -206,7 +206,7 @@ def test_011_DataWrapper():
 
     
     # FITS file object should pull the first HDU
-    a = t.DataWrapper2(fits)
+    a = t.DataWrapper(fits)
     assert(isinstance(a.data, np.ndarray))
     assert(isinstance(a.meta, astropy.io.fits.header.Header) )
     assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
@@ -214,7 +214,7 @@ def test_011_DataWrapper():
 
     # Feeding in a dictionary should work right
     f0 = {'header':fits[0].header, 'data':fits[0].data}
-    a = t.DataWrapper2(f0)
+    a = t.DataWrapper(f0)
     assert(isinstance(a.data, np.ndarray))
     assert(isinstance(a.meta, astropy.io.fits.header.Header) )
     assert(isinstance(a.wcs, astropy.wcs.wcs.WCS ))
@@ -223,42 +223,62 @@ def test_011_DataWrapper():
     # Feeding in just a header should work okay
     hdr = dict(fits[0].header)
     
-    #a = t.DataWrapper2(hdr)
+    #a = t.DataWrapper(hdr)
     #'DataWrapper: requires an NDCube object, or a', 'np data array.')
     try:
-        a = t.DataWrapper2(hdr)
+        a = t.DataWrapper(hdr)
         assert(False)
     except: 
         pass
-    #assert(isinstance(a.meta,astropy.io.fits.header.Header))
-    #assert(isinstance(a.wcs,astropy.wcs.wcs.WCS))
+    assert(isinstance(a.meta,astropy.io.fits.header.Header))
+    assert(isinstance(a.wcs,astropy.wcs.wcs.WCS))
     #assert( f"{b}" == "Transform( Inverse _PlusOne )")
     #assert( a.data is None )
    
     # a tuple should work  right
-    a = t.DataWrapper2((fits[0].data,fits[0].header))
+    a = t.DataWrapper((fits[0].data,fits[0].header))
     assert(isinstance(a.data, np.ndarray))
     assert(isinstance(a.meta, astropy.io.fits.header.Header))
     assert(isinstance(a.wcs, astropy.wcs.wcs.WCS))
     assert(a.meta['NAXIS']==2)
-    """MT
+
     # A template should override the input
     a = t.DataWrapper((fits[0].data, fits[0].header),template=
                       {'CRPIX1':99})
-    assert(a.header['CRPIX1']==99) # this fails because template is not doing anything.
+
+    assert(a.meta['CRPIX1']==99) # this fails because template is not doing anything.
     assert(fits[0].header['CRPIX1'] != 99)
-    assert(a.header['CRPIX2'] == fits[0].header['CRPIX2'])
+    assert(a.meta['CRPIX2'] == fits[0].header['CRPIX2'])
+    
+    assert(a.wcs.wcs.naxis == 2)
+    assert(a.wcs.pixel_shape[0] == a.meta['NAXIS1'])
+    assert(a.wcs.pixel_shape[1] == a.meta['NAXIS2'])
+    assert(a.wcs.wcs.crpix[0] == a.meta['CRPIX1'])
+    assert(a.wcs.wcs.crpix[1] == a.meta['CRPIX2'])
+
+
+    #MT(test wcs)
 
     # Check that CTYPE/CUNIT are exported from the WCS to the head if need be
     a = t.DataWrapper((fits[0].data, fits[0].header))
-    a.header = None
-    a.wcs2head()
-    assert(isinstance(a.header, astropy.io.fits.header.Header))
-    assert(a.header['NAXIS']==2)
-    assert(a.header['CTYPE1'] == fits[0].header['CTYPE1'])
-    assert(a.header['CRPIX1'] == fits[0].header['CRPIX1'])
-    """
-           
+    a.meta = None
+    try:
+        isinstance(a.meta, astropy.io.fits.header.Header)
+        assert(False)
+    except: 
+        pass
+    
+    # make meta data with DataTemplate and add it to a
+    tempTemplate = t.DataTemplate(a)
+    tempTemplate.wcs2head()
+    a.meta = tempTemplate.header
+    #a.wcs2head()
+
+    assert(isinstance(a.meta, astropy.io.fits.header.Header))
+    assert(a.meta['NAXIS']==2)
+    assert(a.meta['CTYPE1'] == fits[0].header['CTYPE1'])
+    assert(a.meta['CRPIX1'] == fits[0].header['CRPIX1'])
+    
     
 
     # Sunpy map tests should go here ... eventually.
@@ -421,25 +441,25 @@ def test_014_ndcube():
     }
     input_wcs = astropy.wcs.WCS(ahdr)
     testcube=NDCube(a,wcs=input_wcs)
-    outcube=t.DataWrapper2(testcube)
+    outcube=t.DataWrapper(testcube)
 
     assert(type(outcube)==type(testcube))
     
     # FITS file should load okay
-    #a = t.DataWrapper2( astropy.io.fits.open('sample.fits'))
+    a = t.DataWrapper( astropy.io.fits.open('sample.fits'))
     
     assert( isinstance(outcube.data, np.ndarray))
     assert( isinstance(outcube.wcs, astropy.wcs.wcs.WCS) )
-    #assert(a.header['NAXIS']==2)
-    #assert(a.header['NAXIS1'] == a.data.shape[1])
-    #assert(a.header['NAXIS2'] == a.data.shape[0])
-    #assert(a.wcs.wcs.naxis == 2)
-    #assert(a.wcs.pixel_shape[0] == a.header['NAXIS1'])
-    #assert(a.wcs.pixel_shape[1] == a.header['NAXIS2'])
+    assert(a.meta['NAXIS']==2)
+    assert(a.meta['NAXIS1'] == a.data.shape[1])
+    assert(a.meta['NAXIS2'] == a.data.shape[0])
+    assert(a.wcs.wcs.naxis == 2)
+    assert(a.wcs.pixel_shape[0] == a.meta['NAXIS1'])
+    assert(a.wcs.pixel_shape[1] == a.meta['NAXIS2'])
     
     # Non-file string should fail
     try:
-        a = t.DataWrapper2('blargle.notafitsfile.fits')
+        a = t.DataWrapper('blargle.notafitsfile.fits')
         assert(False)
     except:
         pass
@@ -452,7 +472,7 @@ def test_014_ndcube():
     input_wcs = astropy.wcs.WCS(input_header)
     
     testcube2=NDCube(input_data,wcs=input_wcs,meta=input_header)
-    outcube2=t.DataWrapper2(testcube2)
+    outcube2=t.DataWrapper(testcube2)
 
     assert( type(outcube2)==type(testcube2))
     #assert( isinstance(outcube2, ndcube.ndcube.NDCube))
@@ -461,11 +481,14 @@ def test_014_ndcube():
     assert( isinstance(outcube2.meta, astropy.io.fits.header.Header)) 
     
     # tuple test
-    #outcube2tuple = t.DataWrapper2((HDUList[0].data,HDUList[0].header))
+    outcube2tuple = t.DataWrapper((HDUList[0].data,HDUList[0].header))
 
     # HDU test
-    #outcubehdulist = t.DataWrapper2(HDUList)
+    outcubehdulist = t.DataWrapper(HDUList)
 
-    # HEADER test
-    #outcubeHeader = t.DataWrapper2(HDUList[0].header)
-    
+    # HEADER test - no data should fail
+    try:
+        outcubeHeader = t.DataWrapper(HDUList[0].header)
+        assert(False)
+    except:
+        pass 

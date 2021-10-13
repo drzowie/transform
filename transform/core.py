@@ -793,7 +793,7 @@ class Transform:
         
 
         # Regularize the input data
-        data = DataWrapper2(data,template=wcs)
+        data = DataWrapper(data,template=wcs)
         
         if (wcs!=None):
             templateObject=DataTemplate(wcs)
@@ -941,23 +941,17 @@ class Transform:
         #print("MT: out_remap2", out_template)
         #print(out_template.wcs)
 
-        output = DataWrapper2(
+        output = DataWrapper(
             (data_resampled,out_template.header),
             template = out_template
         )
         return output
 
        
-def DataWrapper2(this, template=None):
+def DataWrapper(this, template=None):
     data=None
     wcs=None
     header=None
-
-    if( template is not None ):
-        if(not isinstance(template, DataTemplate)):
-            template=DataTemplate(template)
-        header=template.header
-        wcs=template.wcs
 
 
     # If it's already a DataWrapper, then return it
@@ -1176,6 +1170,45 @@ def DataWrapper2(this, template=None):
     ### Parsed!  
     ### Data can NOT be None; both header and wcs should now be populated.
 
+    #MT: NEEDS CHECKING WITH CD. 
+    #1. Should WCS and header always be similar? 
+    #2. should template always supercede the WCS
+
+    # Now apply a template if supplied
+    if( template is not None ):
+
+        # if its a dict build WCS using dict entries,
+        #use DataTemplate to build header
+        #print("MT:", type(wcs))
+        #print(wcs)
+        if( isinstance(template,dict)):
+            for key in template:
+                header[key]=template[key]
+            template=DataTemplate(header)
+
+        # if wcs make into DataTemplate object
+        elif( isinstance(template, ap.wcs.wcs.WCS)):
+            template=DataTemplate(template)
+        
+        # if NDcube, extract wcs and header 
+        elif(isinstance(template, ndcube.ndcube.NDCube)):
+            template=DataTemplate(template)      
+
+        # if DataTemplate then extract header and WCS
+        elif(isinstance(template, DataTemplate)):
+            pass
+
+        elif(isinstance(template, ap.io.fits.header.Header)):
+            template=DataTemplate(template)
+
+        else:
+            raise ValueError("DataWrapper: requires a valid Header, WCS,", 
+            "NDCube, DataTemplate or dict object.")
+
+        header=template.header
+        wcs=template.wcs  
+
+
     if (data is None):
         raise ValueError("DataWrapper: requires an NDCube object, or a", 
             "np data array.")
@@ -1227,10 +1260,12 @@ class DataTemplate():
             self.wcs = this.wcs
             self.header = this.header
 
+        # if an ndcube is passed, it's assumed that the meta and wcs should be preserved
         elif( isinstance(this, ndcube.ndcube.NDCube)):
             self.wcs = this.wcs
-            self.wcs2head()
+            self.header = this.meta
 
+        # if wcs then make header
         elif( isinstance(this, ap.wcs.wcs.WCS)):
             self.wcs = this
             self.wcs2head()
@@ -1288,6 +1323,10 @@ class DataTemplate():
         header = self.header
 
         if(header is None):
+            self.header = self.wcs.to_header()
+            header = self.header
+        elif(not bool(header)):
+            # MT new
             self.header = self.wcs.to_header()
             header = self.header
         else:
@@ -2087,14 +2126,18 @@ class WCS(Transform):
         # Construct a WCS object -- that's what does the real work.
         # Very important to detect and not wrap DataWrappers, since the
         # DataWrapper constructor calls this.
+
+        #print("MT: dingus", type(dingus))
         if isinstance(dingus,ndcube.ndcube.NDCube):
             if(not isinstance(dingus.wcs,ap.wcs.wcs.WCS)):
                 dingus.head2wcs()
-            wcs_obj = dingus.wcs        
+            wcs_obj = dingus.wcs
+        elif isinstance(dingus,DataTemplate):
+            wcs_obj = dingus.wcs
         elif isinstance(dingus,ap.wcs.wcs.WCS):
             wcs_obj = dingus
         else:
-            dingus = DataWrapper2(dingus)
+            dingus = DataWrapper(dingus)
             wcs_obj = dingus.wcs
 
         # Generate input axis names and units - these are standard

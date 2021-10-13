@@ -208,56 +208,9 @@ def test_013_remap():
     #print("a:", a)
 
 #test_013_remap()
+fits = astropy.io.fits.open('sample.fits')
 
-a2 = np.zeros([7,7])
-a2[1:5,3] = 1
-a2[3,0:5] = 1
+
     
-a2hdr = {
-        'SIMPLE':'T',       'NAXIS':2, 
-        'NAXIS1':7,         'NAXIS2':7,
-        'CRPIX1':4,         'CRPIX2':4,
-        'CRVAL1':0,         'CRVAL2':0,
-        'CDELT1':1,         'CDELT2':1,
-        'CUNIT1':'pixel',   'CUNIT2':'pixel',
-        'CTYPE1':'X',       'CTYPE2':'Y'
-}
-    
-trans2 = t.Identity()
-b2 = trans2.remap2({'data':a2,'header':a2hdr},method='nearest')
-
-trans2 = t.PlusOne_()
-b2 = trans2.remap2({'data':a2,'header':a2hdr},method='nearest')
-
-print("remap2 run")
-#print("b2",b2.wcs)
-print("b2",b2.meta['CRVAL1'])
-
-#print(b2.data)
-
-
-a = np.zeros([7,7])
-a[1:5,3] = 1
-a[3,0:5] = 1
-
-ahdr = {
-        'SIMPLE':'T',       'NAXIS':2, 
-        'NAXIS1':7,         'NAXIS2':7,
-        'CRPIX1':4,         'CRPIX2':4,
-        'CRVAL1':0,         'CRVAL2':0,
-        'CDELT1':1,         'CDELT2':1,
-        'CUNIT1':'pixel',   'CUNIT2':'pixel',
-        'CTYPE1':'X',       'CTYPE2':'Y'
-}
-    
-trans = t.Identity()
-b = trans.remap({'data':a,'header':ahdr},method='nearest')
-
-trans = t.PlusOne_()
-b = trans.remap({'data':a,'header':ahdr},method='nearest')
-print("remap run")
-#print("b",b.wcs)
-print("b",b.header['CRVAL1'])
-
-#print(b.data)
-
+a = t.DataWrapper2((fits[0].data, fits[0].header),template=
+                      {'CRPIX1':99})
