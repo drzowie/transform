@@ -587,7 +587,9 @@ class Transform:
         
         return(output)
     
-        
+
+
+
     def remap(self, data, /, 
             method='n',
             bound='t',
@@ -791,8 +793,12 @@ class Transform:
         
 
         # Regularize the input data
-        data = DataWrapper(data,template=wcs)
+        data = DataWrapper2(data,template=wcs)
         
+        if (wcs!=None):
+            templateObject=DataTemplate(wcs)
+        
+        # this is not needed as will always be ndarray in an ndcube
         if not isinstance(data.data, np.ndarray):
             raise ValueError("remap: data must be a NumPy array")
         
@@ -813,7 +819,7 @@ class Transform:
         
         # Parse and regularize template
         if(template is not None):
-            out_template = DataWrapper(this=template)
+            out_template = DataTemplate(template)
         else:
             out_template = None
         
@@ -917,8 +923,8 @@ class Transform:
             #    otwcs.wcs.cunit = copy.copy(self.ounit)
                 
             otwcs.pixel_shape = list(shape).reverse()
-            
-            out_template = DataWrapper(data.header,template=otwcs)
+            #out_template = DataWrapper(data.header,template=otwcs)
+            out_template = DataTemplate(otwcs)
             
         ## Now we have an out_template -- either via autoscaling or 
         ## via parameter.
@@ -928,25 +934,41 @@ class Transform:
         total_trans = Composition([output_trans, self, input_trans])
         data_resampled = total_trans.resample(data.data, method=method, bound=bound, phot=phot, shape=shape)
 
-        output = DataWrapper(
-            (data_resampled,data.header),
+        #print("MT: out_remap header", out_template.wcs)
+        #print("MT: out_remap header", out_template.header)
+        #print("MT: out_remap2 wcs", otwcs.wcs.crval)
+        #print("MT: out_remap2", otwcs)
+        #print("MT: out_remap2", out_template)
+        #print(out_template.wcs)
+
+        output = DataWrapper2(
+            (data_resampled,out_template.header),
             template = out_template
         )
         return output
-    
+
        
 def DataWrapper2(this, template=None):
-    data = None
-    header = None
-    wcs = None
+    data=None
+    wcs=None
+    header=None
+
+    if( template is not None ):
+        if(not isinstance(template, DataTemplate)):
+            template=DataTemplate(template)
+        header=template.header
+        wcs=template.wcs
+
 
     # If it's already a DataWrapper, then return it
     if isinstance(this, ndcube.ndcube.NDCube):
+        #print("MT: In NDCUBE test")
         return this
 
     # If it's an HDUList then grab the primary HDU - DWIMming for
     # the results of opening a FITS file.
     if isinstance(this, ap.io.fits.hdu.hdulist.HDUList):
+        #print("MT: In hdulist test")
         this = this[0]
 
     ## Parse:
@@ -957,6 +979,7 @@ def DataWrapper2(this, template=None):
 
     # Tuple - (data, header, wcs).  Be generous and take a list also
     if (isinstance(this,tuple) or isinstance(this,list)):
+        #print("MT: In tuple test")
         try:
             data = copy.copy(this[0])
             header = copy.copy(this[1])
@@ -969,25 +992,30 @@ def DataWrapper2(this, template=None):
 
     # If it's a PrimaryHDU then parse appropriately.
     elif isinstance(this, ap.io.fits.hdu.image.PrimaryHDU):
+        #print("MT: In HDU test")
         data = copy.copy(this.data)
         header = copy.copy(this.header)
         wcs = ap.wcs.WCS(header)
 
     # If it's just a FITS header, that is okay.
     elif isinstance(this, ap.io.fits.header.Header):
+        #print("MT: In header test")
         header = copy.copy(this)
 
     # If it's a WCS object, that is okay also.
     elif( isinstance( this, ap.wcs.wcs.WCS ) ):
+        #print("MT: In WCS test")
         wcs = copy.copy(this)
 
     # If it's a NumPy object, that is also okay.
     elif( isinstance( this, np.ndarray ) ):
+        #print("MT: In numpy test")
         data = copy.copy(this)
 
     # If it's a dict then it must either have data, header, or wcs 
     # tags -- or else look like a FITS header
     elif ( isinstance(this, dict) ):
+        #print("MT: In dict test")
         if(   ('data' in this) or 
               ('header' in this ) or
               ('wcs' in this) ):
@@ -1010,6 +1038,7 @@ def DataWrapper2(this, template=None):
     elif( hasattr( this, 'data') or 
           hasattr( this, 'header') or
           hasattr( this, 'wcs') ):
+        #print("MT: In template:NDCUBE test")
         if(hasattr(this, 'data')):
             data = copy.copy(this.data)
         if(hasattr(this, 'header')):
@@ -1024,10 +1053,14 @@ def DataWrapper2(this, template=None):
     ############################
     # Now we've gathered one or more of data, header, and wcs. 
     # Make sense of what we've got:
+
     if( header is None):
 
+        #print("MT: In headerNone test")
+        #print(wcs)
         # No header but we got a valid WCS object
         if( wcs is not None):
+            #print("MT: In headerNone:WCS test")
             header = wcs.to_header()
             header['NAXIS'] = wcs.naxis
             if(wcs.pixel_shape is None and data is None):
@@ -1140,61 +1173,117 @@ def DataWrapper2(this, template=None):
             raise ValueError("DataWrapper: requires ",
                              "NDCube, data, header, and/or WCS object.")
 
-
-
-    # Two choices here. Raise error Or add masked data
-    # do we want to use hader on meta?
-
-
     ### Parsed!  
-    ### Data can not be None; both header and wcs should now be populated.
+    ### Data can NOT be None; both header and wcs should now be populated.
 
     if (data is None):
-        print("MT: creating data")
+        raise ValueError("DataWrapper: requires an NDCube object, or a", 
+            "np data array.")
+    #    print("MT: creating data")
+    #    if( header is not None):
+    #        if(wcs is None):
+    #            wcs = ap.wcs.WCS(header)              
+    #    elif( wcs is not None):
+    #        if(header is None):
+    #            header = wcs.to_header()    
+    #    else:
+    #        raise ValueError("DataWrapper: requires ",
+    #            "NDCube, or data with a WCS object, and/or a header.",
+    #            "Tried to create placeholder data from header/WCS",
+    #            "but failed.")
+    #    arraydims=[]
+    #    for ii in range(wcs.naxis):
+    #        arraydims.append(header[f"NAXIS{wcs.naxis-ii}"])
+    #    data=np.empty(arraydims)
+    #    data[:] = np.NaN
+    #if( template is not None ):
+    #    if( isinstance(template, ndcube.ndcube.NDCube)):
+    #        template = template.header
+    #            
+    #        if(isinstance(template,ap.wcs.wcs.WCS)):
+    #            self.wcs = template
+    #            self.wcs2head()
 
-        if( header is not None):
-            if(wcs is None):
-                wcs = ap.wcs.WCS(header)  
-            
-        elif( wcs is not None):
-            if(header is None):
-                header = wcs.to_header()    
 
-        else:
-            raise ValueError("DataWrapper: requires ",
-                "NDCube, or data with a WCS object, and/or a header.",
-                "Tried to create placeholder data from header/WCS",
-                "but failed.")
-
-        arraydims=[]
-        for ii in range(wcs.naxis):
-            arraydims.append(header[f"NAXIS{wcs.naxis-ii}"])
-        data=np.empty(arraydims)
-        data[:] = np.NaN
+    #if( template is not None ):
+        
 
 
     return NDCube(data, wcs=wcs, meta=header)
 
 
 
+class DataTemplate():
+    def __init__( self, this ):
 
-
-
-class WCStemplate():
-    def __init__( self, this, template=None ):
-        cube = None
-        data = None
         header = None
         wcs = None
-        _WCS_ = None       # cached WCS Transform object
+        self.wcs = wcs
+        self.header = header
+        self._WCS_ = None       # cached WCS Transform object
 
-        if( isinstance(template, WCStemplate)):
-            template = WCStemplate
+        # If it's already a DataTemplate, then return it
+        if( isinstance(this, DataTemplate)):
+            self.wcs = this.wcs
+            self.header = this.header
 
-        if(isinstance(template,ap.wcs.wcs.WCS)):
-            self.wcs = template
+        elif( isinstance(this, ndcube.ndcube.NDCube)):
+            self.wcs = this.wcs
             self.wcs2head()
 
+        elif( isinstance(this, ap.wcs.wcs.WCS)):
+            self.wcs = this
+            self.wcs2head()
+
+        # We got a template and it's not a WCS.  Try to make it into one.
+        else:
+            if ( isinstance(this, ap.io.fits.header.Header) ):
+                self.wcs = ap.wcs.WCS(this)
+
+            elif ( isinstance(this,dict) ):
+                self.wcs = ap.wcs.WCS(FITSHeaderFromDict(this))
+
+            # A list or tuple is an *array* shape (...,Y,X order)                    
+            elif( isinstance(this, list) or 
+                    isinstance(this, tuple) or
+                    ( isinstance(this, np.ndarray) and 
+                        len(this.shape)==1 
+                        )
+                    ):
+                if( len(this) != self.header['NAXIS'] ):
+                    raise ValueError(
+                        "DataTemplate: shape format template "
+                        "must match data axis count"
+                        )
+                for i in range(self.header['NAXIS']):
+                    self.header[f"NAXIS{i}"] = this[-1-i]
+                self.wcs.pixel_shape = [ 
+                        this[-1-i] 
+                        for i in range(self.header['NAXIS']) 
+                        ]
+            else:
+                raise ValueError("DataTemplate: template must be a "
+                                 "FITS header, WCS object, or shape")
+                
+            self.wcs2head()
+
+               
+        
+    def WCS(self):
+        '''
+        DataTemplate.WCS() - return a WCS Transform associated with this object.
+
+        '''
+        if(self._WCS_ is None):
+            self._WCS_ = _WCSTrans_(self)
+        return self._WCS_
+        
+    def head2wcs(self):
+        self.wcs = ap.wcs.WCS(self.header)
+        # Clear cached WCS Transfom obejct
+        if(self._WCS_ is not None):
+            self._WCS_ = None
+        
     def wcs2head(self):
         header = self.header
 
@@ -1226,8 +1315,21 @@ class WCStemplate():
             # Copy keys from WCS header to the main FITS header
             for ky in hdr.keys():
                 header.set(ky,hdr[ky])
+                
+        # Copy NAXIS limitsfrom WCS into the header - this is necessary if 
+        # reconstituting a header entirely from the WCS object.
+        if not 'NAXIS' in header:
+            header['NAXIS'] = self.wcs.naxis
+        
+        if(self.wcs.pixel_shape is not None):
+            for i in range(self.wcs.naxis):
+                axis = f'NAXIS{i+1}'
+                # Note: wcs pixel_shape is in axis order, not array index order
+                header[axis] = self.wcs.pixel_shape[i]
+    
 
 
+"""
 ###################################
 ###################################
 ###
@@ -1280,7 +1382,7 @@ class DataWrapper():
         wcs = None
 
         
-        # If it's already a DataWrapper, then return it
+        # If it's already a DataWrapper, then return it - is this valid? I didn't think you could return from a class
         if isinstance(this, DataWrapper):
             return this
         
@@ -1556,6 +1658,7 @@ class DataWrapper():
             return self.WCS
         else:
             raise IndexError(index)
+"""
 
 
 
@@ -1984,14 +2087,14 @@ class WCS(Transform):
         # Construct a WCS object -- that's what does the real work.
         # Very important to detect and not wrap DataWrappers, since the
         # DataWrapper constructor calls this.
-        if isinstance(dingus,DataWrapper):
+        if isinstance(dingus,ndcube.ndcube.NDCube):
             if(not isinstance(dingus.wcs,ap.wcs.wcs.WCS)):
                 dingus.head2wcs()
             wcs_obj = dingus.wcs        
         elif isinstance(dingus,ap.wcs.wcs.WCS):
             wcs_obj = dingus
         else:
-            dingus = DataWrapper(dingus)
+            dingus = DataWrapper2(dingus)
             wcs_obj = dingus.wcs
 
         # Generate input axis names and units - these are standard
